@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>World Engine - Editor</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #111;
+        color: #fff;
+        font-family: monospace;
+      }
+      #container {
+        display: flex;
+        height: 100vh;
+      }
+      #canvas-container {
+        flex: 1;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      #sidebar {
+        width: 300px;
+        background: #222;
+        padding: 20px;
+        overflow-y: auto;
+      }
+      canvas {
+        border: 2px solid #444;
+        image-rendering: pixelated;
+      }
+      .stat {
+        margin: 10px 0;
+        padding: 10px;
+        background: #333;
+        border-radius: 4px;
+      }
+      button {
+        width: 100%;
+        padding: 10px;
+        margin: 5px 0;
+        background: #444;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+      }
+      button:hover {
+        background: #555;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="container">
+      <div id="canvas-container">
+        <canvas id="gameCanvas"></canvas>
+      </div>
+      <div id="sidebar">
+        <h2>World Engine</h2>
+        <div class="stat">Tiles: <span id="stat-tiles">0</span></div>
+        <div class="stat">Atlas: <span id="stat-atlas">0</span></div>
+        <div class="stat">Z: <span id="stat-z">7</span></div>
+        <button onclick="changeZ(1)">Z +1</button>
+        <button onclick="changeZ(-1)">Z -1</button>
+        <button onclick="toggleDebug()">Debug</button>
+      </div>
+    </div>
+
+    <script type="module">
+      import { AssetManager } from "./render/assetManager.js";
+      import { loadAllSprites } from "./render/assetLoader.js";
+      import {
+        setupCanvas,
+        centerCamera,
+        buildFloorIndex,
+        setAssetManagerRef,
+        renderMap,
+      } from "./render/mapRenderer.js";
+      import { renderWorld } from "./render/worldRenderer.js";
+      import { WORLD_ENGINE, TILE_SIZE } from "./core/config.js";
+
+      window.DEBUG_RENDER = false;
+
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+      const assets = new AssetManager();
+      setAssetManagerRef(assets);
+
+      let map = {};
+      let floorIndex = null;
+      let camera = { x: 0, y: 0 };
+      let activeZ = 7;
+      let animClock = 0;
+
+      async function initialize() {
+        setupCanvas(canvas, WORLD_ENGINE.canvasCols, WORLD_ENGINE.canvasRows);
+        await loadAllSprites(assets, "./assets_novo/");
+
+        const mapRes = await fetch("./assets_novo/map_compact.json");
+        map = await mapRes.json();
+        floorIndex = buildFloorIndex(map);
+
+        camera = centerCamera(
+          { x: 100, y: 100 },
+          WORLD_ENGINE.canvasCols,
+          WORLD_ENGINE.canvasRows,
+        );
+
+        document.getElementById("stat-tiles").textContent =
+          Object.keys(map).length;
+        document.getElementById("stat-atlas").textContent = assets.atlasCount;
+
+        gameLoop();
+      }
+
+      window.changeZ = (delta) => {
+        activeZ = Math.max(0, Math.min(15, activeZ + delta));
+        document.getElementById("stat-z").textContent = activeZ;
+      };
+
+      window.toggleDebug = () => {
+        window.DEBUG_RENDER = !window.DEBUG_RENDER;
+      };
+
+      function gameLoop() {
+        animClock += 16;
+
+        renderWorld({
+          ctx,
+          camX: camera.x * TILE_SIZE,
+          camY: camera.y * TILE_SIZE,
+          activeZ,
+          animClock,
+          ts: Date.now(),
+          canvasW: canvas.width,
+          canvasH: canvas.height,
+          cols: WORLD_ENGINE.canvasCols,
+          rows: WORLD_ENGINE.canvasRows,
+          map,
+          assets,
+          anim: null,
+          floorIndex,
+          extraEntities: {},
+          renderOptions: { showHP: true, showName: true },
+        });
+
+        requestAnimationFrame(gameLoop);
+      }
+
+      initialize();
+    </script>
+  </body>
+</html>

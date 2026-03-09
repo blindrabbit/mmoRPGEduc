@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <title>mmoRPGGame - Player Manager</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+        <!-- NOTE: Using the Tailwind CDN for development only.
+          For production, install Tailwind as a PostCSS plugin or use the Tailwind CLI
+          as described: https://tailwindcss.com/docs/installation -->
+  </head>
+  <body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto">
+      <header
+        class="flex justify-between items-center mb-8 bg-white p-6 rounded-lg shadow-md border-l-4 border-indigo-600"
+      >
+        <div>
+          <h1 class="text-2xl font-bold text-gray-800">
+            mmoRPGGame - Administração
+          </h1>
+          <p class="text-gray-500 text-sm">Gerenciamento via db.js e Base64</p>
+        </div>
+        <button
+          onclick="openModal()"
+          class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-bold shadow-lg transition-all"
+        >
+          + Novo Jogador
+        </button>
+      </header>
+
+      <div
+        class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-200"
+      >
+        <table class="w-full text-left">
+          <thead class="bg-gray-50 text-gray-600 uppercase text-xs font-bold">
+            <tr>
+              <th class="p-4">Exibição (Game)</th>
+              <th class="p-4">Nome Completo</th>
+              <th class="p-4">E-mail (Decodificado)</th>
+              <th class="p-4">UUID</th>
+              <th class="p-4 text-center">Ações</th>
+            </tr>
+          </thead>
+          <tbody id="userTableBody" class="divide-y divide-gray-100"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div
+      id="modal"
+      class="fixed inset-0 bg-black/60 hidden flex items-center justify-center p-4 backdrop-blur-sm"
+    >
+      <div class="bg-white rounded-2xl max-w-md w-full p-8 shadow-2xl">
+        <h2
+          id="modalTitle"
+          class="text-2xl font-bold mb-6 text-gray-800 text-center"
+        >
+          Configurar Conta
+        </h2>
+        <form id="userForm" class="space-y-4">
+          <input type="hidden" id="editUUID" value="" />
+
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1"
+              >Nome Completo do Aluno</label
+            >
+            <input
+              type="text"
+              id="fullName"
+              class="w-full border-gray-300 border p-3 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Ex: Renan Soprani"
+              required
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1"
+              >E-mail de Acesso</label
+            >
+            <input
+              type="email"
+              id="userEmail"
+              class="w-full border-gray-300 border p-3 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="email@gmail.com"
+              required
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-bold text-gray-700 mb-1"
+              >Senha</label
+            >
+            <input
+              type="text"
+              id="pass"
+              class="w-full border-gray-300 border p-3 rounded-lg outline-none focus:ring-2 focus:ring-indigo-500"
+              value="123456"
+              required
+            />
+          </div>
+
+          <div class="flex justify-end gap-3 pt-4">
+            <button
+              type="button"
+              onclick="closeModal()"
+              class="px-5 py-2 text-gray-500 hover:text-gray-700 font-medium"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              class="px-6 py-2 bg-green-600 text-white font-bold rounded-lg hover:bg-green-700 shadow-md"
+            >
+              Salvar Aluno
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        getAllAccounts,
+        saveAccount,
+        deleteAccount,
+        decodeUser,
+        formatDisplayName,
+        watchMonsterTemplates,
+        getMonsterTemplates,
+      } from "./src/core/db.js";
+      import { setMonsterTemplates } from "./src/core/remoteTemplates.js";
+
+      // Expose modal controls globally so the inline onclick="openModal()" works
+      window.openModal = () => {
+        const modal = document.getElementById("modal");
+        const title = document.getElementById("modalTitle");
+        const editUUID = document.getElementById("editUUID");
+        const form = document.getElementById("userForm");
+        // Prepare for new user
+        title.innerText = "Novo Jogador";
+        editUUID.value = "";
+        form.reset();
+        modal.classList.remove("hidden");
+      };
+
+      window.closeModal = () => {
+        const modal = document.getElementById("modal");
+        modal.classList.add("hidden");
+      };
+
+      // Tornamos a função GLOBAL para o botão 'onclick' funcionar
+      window.prepareEdit = (uuid, b64Data) => {
+        try {
+          const data = JSON.parse(atob(b64Data));
+          document.getElementById("modalTitle").innerText = "Editar Jogador";
+          document.getElementById("editUUID").value = uuid;
+          document.getElementById("userEmail").value = decodeUser(data.user);
+          document.getElementById("fullName").value = data.fullName || "";
+          document.getElementById("pass").value = data.pass || "123456";
+
+          // Abre o modal (garanta que openModal também seja global ou acessível)
+          document.getElementById("modal").classList.remove("hidden");
+        } catch (e) {
+          console.error("Erro ao preparar edição:", e);
+        }
+      };
+
+      window.deleteUser = async (uuid) => {
+        if (confirm("Deseja realmente excluir este aluno?")) {
+          await deleteAccount(uuid);
+          loadUsers();
+        }
+      };
+
+      // assistir templates para fins de debug/UI (agora que temos watcher global)
+      watchMonsterTemplates((data) => {
+        setMonsterTemplates(data || {});
+        console.log("monster templates atualizados (playerManager)", data);
+      });
+      // busca manual inicial também
+      (async function fetchInitialTemplates() {
+        try {
+          const data = await getMonsterTemplates();
+          if (data) {
+            setMonsterTemplates(data);
+            console.log("monster templates iniciais (playerManager)", Object.keys(data).length);
+          }
+        } catch (e) {
+          console.warn("erro ao buscar templates iniciais (playerManager)", e);
+        }
+      })();
+
+      async function loadUsers() {
+        const accounts = await getAllAccounts(); // Busca apenas o nó 'accounts'
+        const tbody = document.getElementById("userTableBody");
+        tbody.innerHTML = "";
+
+        if (!accounts) return;
+
+        Object.entries(accounts).forEach(([uuid, data]) => {
+          // Filtro de segurança para não listar pastas do sistema
+          if (!data || typeof data !== "object" || !data.user) return;
+
+          const tr = document.createElement("tr");
+          tr.className = "hover:bg-indigo-50/40 transition-colors";
+
+          const emailClean = decodeUser(data.user);
+          const gameName = formatDisplayName(data.fullName);
+
+          tr.innerHTML = `
+                <td class="p-4 font-bold text-indigo-700">${gameName}</td>
+                <td class="p-4 text-gray-700">${data.fullName || "---"}</td>
+                <td class="p-4 text-sm text-gray-500">${emailClean}</td>
+                <td class="p-4 text-xs font-mono text-gray-400">${uuid}</td>
+                <td class="p-4 flex justify-center gap-2">
+                    <button onclick="window.prepareEdit('${uuid}', '${btoa(JSON.stringify(data))}')" 
+                            class="px-3 py-1 bg-amber-500 text-white rounded text-xs font-bold hover:bg-amber-600 transition-all">Editar</button>
+                    <button onclick="window.deleteUser('${uuid}')" 
+                            class="px-3 py-1 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 transition-all">Excluir</button>
+                </td>
+            `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      // Lógica do formulário
+      document.getElementById("userForm").onsubmit = async (e) => {
+        e.preventDefault();
+        const editUUID = document.getElementById("editUUID").value;
+        const email = document.getElementById("userEmail").value;
+        const fullName = document.getElementById("fullName").value;
+        const pass = document.getElementById("pass").value;
+
+        // Se não tem UUID, gera um novo para o aluno
+        const uuid = editUUID || "user_" + Date.now();
+
+        // Se for edição, preservamos os personagens (characters)
+        let characters = [];
+        if (editUUID) {
+          const current = await getAllAccounts();
+          if (current[uuid] && current[uuid].characters) {
+            characters = current[uuid].characters;
+          }
+        }
+
+        const payload = {
+          uid: uuid,
+          user: btoa(email), // Base64 direto
+          fullName: fullName,
+          pass: pass,
+          characters: characters,
+          lastUpdate: new Date().toISOString(),
+        };
+
+        await saveAccount(uuid, payload);
+
+        // Fecha modal e recarrega
+        document.getElementById("modal").classList.add("hidden");
+        document.getElementById("userForm").reset();
+        loadUsers();
+      };
+
+      // Inicializa a lista
+      loadUsers();
+    </script>
+  </body>
+</html>

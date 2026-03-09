@@ -1,0 +1,1470 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>GM CONTROL — mmoRPGGame</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #1a1a1a;
+        color: #eee;
+        font-family: "Segoe UI", sans-serif;
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+      }
+      #sidebar {
+        width: 280px;
+        background: #252525;
+        border-right: 2px solid #333;
+        display: flex;
+        flex-direction: column;
+        padding: 15px;
+        overflow-y: auto;
+      }
+      #sidebar h3 {
+        color: #2ecc71;
+        text-align: center;
+        border-bottom: 1px solid #444;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+      }
+      .tool-group {
+        margin-bottom: 16px;
+        background: #333;
+        padding: 12px;
+        border-radius: 6px;
+      }
+      label {
+        display: block;
+        font-size: 11px;
+        color: #aaa;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+      }
+      select,
+      input[type="text"],
+      input[type="number"] {
+        width: 100%;
+        padding: 8px;
+        background: #222;
+        border: 1px solid #444;
+        color: #fff;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      input[type="file"] {
+        width: 100%;
+        padding: 6px;
+        background: #222;
+        border: 1px solid #444;
+        color: #aaa;
+        border-radius: 4px;
+        margin-bottom: 10px;
+      }
+      .btn {
+        width: 100%;
+        padding: 10px;
+        background: #2980b9;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-weight: bold;
+        border-radius: 4px;
+        margin-bottom: 8px;
+        transition: background 0.2s;
+      }
+      .btn:hover {
+        filter: brightness(1.2);
+      }
+      .btn:last-child {
+        margin-bottom: 0;
+      }
+      .inline-check {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #ddd;
+        text-transform: none;
+      }
+      .inline-check input[type="checkbox"] {
+        width: auto;
+        margin: 0;
+      }
+      #map-mode {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 4px;
+        font: 11px monospace;
+        margin-bottom: 16px;
+        border: 1px solid #444;
+        background: #222;
+      }
+      #map-mode-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #888;
+        flex-shrink: 0;
+      }
+      #map-mode-dot.online {
+        background: #2ecc71;
+        box-shadow: 0 0 6px #2ecc71;
+      }
+      #map-mode-dot.offline {
+        background: #f1c40f;
+        box-shadow: 0 0 6px #f1c40f;
+      }
+      #map-mode-dot.error {
+        background: #e74c3c;
+        box-shadow: 0 0 6px #e74c3c;
+      }
+      #viewport {
+        flex-grow: 1;
+        position: relative;
+        background: #000;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+        background: #000;
+        cursor: crosshair;
+        flex-grow: 1;
+      }
+      #gm-overlay {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.82);
+        padding: 10px 14px;
+        border: 1px solid #2ecc71;
+        border-radius: 4px;
+        font: 11px monospace;
+        line-height: 2;
+        z-index: 10;
+      }
+      #gm-overlay span {
+        color: #2ecc71;
+        font-weight: bold;
+      }
+      #log-panel.tabbed-panel {
+        height: 200px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-top: 2px solid #1a2a3a;
+        background: rgba(10, 12, 18, 0.97);
+      }
+      .tabs {
+        display: flex;
+        background: #0d1117;
+        border-bottom: 1px solid #1a2a3a;
+      }
+      .tab-btn {
+        flex: 1;
+        padding: 6px 0;
+        background: none;
+        border: none;
+        color: #2ecc71;
+        font: bold 11px monospace;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .tab-btn.active {
+        background: #1a2a3a;
+        color: #fff;
+      }
+      .tab-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+        font: 11px monospace;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
+      }
+      /* Chat GM */
+      #tab-chat {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+      }
+      #chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 4px 8px;
+        font: 11px monospace;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
+      }
+      #chat-input-row {
+        display: flex;
+        gap: 4px;
+        padding: 4px 8px;
+        border-top: 1px solid #1a2a3a;
+        background: #0d1117;
+        flex-shrink: 0;
+      }
+      #chat-input {
+        flex: 1;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        color: #eee;
+        font: 11px monospace;
+        padding: 3px 6px;
+        border-radius: 3px;
+        outline: none;
+      }
+      #chat-input:focus { border-color: #e74c3c; }
+      #chat-send {
+        width: 28px;
+        background: #1a2a3a;
+        border: 1px solid #e74c3c;
+        color: #e74c3c;
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 12px;
+        transition: background 0.15s;
+        padding: 0;
+        margin: 0;
+      }
+      #chat-send:hover { background: #e74c3c; color: #000; }
+      .chat-line { padding: 2px 0; line-height: 1.5; border-bottom: 1px solid #0d1117; }
+      .chat-name   { color: #f1c40f; font-weight: bold; }
+      .chat-name.gm { color: #e74c3c; }
+      .chat-text   { color: #ddd; }
+      .chat-ts     { color: #4a5568; font-size: 10px; }
+      #ctx-menu {
+        width: 100px;
+        position: absolute;
+        background: #222;
+        border: 1px solid #2ecc71;
+        display: none;
+        flex-direction: column;
+        z-index: 1000;
+        min-width: 200px;
+        border-radius: 4px;
+        box-shadow: 5px 5px 15px rgba(0, 0, 0, 0.5);
+      }
+      .menu-item {
+        background: none;
+        border: none;
+        color: white;
+        padding: 12px;
+        text-align: left;
+        cursor: pointer;
+        border-bottom: 1px solid #333;
+        width: 100%;
+        font-size: 13px;
+      }
+      .menu-item:hover {
+        background: #2ecc71;
+        color: black;
+      }
+      #menu-info {
+        padding: 10px;
+        font-size: 11px;
+        color: #888;
+        background: #111;
+        text-align: center;
+        border-bottom: 1px solid #333;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="sidebar">
+      <h3>GM CONTROL</h3>
+
+      <div id="map-mode">
+        <div id="map-mode-dot"></div>
+        <span id="map-mode-label">Aguardando...</span>
+      </div>
+
+      <div class="tool-group">
+        <label>Invocação de Monstros</label>
+        <select id="spawn-species"></select>
+        <button class="btn" id="btnSpawnManual">Invocar no Mouse</button>
+      </div>
+
+      <div class="tool-group">
+        <label>Gestão de Jogadores</label>
+        <select id="player-list-select">
+          <option>A carregar...</option>
+        </select>
+        <button class="btn" id="btnGoTo">Ir até Jogador</button>
+        <button class="btn" id="btnKick" style="background: #c0392b">
+          Kickar Jogador
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <label>Upload de Mapa JSON</label>
+        <input type="file" id="mapFileInput" accept=".json" />
+        <button class="btn" id="btnUploadMap" style="background: #8e44ad">
+          Enviar ao Firebase
+        </button>
+      </div>
+
+      <div class="tool-group">
+        <label>Visualização</label>
+        <label class="inline-check">
+          <input type="checkbox" id="gm-labels-floor-only" />
+          Mostrar nomes/HP só no andar ativo
+        </label>
+      </div>
+
+      <div class="tool-group">
+        <label>Ações Globais</label>
+        <button class="btn" id="btnHealAll" style="background: #27ae60">
+          &#10084; Curar Todos
+        </button>
+        <button class="btn" id="btnClearMobs" style="background: #c0392b">
+          &#128721; Limpar Monstros
+        </button>
+      </div>
+    </div>
+
+    <div id="viewport">
+      <div id="gm-overlay">
+        <div style="color: #2ecc71; font-weight: bold; margin-bottom: 4px">
+          GM ENGINE
+        </div>
+        CAM&nbsp;&nbsp;<span id="valCam"></span><br />
+        HOVER <span id="valHover"></span><br />
+        FLOOR <span id="valZ">7</span><br />
+        ENTS&nbsp;<span id="entity-count">0</span>
+      </div>
+
+      <canvas id="adminCanvas"></canvas>
+
+      <div id="log-panel" class="tabbed-panel">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="logs">Logs</button>
+          <button class="tab-btn" data-tab="world">Eventos do Mundo</button>
+          <button class="tab-btn" data-tab="chat">Chat GM</button>
+        </div>
+        <div class="tab-content" id="tab-logs"></div>
+        <div class="tab-content" id="tab-world" style="display: none"></div>
+        <div class="tab-content" id="tab-chat" style="display: none">
+          <div id="chat-messages"></div>
+          <div id="chat-input-row">
+            <input type="text" id="chat-input" placeholder="[GM] Mensagem global..." maxlength="120" autocomplete="off" />
+            <button id="chat-send">&#9654;</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="ctx-menu">
+        <div id="menu-info">COORD 0, 0</div>
+        <div id="dynamic-actions"></div>
+      </div>
+    </div>
+
+    <script type="module">
+      import {
+        centerCamera,
+        screenToTile,
+        buildFloorIndex,
+      } from "./src/render/mapRenderer.js";
+      import { AssetManager } from "./src/render/assetManager.js";
+      import { AnimationController } from "./src/render/animationController.js";
+      import { uploadWorld } from "./src/clients/rpg-admin/admin/adminloader.js";
+
+      // ✅ FASE IMEDIATA: db.js substitui firebaseClient + SDK Firebase direto
+      // ❌ REMOVIDO: import { db, dbGet, dbSet, dbWatch, syncEntity } from './firebaseClient.js'
+      // ❌ REMOVIDO: import { ref, remove } from 'https://...firebase-database.js'
+      import {
+        getMap,
+        setMap,
+        getAccount,
+        setAccount,
+        syncMonster,
+        syncPlayer,
+        removePlayer,
+        clearMonsters,
+        // watchPlayers, watchMonsters no longer used directly
+        watchMonsterTemplates,
+        getMonsterTemplates,
+        syncChat,
+        watchChat,
+      } from "../core/db.js";
+      import { initWorldStore, subscribe } from "./src/core/worldStore.js";
+
+      import {
+        WORLD_SETTINGS,
+        TILESIZE,
+        GROUNDZ,
+        ASSETS,
+        ENTITY_RENDER,
+        EFFECTS_RENDER,
+        ADMIN_ENGINE,
+      } from "./src/core/config.js";
+      import {
+        monitorEffects,
+        calculateStepDuration,
+      } from "./src/gameplay/gameCore.js";
+      import { handlePlayerSync } from "./src/gameplay/playerManager.js";
+      import {
+        applyDamage,
+        handleStatsChanges,
+        initCombatEngine,
+      } from "./src/gameplay/combatEngine.js";
+      import { loadAllSprites } from "./src/render/assetLoader.js";
+      import { MONSTER_TEMPLATES } from "./src/gameplay/monsterData.js";
+      import { renderWorld } from "./src/render/worldRenderer.js";
+      import { initEventLog, pushLog } from "./src/gameplay/eventLog.js";
+      import { setMonsterTemplates } from "./src/core/remoteTemplates.js";
+      import { loadPack } from "./src/render/assetLoader.js";
+      import { getEffects, getFields } from "./src/core/worldStore.js";
+      import { OUTFIT_MAP } from "./src/render/outfitData.js";
+
+      // INIT LOG — primeiro de tudo
+      initEventLog({
+        panelId: "tab-logs",
+        showSource: true,
+        filters: ["all", "damage", "death", "heal", "system", "loot"],
+      });
+
+      // INIT EVENTOS DO MUNDO
+      window.initWorldEventPanel = function () {
+        initEventLog({
+          panelId: "tab-world",
+          showSource: true,
+          filters: ["all", "engine", "move", "field", "spawn"],
+        });
+      };
+      window.initWorldEventPanel();
+
+      // Alternância de abas
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", function () {
+          document
+            .querySelectorAll(".tab-btn")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const tab = btn.getAttribute("data-tab");
+          document
+            .querySelectorAll(".tab-content")
+            .forEach((tc) => (tc.style.display = "none"));
+          document.getElementById("tab-" + tab).style.display = "";
+        });
+      });
+
+      // ---------------------------------------------------------------------------
+      // CHAT GM — vê todas as mensagens; envia como broadcast global (isGM: true)
+      // ---------------------------------------------------------------------------
+      const chatMessages = document.getElementById("chat-messages");
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function appendChatLine(msg) {
+        const time = new Date(msg.ts ?? Date.now()).toLocaleTimeString("pt-BR", {
+          hour12: false,
+        });
+        const div = document.createElement("div");
+        div.className = "chat-line";
+        const nameClass = msg.isGM ? "chat-name gm" : "chat-name";
+        div.innerHTML =
+          `<span class="chat-ts">${time}</span> ` +
+          `<span class="${nameClass}">${escapeHtml(msg.name)}:</span> ` +
+          `<span class="chat-text">${escapeHtml(msg.msg)}</span>`;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        while (chatMessages.children.length > 60)
+          chatMessages.removeChild(chatMessages.firstChild);
+      }
+
+      // GM vê todas as mensagens sem filtro de proximidade
+      watchChat((msg) => appendChatLine(msg));
+
+      async function sendChatMsg() {
+        const input = document.getElementById("chat-input");
+        const text = input.value.trim();
+        if (!text) return;
+        input.value = "";
+        const id = `chat_${Date.now()}_gm`;
+        await syncChat(id, {
+          id,
+          playerId: "gm",
+          name: "GM",
+          msg: text,
+          x: 0,
+          y: 0,
+          z: 0,
+          ts: Date.now(),
+          isGM: true,
+        });
+      }
+
+      document.getElementById("chat-send").addEventListener("click", sendChatMsg);
+      document.getElementById("chat-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") sendChatMsg();
+      });
+
+      // ---------------------------------------------------------------------------
+      // ESTADO
+      // ---------------------------------------------------------------------------
+      const assets = new AssetManager();
+      const anim = new AnimationController();
+      const state = {
+        map: {},
+        floorIndex: null,
+        nexoData: {},
+        atlas: null,
+        camera: { x: 0, y: 0 },
+        activeZ: WORLD_SETTINGS.spawn.z,
+        animClock: 0,
+        lastTs: undefined,
+        labelsSameFloorOnly: false,
+        ready: false,
+      };
+
+      let onlinePlayers = {};
+      let dynamicEntities = {};
+      let hoverTile = { x: 0, y: 0 };
+      let rafId = null;
+
+      function _ptInRect(px, py, rx, ry, rw, rh) {
+        return px >= rx && px <= rx + rw && py >= ry && py <= ry + rh;
+      }
+
+      function _computeEntityWalkStep(ent) {
+        const app = ent?.appearance;
+        const duration = calculateStepDuration(ent?.speed ?? app?.speed ?? 100);
+        const elapsed = Date.now() - (ent?.lastMoveTime || 0);
+        const oldX = ent?.oldX ?? ent?.x;
+        const oldY = ent?.oldY ?? ent?.y;
+        const isMoving = ent?.x !== oldX || ent?.y !== oldY;
+        const isWalking = isMoving && elapsed < duration;
+        let step = 1;
+        if (isWalking) step = Math.min(Math.floor((elapsed / duration) * 3), 2);
+        return { elapsed, duration, isWalking, step };
+      }
+
+      function _pickEntityUnderMouse(px, py, camX, camY) {
+        const entities = {
+          ...dynamicEntities,
+          ...onlinePlayers,
+          [ADMIN_ID]: adminPos,
+        };
+
+        // Preferir entidade mais próxima do cursor (evita snap para outra)
+        let best = null;
+        let bestDist2 = Infinity;
+
+        for (const id in entities) {
+          const ent = entities[id];
+          if (!ent) continue;
+          if ((ent.z ?? state.activeZ) !== state.activeZ) continue;
+          if (ent.dead || ent.type === "corpse") continue;
+          if (ent.x == null || ent.y == null) continue;
+
+          const safeEnt =
+            ent.oldX == null || ent.oldY == null
+              ? { ...ent, oldX: ent.oldX ?? ent.x, oldY: ent.oldY ?? ent.y }
+              : ent;
+
+          const vPos = anim.getVisualPos(safeEnt);
+          const floorOffset = (state.activeZ - GROUNDZ) * TILESIZE;
+          const baseX = Math.round(vPos.x - camX + floorOffset);
+          const baseY = Math.round(vPos.y - camY + floorOffset);
+
+          const { elapsed, isWalking, step } = _computeEntityWalkStep(safeEnt);
+          const dir = safeEnt.direcao || "frente";
+
+          const isMonster =
+            safeEnt.type === "monster" ||
+            typeof safeEnt.species === "string" ||
+            (typeof id === "string" && id.startsWith("mob"));
+
+          if (!isMonster) {
+            // Players: usa outfits atlas (getOutfitSprites) — bounds reais do sprite
+            const pack = safeEnt.appearance?.outfitPack;
+            const outfitId = safeEnt.appearance?.outfitId;
+            if (!pack || outfitId == null) continue;
+            if (typeof assets?.getOutfitSprites !== "function") continue;
+
+            const sprites = assets.getOutfitSprites(outfitId, {
+              dir,
+              step,
+              elapsedMs: elapsed,
+              animationTimeMs: Date.now(),
+              pack,
+              addons: safeEnt.appearance?.addons ?? null,
+              isWalking,
+            });
+
+            if (!Array.isArray(sprites) || !sprites.length) continue;
+
+            for (const sprite of sprites) {
+              if (!sprite?.info) continue;
+
+              const oversized =
+                sprite.info.w > TILESIZE || sprite.info.h > TILESIZE;
+              const offX = oversized ? 0 : (ENTITY_RENDER?.offsetX ?? 0);
+              const offY = oversized ? 0 : (ENTITY_RENDER?.offsetY ?? 0);
+
+              const colShift = (sprite.colOffset ?? 0) * sprite.info.w;
+              const drawX =
+                baseX +
+                Math.round((TILESIZE - sprite.info.w) / 2) +
+                offX +
+                colShift;
+              const footY = Math.round(
+                TILESIZE * (ENTITY_RENDER?.footAnchorY ?? 1.0),
+              );
+              const drawY = baseY + footY - sprite.info.h + offY;
+
+              if (_ptInRect(px, py, drawX, drawY, sprite.info.w, sprite.info.h)) {
+                const cx = drawX + sprite.info.w / 2;
+                const cy = drawY + sprite.info.h / 2;
+                const d2 = (px - cx) * (px - cx) + (py - cy) * (py - cy);
+                if (d2 < bestDist2) {
+                  bestDist2 = d2;
+                  best = { x: safeEnt.x, y: safeEnt.y };
+                }
+              }
+            }
+            continue;
+          }
+
+          // Monsters: bounds aproximados pelo frame legado (OUTFIT_MAP + pack)
+          const pack = safeEnt.appearance?.outfitPack;
+          const outfitId = safeEnt.appearance?.outfitId;
+          if (!pack || outfitId == null) continue;
+          const cfg = OUTFIT_MAP?.[outfitId];
+          const spriteNum = cfg?.frames?.[dir]?.[step ?? 1];
+          if (!spriteNum || typeof assets?.getSprite !== "function") continue;
+
+          const sprite = assets.getSprite(pack, `${spriteNum}.png`);
+          if (!sprite?.info) continue;
+
+          const drawX =
+            baseX +
+            Math.round((TILESIZE - sprite.info.w) / 2) +
+            (ENTITY_RENDER?.offsetX ?? 0) +
+            (cfg?.offX || 0);
+
+          const footY = Math.round(
+            TILESIZE * (ENTITY_RENDER?.footAnchorY ?? 1.0),
+          );
+          const drawY =
+            baseY +
+            footY -
+            sprite.info.h +
+            (ENTITY_RENDER?.offsetY ?? 0) +
+            (cfg?.offY || 0);
+
+          if (_ptInRect(px, py, drawX, drawY, sprite.info.w, sprite.info.h)) {
+            const cx = drawX + sprite.info.w / 2;
+            const cy = drawY + sprite.info.h / 2;
+            const d2 = (px - cx) * (px - cx) + (py - cy) * (py - cy);
+            if (d2 < bestDist2) {
+              bestDist2 = d2;
+              best = { x: safeEnt.x, y: safeEnt.y };
+            }
+          }
+        }
+
+        return best;
+      }
+
+      function _pickEffectUnderMouse(px, py, camX, camY) {
+        const now = Date.now();
+        const floorOffset = (state.activeZ - GROUNDZ) * TILESIZE;
+
+        // Fields (chão)
+        const fields = getFields?.() ?? {};
+        for (const id in fields) {
+          const field = fields[id];
+          if (!field) continue;
+          if (field.z != null && field.z !== state.activeZ) continue;
+          if (field.expiry && now > field.expiry) continue;
+          if (typeof assets?.getFieldSprites !== "function") continue;
+
+          const fieldVisualIdRaw =
+            field.fieldId ?? field.fieldTypeId ?? field.effectId;
+          const fieldVisualId = Number(fieldVisualIdRaw);
+
+          const startTime =
+            field.startTime ?? field.expiry - (field.fieldDuration ?? 5000);
+          const safeElapsed = Math.max(0, now - (startTime || now));
+
+          const sprites = Number.isFinite(fieldVisualId)
+            ? assets.getFieldSprites(fieldVisualId, safeElapsed, {
+                x: field.x,
+                y: field.y,
+                z: field.z,
+                seed: String(field.id ?? id).length,
+              })
+            : [];
+
+          for (const sprite of sprites) {
+            if (!sprite?.info) continue;
+
+            const posX = Math.round(
+              field.x * TILESIZE -
+                camX +
+                floorOffset +
+                Math.round((TILESIZE - sprite.info.w) / 2) +
+                (EFFECTS_RENDER?.offsetX ?? 0),
+            );
+            const posY = Math.round(
+              field.y * TILESIZE -
+                camY +
+                floorOffset +
+                (TILESIZE - sprite.info.h) +
+                (EFFECTS_RENDER?.offsetY ?? 0),
+            );
+
+            if (_ptInRect(px, py, posX, posY, sprite.info.w, sprite.info.h)) {
+              return { x: Math.round(field.x), y: Math.round(field.y) };
+            }
+          }
+        }
+
+        // Effects (top)
+        const effects = getEffects?.() ?? {};
+        for (const id in effects) {
+          const effect = effects[id];
+          if (!effect) continue;
+          if (effect.z != null && effect.z !== state.activeZ) continue;
+          if (effect.expiry && now > effect.expiry) continue;
+          if (effect.type === "corpse" || effect.isField) continue;
+          if (typeof assets?.getEffectSprite !== "function") continue;
+
+          const totalDuration = effect.effectDuration ?? 1200;
+          const startTime = effect.startTime ?? effect.expiry - totalDuration;
+          const safeElapsed = Math.max(0, now - startTime);
+
+          const fxSprite = assets.getEffectSprite(effect.effectId, safeElapsed);
+          if (!fxSprite?.info) continue;
+
+          const baseX = Number(effect.x ?? 0);
+          const baseY = Number(effect.y ?? 0);
+
+          const posX = Math.round(
+            baseX * TILESIZE -
+              camX +
+              floorOffset +
+              Math.round((TILESIZE - fxSprite.info.w) / 2) +
+              (EFFECTS_RENDER?.offsetX ?? 0),
+          );
+          const posY = Math.round(
+            baseY * TILESIZE -
+              camY +
+              floorOffset +
+              (TILESIZE - fxSprite.info.h) +
+              (EFFECTS_RENDER?.offsetY ?? 0),
+          );
+
+          if (_ptInRect(px, py, posX, posY, fxSprite.info.w, fxSprite.info.h)) {
+            return { x: Math.round(baseX), y: Math.round(baseY) };
+          }
+        }
+
+        return null;
+      }
+
+      const ADMIN_ID = "GMADMIN";
+      let adminPos = {
+        id: ADMIN_ID,
+        name: "GM Master",
+        x: 0,
+        y: 0,
+        z: WORLD_SETTINGS.spawn.z,
+        direcao: "frente",
+        appearance: { outfitId: "75", outfitPack: "outfits_01", isAdmin: true },
+        speed: 150, // ✅ speed na raiz (schema.js)
+        lastMoveTime: 0,
+      };
+
+      // Getters locais para injetar no combatEngine
+      const getMonsters = () => dynamicEntities;
+      const getPlayers = () => onlinePlayers;
+
+      // ---------------------------------------------------------------------------
+      // INDICADOR DE MAPA
+      // ---------------------------------------------------------------------------
+      function setMapMode(mode) {
+        const dot = document.getElementById("map-mode-dot");
+        const label = document.getElementById("map-mode-label");
+        dot.className = "";
+        if (mode === "firebase") {
+          dot.classList.add("online");
+          label.style.color = "#2ecc71";
+          label.innerText = "Mapa Firebase";
+        } else if (mode === "local") {
+          dot.classList.add("offline");
+          label.style.color = "#f1c40f";
+          label.innerText = "Mapa Local (offline)";
+        } else {
+          dot.classList.add("error");
+          label.style.color = "#e74c3c";
+          label.innerText = "Mapa Sem dados";
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // LOAD MAPA
+      // ---------------------------------------------------------------------------
+      async function loadMap() {
+        // 1ª tentativa: Firebase
+        try {
+          const data = await getMap();
+          if (data && Object.keys(data).length > 0) {
+            setMapMode("firebase");
+            pushLog(
+              "admin",
+              "system",
+              `Mapa Firebase: ${Object.keys(data).length} tiles`,
+            );
+            return data;
+          }
+        } catch {
+          pushLog("admin", "warn", "Firebase indisponível, tentando local...");
+        }
+
+        // 2ª tentativa: arquivo local (mesmo path do worldEngine via ASSETS)
+        try {
+          const res = await fetch(ASSETS.mapFile);
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+          const data = await res.json();
+          setMapMode("local");
+          pushLog(
+            "admin",
+            "warn",
+            `Mapa local (${ASSETS.mapFile}): ${Object.keys(data).length} tiles`,
+          );
+          return data;
+        } catch (e) {
+          pushLog("admin", "error", `Falha ao carregar mapa: ${e.message}`);
+          setMapMode("none");
+          return {};
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // INIT
+      // ---------------------------------------------------------------------------
+      async function init() {
+        const canvas = document.getElementById("adminCanvas");
+        const ctx = canvas.getContext("2d");
+        canvas.width = window.innerWidth - ADMIN_ENGINE.sidebarWidth;
+        canvas.height = window.innerHeight - ADMIN_ENGINE.logPanelHeight;
+        ctx.imageSmoothingEnabled = false;
+
+        const canvasW = canvas.width;
+        const canvasH = canvas.height;
+        const cols = Math.ceil(canvasW / TILESIZE) + 2;
+        const rows = Math.ceil(canvasH / TILESIZE) + 2;
+
+        pushLog("admin", "system", "Ligando engine...");
+
+        try {
+          // 1. Mapa
+          state.map = await loadMap();
+
+          // 2. Câmera — posição do GM
+          const firstKey = Object.keys(state.map)[0];
+          if (firstKey) {
+            const [fx, fy] = firstKey.split(",").map(Number);
+            state.camera = centerCamera({ x: fx, y: fy }, cols, rows);
+            adminPos.x = Math.floor(state.camera.x + cols / 2);
+            adminPos.y = Math.floor(state.camera.y + rows / 2);
+            adminPos.z = state.activeZ;
+          }
+
+          // 3. nexodata
+          pushLog("admin", "system", `Carregando ${ASSETS.dataFile}...`);
+          const ndRes = await fetch(ASSETS.dataFile);
+          if (!ndRes.ok)
+            throw new Error(`${ASSETS.dataFile} HTTP ${ndRes.status}`);
+          state.nexoData = await ndRes.json();
+          pushLog(
+            "admin",
+            "system",
+            `nexodata carregado: ${Object.keys(state.nexoData).length} sprites`,
+          );
+
+          // 4. Atlas
+          pushLog("admin", "system", `Carregando ${ASSETS.atlasFile}...`);
+          state.atlas = await new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+              pushLog("admin", "system", `Atlas ${img.width}×${img.height}px`);
+              resolve(img);
+            };
+            img.onerror = () =>
+              reject(new Error(`Falha ao carregar ${ASSETS.atlasFile}`));
+            img.src = ASSETS.atlasFile;
+          });
+
+          // 5. Sprites
+          const totalPacks = await loadAllSprites(assets);
+          pushLog("admin", "system", `Sprites carregados: ${totalPacks} packs`);
+
+          // 6. CombatEngine
+          initCombatEngine([], getMonsters, getPlayers);
+
+          // 7. GM online
+          // ✅ syncPlayer substitui dbSet('online_players/ADMIN_ID', adminPos)
+          await syncPlayer(ADMIN_ID, adminPos);
+          pushLog(
+            "admin",
+            "system",
+            `GM online em ${adminPos.x},${adminPos.y}`,
+          );
+
+          // 8. Efeitos visuais
+          monitorEffects();
+
+          // 9. Watchers Firebase
+          // Use worldStore helpers so partial updates aren't lost
+          initWorldStore();
+
+          subscribe("players", (data) => {
+            onlinePlayers = data ?? {};
+            updatePlayerListUI();
+            handleStatsChanges("players", onlinePlayers);
+          });
+
+          subscribe("monsters", (data) => {
+            dynamicEntities = data ?? {};
+            const count = Object.keys(dynamicEntities).length;
+            document.getElementById("entity-count").innerText = count;
+            handleStatsChanges("monsters", data);
+          });
+
+          // template de monstros para renderização correta
+          watchMonsterTemplates(async (data) => {
+            const tmpl = data || {};
+            setMonsterTemplates(tmpl);
+            const keys = Object.keys(tmpl);
+            pushLog(
+              "admin",
+              "system",
+              `Monster templates recebidos: ${keys.length}${keys.length ? " → " + keys.join(", ") : ""}`,
+            );
+
+            // carregar packs ausentes referenciados pelos novos templates
+            try {
+              const packs = new Set();
+              keys.forEach((k) => {
+                const p = tmpl[k]?.appearance?.outfitPack;
+                if (p) packs.add(p);
+              });
+              for (const pack of packs) {
+                if (String(pack).startsWith("outfits_")) continue;
+                if (!assets.hasPack(pack)) {
+                  pushLog(
+                    "admin",
+                    "system",
+                    `Carregando pack faltante ${pack}...`,
+                  );
+                  await loadPack(assets, pack);
+                  pushLog("admin", "system", `Pack ${pack} carregado`);
+                }
+              }
+            } catch (e) {
+              console.warn("falha ao carregar packs de templates (admin)", e);
+            }
+          });
+          // fetch inicial em caso de watcher tardio
+          (async () => {
+            try {
+              const data = await getMonsterTemplates();
+              if (data) {
+                setMonsterTemplates(data);
+                const keys = Object.keys(data);
+                pushLog(
+                  "admin",
+                  "system",
+                  `Monster templates iniciais: ${keys.length}${keys.length ? " → " + keys.join(", ") : ""}`,
+                );
+                // carregar packs dos templates iniciais
+                try {
+                  const packs = new Set();
+                  keys.forEach((k) => {
+                    const p = data[k]?.appearance?.outfitPack;
+                    if (p) packs.add(p);
+                  });
+                  for (const pack of packs) {
+                    if (String(pack).startsWith("outfits_")) continue;
+                    if (!assets.hasPack(pack)) {
+                      pushLog(
+                        "admin",
+                        "system",
+                        `Carregando pack faltante ${pack}...`,
+                      );
+                      await loadPack(assets, pack);
+                      pushLog("admin", "system", `Pack ${pack} carregado`);
+                    }
+                  }
+                } catch (e) {
+                  console.warn("falha ao carregar packs iniciais - admin", e);
+                }
+              }
+            } catch (e) {
+              console.warn("erro fetch inicial templates admin", e);
+            }
+          })();
+
+          // 10. UI e controles
+          // botão para recarregar templates (debug)
+          const btnReload = document.createElement("button");
+          btnReload.textContent = "🔁 Reload sprites";
+          btnReload.className = "btn";
+          btnReload.style.marginTop = "8px";
+          btnReload.onclick = async () => {
+            try {
+              const data = await getMonsterTemplates();
+              setMonsterTemplates(data || {});
+              pushLog(
+                "admin",
+                "system",
+                `Templates recarregados: ${data ? Object.keys(data).length : 0}`,
+              );
+            } catch (e) {
+              pushLog("admin", "error", `Falha reload templates: ${e.message}`);
+            }
+          };
+          document.querySelector(".tool-group").appendChild(btnReload);
+          populateSpawnSelect();
+          setupUploadMap();
+          setupSidebar(canvas, cols, rows);
+          setupKeyboard(cols, rows);
+          setupMouse(canvas);
+
+          // 11. floorIndex
+          state.floorIndex = buildFloorIndex(state.map);
+          state.ready = true;
+
+          pushLog("admin", "system", "Admin Engine pronta.");
+          document.getElementById("valCam").innerText =
+            `${Math.floor(state.camera.x)},${Math.floor(state.camera.y)}`;
+          document.getElementById("valZ").innerText = state.activeZ;
+
+          if (rafId) cancelAnimationFrame(rafId);
+          rafId = requestAnimationFrame((ts) =>
+            renderLoop(ts, ctx, canvasW, canvasH, cols, rows),
+          );
+        } catch (e) {
+          pushLog("admin", "error", e.message);
+          console.error(e);
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // TECLADO
+      // ---------------------------------------------------------------------------
+      function setupKeyboard(cols, rows) {
+        document.addEventListener("keydown", (e) => {
+          const speed = 1;
+          let dx = 0,
+            dy = 0;
+          if (e.key === "ArrowUp" || e.key === "w") dy = -speed;
+          if (e.key === "ArrowDown" || e.key === "s") dy = speed;
+          if (e.key === "ArrowLeft" || e.key === "a") dx = -speed;
+          if (e.key === "ArrowRight" || e.key === "d") dx = speed;
+
+          if (dx !== 0 || dy !== 0) {
+            state.camera.x += dx;
+            state.camera.y += dy;
+            adminPos.x = Math.floor(state.camera.x + cols / 2);
+            adminPos.y = Math.floor(state.camera.y + rows / 2);
+            adminPos.direcao =
+              dy < 0
+                ? "costas"
+                : dy > 0
+                  ? "frente"
+                  : dx > 0
+                    ? "lado"
+                    : "lado-esquerdo";
+            handlePlayerSync(ADMIN_ID, adminPos);
+          }
+          if (e.key === "PageUp")
+            state.activeZ = Math.max(0, state.activeZ - 1);
+          if (e.key === "PageDown")
+            state.activeZ = Math.min(15, state.activeZ + 1);
+
+          document.getElementById("valCam").innerText =
+            `${Math.floor(state.camera.x)},${Math.floor(state.camera.y)}`;
+          document.getElementById("valZ").innerText = state.activeZ;
+        });
+      }
+
+      // ---------------------------------------------------------------------------
+      // MOUSE
+      // ---------------------------------------------------------------------------
+      function setupMouse(canvas) {
+        canvas.addEventListener("mousemove", (e) => {
+          const rect = canvas.getBoundingClientRect();
+          const px = e.clientX - rect.left;
+          const py = e.clientY - rect.top;
+
+          const { tx, ty } = screenToTile(px, py, state.camera);
+
+          // Default: tile sob o cursor
+          let hx = tx;
+          let hy = ty;
+
+          // Se estiver sobre sprite (entidade/efeito), usa a coordenada real do objeto
+          const camX = state.camera.x * TILESIZE;
+          const camY = state.camera.y * TILESIZE;
+
+          const pickedEntity = _pickEntityUnderMouse(px, py, camX, camY);
+          const pickedFx = pickedEntity
+            ? null
+            : _pickEffectUnderMouse(px, py, camX, camY);
+
+          if (pickedEntity) {
+            hx = pickedEntity.x;
+            hy = pickedEntity.y;
+          } else if (pickedFx) {
+            hx = pickedFx.x;
+            hy = pickedFx.y;
+          }
+
+          hoverTile.x = hx;
+          hoverTile.y = hy;
+          document.getElementById("valHover").innerText = `${hx},${hy}`;
+        });
+
+        canvas.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+          const rect = document
+            .getElementById("viewport")
+            .getBoundingClientRect();
+          openContextMenu(e.clientX - rect.left, e.clientY - rect.top);
+        });
+
+        window.addEventListener("click", closeContextMenu);
+      }
+
+      // ---------------------------------------------------------------------------
+      // RENDER LOOP
+      // ---------------------------------------------------------------------------
+      function renderLoop(ts, ctx, canvasW, canvasH, cols, rows) {
+        if (!state.ready) {
+          rafId = requestAnimationFrame((t) =>
+            renderLoop(t, ctx, canvasW, canvasH, cols, rows),
+          );
+          return;
+        }
+        if (state.lastTs === undefined) state.lastTs = ts;
+        // keep a running clock exactly like worldEngine
+        state.animClock += ts - state.lastTs;
+        state.lastTs = ts;
+
+        const camX = state.camera.x * TILESIZE;
+        const camY = state.camera.y * TILESIZE;
+        const floorOffset = (state.activeZ - GROUNDZ) * TILESIZE;
+
+        renderWorld({
+          ctx,
+          camX,
+          camY,
+          activeZ: state.activeZ,
+          animClock: state.animClock,
+          ts,
+          canvasW,
+          canvasH,
+          cols,
+          rows,
+          atlas: state.atlas,
+          nexoData: state.nexoData,
+          map: state.map,
+          assets,
+          anim,
+          roofFadeRadius: 0,
+          extraEntities: {
+            ...dynamicEntities,
+            ...onlinePlayers,
+            [ADMIN_ID]: adminPos,
+          },
+          renderOptions: {
+            showHP: true,
+            showName: true,
+            renderMode: "high",
+            isAdmin: true,
+            labelsSameFloorOnly: state.labelsSameFloorOnly,
+          },
+        });
+
+        // Hover tile highlight — baseado em camX/camY (pixels) para bater com o render
+        const hx = Math.round(hoverTile.x * TILESIZE - camX + floorOffset);
+        const hy = Math.round(hoverTile.y * TILESIZE - camY + floorOffset);
+        ctx.save();
+        ctx.strokeStyle = "#2ecc71";
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 2]);
+        ctx.strokeRect(hx, hy, TILESIZE, TILESIZE);
+        ctx.restore();
+
+        rafId = requestAnimationFrame((t) =>
+          renderLoop(t, ctx, canvasW, canvasH, cols, rows),
+        );
+      }
+
+      // ---------------------------------------------------------------------------
+      // SPAWN
+      // ---------------------------------------------------------------------------
+      function populateSpawnSelect() {
+        const select = document.getElementById("spawn-species");
+        select.innerHTML = "";
+        Object.entries(MONSTER_TEMPLATES).forEach(([key, tmpl]) => {
+          const opt = document.createElement("option");
+          opt.value = key;
+          opt.textContent = tmpl.name;
+          select.appendChild(opt);
+        });
+      }
+
+      async function spawnMonster(x, y, z) {
+        const species = document.getElementById("spawn-species").value;
+        const template = MONSTER_TEMPLATES[species];
+        if (!template) {
+          pushLog("admin", "warn", "Template não encontrado.");
+          return;
+        }
+
+        const id = `mob${Date.now()}`;
+        // ✅ syncMonster de db.js (substitui syncEntity de firebaseClient)
+        await syncMonster(id, {
+          id,
+          species,
+          name: template.name,
+          x,
+          y,
+          z,
+          type: "monster",
+          direcao: "frente",
+          speed: template.speed ?? template.appearance?.speed ?? 80, // ✅ raiz
+          stats: { ...template.stats },
+          appearance: { ...template.appearance },
+        });
+        pushLog("admin", "spawn", `${template.name} invocado em ${x},${y}`);
+      }
+
+      // ---------------------------------------------------------------------------
+      // UPLOAD DE MAPA
+      // ---------------------------------------------------------------------------
+      function setupUploadMap() {
+        document.getElementById("btnUploadMap").onclick = async () => {
+          const file = document.getElementById("mapFileInput").files[0];
+          if (!file) {
+            pushLog("admin", "warn", "Selecione um arquivo JSON.");
+            return;
+          }
+          pushLog("admin", "system", `Lendo ${file.name}...`);
+          try {
+            const mapData = JSON.parse(await file.text());
+            pushLog("admin", "system", "Enviando ao Firebase...");
+            await uploadWorld(mapData);
+            state.map = await getMap(); // ✅ db.js
+            state.floorIndex = buildFloorIndex(state.map);
+            setMapMode("firebase");
+            pushLog(
+              "admin",
+              "system",
+              `Mapa enviado: ${Object.keys(state.map).length} tiles`,
+            );
+          } catch (e) {
+            pushLog("admin", "error", `Erro no upload: ${e.message}`);
+          }
+        };
+      }
+
+      // ---------------------------------------------------------------------------
+      // MENU DE CONTEXTO
+      // ---------------------------------------------------------------------------
+      const ctxMenu = document.getElementById("ctx-menu");
+
+      function openContextMenu(screenX, screenY) {
+        const { x, y } = hoverTile;
+        const tileKey = `${x},${y},${state.activeZ}`;
+        const tile = state.map[tileKey];
+        document.getElementById("menu-info").innerText =
+          `COORD ${x},${y}  Z ${state.activeZ}`;
+
+        const actions = document.getElementById("dynamic-actions");
+        actions.innerHTML = "";
+
+        if (tile?.length > 0) {
+          const info = document.createElement("div");
+          info.style.cssText =
+            "padding:8px;font-size:10px;color:#888;border-bottom:1px solid #333";
+          info.innerText = `Items: ${tile.join(", ")}`;
+          actions.appendChild(info);
+        }
+
+        [
+          {
+            label: "Invocar Monstro aqui",
+            action: () => spawnMonster(x, y, state.activeZ),
+          },
+          {
+            label: "Teleportar câmera aqui",
+            action: () => {
+              const c = document.getElementById("adminCanvas");
+              const cols2 = Math.ceil(c.width / TILESIZE) + 2;
+              const rows2 = Math.ceil(c.height / TILESIZE) + 2;
+              state.camera = centerCamera({ x, y }, cols2, rows2);
+              adminPos.x = Math.floor(state.camera.x + cols2 / 2);
+              adminPos.y = Math.floor(state.camera.y + rows2 / 2);
+              handlePlayerSync(ADMIN_ID, adminPos);
+              pushLog("admin", "system", `Câmera teleportada: ${x},${y}`);
+            },
+          },
+          {
+            label: "Inspecionar tile",
+            action: () =>
+              tile?.length > 0
+                ? pushLog(
+                    "admin",
+                    "system",
+                    `Tile ${tileKey}: ${tile.join(", ")}`,
+                  )
+                : pushLog("admin", "warn", `Tile ${tileKey} vazio`),
+          },
+        ].forEach(({ label, action }) => {
+          const btn = document.createElement("button");
+          btn.className = "menu-item";
+          btn.textContent = label;
+          btn.onclick = () => {
+            action();
+            closeContextMenu();
+          };
+          actions.appendChild(btn);
+        });
+
+        ctxMenu.style.left = `${screenX}px`;
+        ctxMenu.style.top = `${screenY}px`;
+        ctxMenu.style.display = "flex";
+      }
+
+      function closeContextMenu() {
+        ctxMenu.style.display = "none";
+      }
+
+      // ---------------------------------------------------------------------------
+      // SIDEBAR
+      // ---------------------------------------------------------------------------
+      function setupSidebar(canvas, cols, rows) {
+        const labelsSameFloorToggle = document.getElementById(
+          "gm-labels-floor-only",
+        );
+        if (labelsSameFloorToggle) {
+          labelsSameFloorToggle.checked = state.labelsSameFloorOnly;
+          labelsSameFloorToggle.addEventListener("change", (e) => {
+            state.labelsSameFloorOnly = !!e.target.checked;
+            pushLog(
+              "admin",
+              "system",
+              `Labels/HP por andar ativo: ${state.labelsSameFloorOnly ? "ON" : "OFF"}`,
+            );
+          });
+        }
+
+        document.getElementById("btnSpawnManual").onclick = () =>
+          spawnMonster(hoverTile.x, hoverTile.y, state.activeZ);
+
+        document.getElementById("btnHealAll").onclick = async () => {
+          const ids = Object.keys(onlinePlayers).filter(
+            (id) => id !== ADMIN_ID,
+          );
+          await Promise.all(ids.map((id) => applyDamage(id, -9999)));
+          pushLog("admin", "heal", `Cura global: ${ids.length} jogadores`);
+        };
+
+        // ✅ clearMonsters() substitui remove(ref(db, 'worldentities'))
+        document.getElementById("btnClearMobs").onclick = async () => {
+          if (!confirm("Remover todos os monstros?")) return;
+          await clearMonsters();
+          // watcher dispara com data=null → dynamicEntities vira {} automaticamente
+          pushLog("admin", "death:monster", "Todos os monstros removidos");
+        };
+
+        document.getElementById("btnGoTo").onclick = () => {
+          const pid = document.getElementById("player-list-select").value;
+          const p = onlinePlayers[pid];
+          if (!p) {
+            pushLog("admin", "warn", "Jogador não encontrado.");
+            return;
+          }
+          state.camera = centerCamera({ x: p.x, y: p.y }, cols, rows);
+          adminPos.x = Math.floor(state.camera.x + cols / 2);
+          adminPos.y = Math.floor(state.camera.y + rows / 2);
+          adminPos.z = p.z ?? WORLD_SETTINGS.spawn.z;
+          state.activeZ = adminPos.z;
+          handlePlayerSync(ADMIN_ID, adminPos);
+          pushLog("admin", "system", `Indo até ${p.name}: ${p.x},${p.y}`);
+        };
+
+        // ✅ removePlayer(pid) substitui dbSet(`online_players/${pid}`, null)
+        document.getElementById("btnKick").onclick = async () => {
+          const pid = document.getElementById("player-list-select").value;
+          const p = onlinePlayers[pid];
+          if (!p || pid === ADMIN_ID) return;
+          await removePlayer(pid);
+          pushLog("admin", "system", `${p.name} removido do servidor`, pid);
+        };
+      }
+
+      // ---------------------------------------------------------------------------
+      // PLAYERS UI
+      // ---------------------------------------------------------------------------
+      function updatePlayerListUI() {
+        const select = document.getElementById("player-list-select");
+        const current = select.value;
+        select.innerHTML = "";
+
+        const players = Object.entries(onlinePlayers).filter(
+          ([id]) => id !== ADMIN_ID,
+        );
+        if (!players.length) {
+          select.innerHTML = "<option>Nenhum jogador online</option>";
+          return;
+        }
+        players.forEach(([id, p]) => {
+          const opt = document.createElement("option");
+          opt.value = id;
+          opt.textContent = `${p.name} [${id}]`;
+          select.appendChild(opt);
+        });
+        select.value = current;
+      }
+
+      // ---------------------------------------------------------------------------
+      // CLEANUP
+      // ---------------------------------------------------------------------------
+      window.addEventListener("beforeunload", () => {
+        // ✅ removePlayer(ADMIN_ID) substitui dbSet(`online_players/${ADMIN_ID}`, null)
+        removePlayer(ADMIN_ID);
+      });
+
+      // ---------------------------------------------------------------------------
+      // BOOT
+      // ---------------------------------------------------------------------------
+      window.addEventListener("load", init);
+    </script>
+  </body>
+</html>

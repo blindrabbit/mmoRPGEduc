@@ -1,0 +1,1884 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>World Client — mmoRPGGame</title>
+    <link rel="icon" href="data:," />
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #111;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        overflow: hidden;
+        font-family: "Courier New", monospace;
+      }
+      /* Boot */
+      #boot-overlay {
+        position: fixed;
+        inset: 0;
+        background: #000;
+        color: #2ecc71;
+        font: 13px monospace;
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+      }
+      #boot-title {
+        color: #2ecc71;
+        font-size: 16px;
+        font-weight: bold;
+        letter-spacing: 3px;
+        margin-bottom: 6px;
+      }
+      #boot-log {
+        width: 520px;
+        max-height: 340px;
+        overflow-y: auto;
+        border: 1px solid #2ecc71;
+        border-radius: 4px;
+        padding: 12px;
+        background: #0a0a0a;
+        font-size: 11px;
+        line-height: 1.8;
+      }
+      .log-ok {
+        color: #2ecc71;
+      }
+      .log-warn {
+        color: #f1c40f;
+      }
+      .log-err {
+        color: #e74c3c;
+        font-weight: bold;
+      }
+      .log-info {
+        color: #aaa;
+      }
+      /* Auth / Char */
+      .box {
+        display: none;
+        background: #222;
+        padding: 25px;
+        border: 2px solid #444;
+        width: 350px;
+        text-align: center;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      }
+      input {
+        width: 90%;
+        padding: 12px;
+        margin: 8px 0;
+        background: #333;
+        border: 1px solid #555;
+        color: white;
+        border-radius: 4px;
+      }
+      button {
+        width: 98%;
+        padding: 12px;
+        margin-top: 10px;
+        background: #2980b9;
+        border: none;
+        color: white;
+        cursor: pointer;
+        font-weight: bold;
+        border-radius: 4px;
+        transition: 0.2s;
+      }
+      button:hover {
+        background: #3498db;
+        transform: translateY(-1px);
+      }
+      .char-slot {
+        background: #333;
+        margin: 10px 0;
+        padding: 15px;
+        border: 1px solid #555;
+        cursor: pointer;
+        transition: 0.2s;
+        text-align: left;
+        border-radius: 4px;
+      }
+      .char-slot:hover {
+        border-color: #2ecc71;
+        background: #3d3d3d;
+      }
+      .empty-slot {
+        border-style: dashed;
+        color: #888;
+        text-align: center;
+        font-style: italic;
+      }
+      /* ═══════════════════════════════════════════════════
+         LAYOUT PRINCIPAL — estilo Tibia OT
+         ═══════════════════════════════════════════════════ */
+      #game-wrapper {
+        display: none;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
+      }
+      /* Área central: painel lateral + canvas */
+      #main-area {
+        display: flex;
+        flex-direction: row;
+        flex: 1;
+        overflow: hidden;
+        min-height: 0;
+      }
+      /* ── Painel lateral (inventário) ── */
+      #side-panel {
+        width: 196px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: rgba(10, 12, 18, 0.97);
+        border-right: 2px solid #1a2a3a;
+        overflow: hidden;
+      }
+      /* Quando dockado à direita */
+      #main-area.dock-right #side-panel {
+        order: 2;
+        border-right: none;
+        border-left: 2px solid #1a2a3a;
+      }
+      #side-panel-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 5px 8px;
+        background: #0d1117;
+        border-bottom: 1px solid #1a2a3a;
+        flex-shrink: 0;
+      }
+      #side-panel-header span {
+        color: #2ecc71;
+        font: bold 10px monospace;
+        letter-spacing: 1px;
+      }
+      #dock-toggle {
+        background: none;
+        border: 1px solid #333;
+        color: #666;
+        font: 11px monospace;
+        width: 22px;
+        height: 18px;
+        cursor: pointer;
+        border-radius: 3px;
+        padding: 0;
+        margin: 0;
+        line-height: 1;
+        transition: color 0.15s, border-color 0.15s;
+      }
+      #dock-toggle:hover { color: #2ecc71; border-color: #2ecc71; }
+      /* Painel lateral: corpo scrollável único */
+      #side-body {
+        flex: 1;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
+      }
+      /* Cabeçalhos de seção dentro do painel lateral */
+      .side-section-hdr {
+        padding: 5px 8px 4px;
+        background: #0d1117;
+        color: #2ecc71;
+        font: bold 9px monospace;
+        letter-spacing: 1px;
+        border-top: 1px solid #1a2a3a;
+        border-bottom: 1px solid #1a2a3a;
+        text-transform: uppercase;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
+      }
+      .side-section-hdr:hover { background: #111827; }
+      .side-section-hdr .sec-arrow { font-size: 8px; color: #555; transition: transform 0.2s; }
+      .side-section-hdr.collapsed .sec-arrow { transform: rotate(-90deg); }
+      .side-section-body.collapsed { display: none; }
+      /* Grade de inventário */
+      #inv-grid {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 3px;
+        padding: 6px;
+      }
+      .inv-slot {
+        aspect-ratio: 1;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        border-radius: 3px;
+      }
+      .inv-slot:hover { border-color: #2ecc71; cursor: pointer; }
+      /* Stats */
+      #stats-panel {
+        padding: 8px;
+        font: 11px monospace;
+      }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+        border-bottom: 1px solid #0d1117;
+        color: #ccc;
+      }
+      .stat-row span:first-child { color: #7f8c8d; }
+      .stat-row span:last-child  { color: #eee; font-weight: bold; }
+      /* Equipamentos */
+      #equip-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        grid-template-rows: repeat(4, 1fr);
+        grid-template-areas:
+          ". head ."
+          "ring body amulet"
+          "weapon legs shield"
+          ". feet .";
+        gap: 4px;
+        padding: 8px;
+      }
+      .equip-slot {
+        aspect-ratio: 1;
+        background: #111827;
+        border: 1px solid #333;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        color: #444;
+        text-align: center;
+        line-height: 1.2;
+      }
+      .equip-slot:hover { border-color: #555; color: #888; }
+      .equip-head    { grid-area: head; }
+      .equip-body    { grid-area: body; }
+      .equip-weapon  { grid-area: weapon; }
+      .equip-shield  { grid-area: shield; }
+      .equip-legs    { grid-area: legs; }
+      .equip-feet    { grid-area: feet; }
+      .equip-ring    { grid-area: ring; }
+      .equip-amulet  { grid-area: amulet; }
+      /* ── Coluna do canvas ── */
+      #canvas-column {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 0;
+      }
+      #canvas-wrapper {
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      canvas {
+        display: block;
+        image-rendering: pixelated;
+        background: #000;
+        transform-origin: center center;
+      }
+      /* HUD overlay sobre o canvas */
+      #ui {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.82);
+        padding: 12px;
+        font-size: 11px;
+        border: 1px solid #333;
+        width: 200px;
+        border-radius: 6px;
+        box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+        z-index: 5;
+      }
+      /* Controles de zoom */
+      #zoom-controls {
+        position: absolute;
+        bottom: 6px;
+        right: 6px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(0, 0, 0, 0.72);
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font: 10px monospace;
+        color: #888;
+        z-index: 10;
+        user-select: none;
+      }
+      #zoom-controls button {
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        background: #1a2a3a;
+        border: 1px solid #333;
+        color: #eee;
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 12px;
+        margin: 0;
+        line-height: 1;
+        transition: background 0.15s;
+      }
+      #zoom-controls button:hover { background: #2ecc71; color: #000; }
+      /* SpellHUD dock */
+      #spell-dock {
+        flex-shrink: 0;
+        background: rgba(10, 12, 18, 0.97);
+        border-top: 1px solid #1a2a3a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 64px;
+        overflow: hidden;
+      }
+      /* ── Barras de status (HP e MP) ── */
+      .stat-label {
+        font-weight: bold;
+        margin-top: 8px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .stat-label .regen-hint {
+        font-size: 9px;
+        color: #666;
+        font-weight: normal;
+      }
+      .bar-bg {
+        width: 100%;
+        height: 12px;
+        background: #2a2a2a;
+        margin-top: 4px;
+        border-radius: 3px;
+        overflow: hidden;
+        border: 1px solid #111;
+      }
+      .bar-fill {
+        height: 100%;
+        transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      #hp-bar-fill {
+        background: #2ecc71;
+        width: 100%;
+      }
+      #mp-bar-fill {
+        background: #3498db;
+        width: 100%;
+      }
+      /* Aliases legados */
+      .hp-bar-bg {
+        display: none;
+      }
+      .hp-bar-fill {
+        display: none;
+      }
+      #hp-text {
+        display: none;
+      }
+      #status-container {
+        margin-top: 10px;
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .status-badge {
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        gap: 4px;
+      }
+      .status-burning {
+        background: #e67e22;
+        color: #fff;
+        box-shadow: 0 0 8px #e67e22;
+      }
+      .status-poisoned {
+        background: #27ae60;
+        color: #fff;
+        box-shadow: 0 0 8px #27ae60;
+      }
+      .status-electrified {
+        background: #f1c40f;
+        color: #000;
+        box-shadow: 0 0 8px #f1c40f;
+      }
+      /* Login Error */
+      #login-error {
+        display: none;
+        color: #e74c3c;
+        font-size: 12px;
+        margin-top: 12px;
+        padding: 10px;
+        background: rgba(231, 76, 60, 0.15);
+        border: 1px solid #e74c3c;
+        border-radius: 4px;
+        text-align: center;
+        font-weight: bold;
+      }
+      /* Class selection modal */
+      #class-modal {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        z-index: 300;
+        align-items: center;
+        justify-content: center;
+      }
+      #class-modal .modal-card {
+        background: #111;
+        border: 1px solid #333;
+        padding: 18px;
+        width: 360px;
+        border-radius: 8px;
+        text-align: center;
+      }
+      #class-modal h3 {
+        color: #2ecc71;
+        margin-bottom: 8px;
+      }
+      .class-grid {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        justify-content: center;
+      }
+      .class-option {
+        padding: 10px 12px;
+        border-radius: 6px;
+        cursor: pointer;
+        min-width: 120px;
+        border: 1px solid #333;
+      }
+      .class-option:hover {
+        transform: translateY(-2px);
+      }
+      /* Log / Chat — barra inferior (igual ao admin) */
+      #log-panel {
+        height: 200px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-top: 2px solid #1a2a3a;
+        background: rgba(10, 12, 18, 0.97);
+      }
+      .tabs {
+        display: flex;
+        background: #0d1117;
+        border-bottom: 1px solid #1a2a3a;
+      }
+      .tab-btn {
+        flex: 1;
+        padding: 6px 0;
+        background: none;
+        border: none;
+        color: #2ecc71;
+        font: bold 11px monospace;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .tab-btn.active {
+        background: #1a2a3a;
+        color: #fff;
+      }
+      .tab-content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+        font: 11px monospace;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
+      }
+      /* Chat */
+      #tab-chat {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+      }
+      #chat-messages {
+        flex: 1;
+        min-height: 100px;
+        overflow-y: auto;
+        padding: 4px 8px;
+        font: 11px monospace;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
+      }
+      #chat-input-row {
+        display: flex;
+        gap: 4px;
+        padding: 4px 8px;
+        border-top: 1px solid #1a2a3a;
+        background: #0d1117;
+        flex-shrink: 0;
+      }
+      #chat-input {
+        flex: 1;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        color: #eee;
+        font: 11px monospace;
+        padding: 3px 6px;
+        border-radius: 3px;
+        outline: none;
+      }
+      #chat-input:focus {
+        border-color: #2ecc71;
+      }
+      #chat-send {
+        width: 28px;
+        background: #1a2a3a;
+        border: 1px solid #2ecc71;
+        color: #2ecc71;
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 12px;
+        transition: background 0.15s;
+        padding: 0;
+        margin: 0;
+      }
+      #chat-send:hover {
+        background: #2ecc71;
+        color: #000;
+      }
+      .chat-line {
+        padding: 2px 0;
+        line-height: 1.5;
+        border-bottom: 1px solid #0d1117;
+      }
+      .chat-name   { color: #f1c40f; font-weight: bold; }
+      .chat-name.gm { color: #e74c3c; }
+      .chat-text   { color: #ddd; }
+      .chat-ts     { color: #4a5568; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <!-- BOOT -->
+    <div id="boot-overlay">
+      <div id="boot-title">mmoRPGGame — CLIENT</div>
+      <div id="boot-log"></div>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="auth-box" class="box">
+      <h3 style="color: #2ecc71; margin-top: 0">ENTRAR NO MUNDO</h3>
+      <input type="text" id="user-email" placeholder="Usuário ou E-mail" />
+      <input type="password" id="user-pass" placeholder="Senha" />
+      <button id="btnEntrar">CONECTAR</button>
+      <div id="login-error"></div>
+    </div>
+
+    <!-- CLASS SELECTION MODAL -->
+    <div id="class-modal">
+      <div class="modal-card">
+        <h3>Escolha a Profissão</h3>
+        <div class="class-grid" id="class-grid"></div>
+        <div style="margin-top: 12px">
+          <button
+            id="class-cancel"
+            style="
+              padding: 8px 12px;
+              background: #c0392b;
+              border: none;
+              color: #fff;
+              border-radius: 6px;
+            "
+          >
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- SELEÇÃO DE PERSONAGEM -->
+    <div id="char-selection" class="box">
+      <h3>SEUS HERÓIS</h3>
+      <div id="slots-container"></div>
+      <button onclick="location.reload()" style="background: #c0392b">
+        SAIR
+      </button>
+    </div>
+
+    <!-- JOGO PRINCIPAL -->
+    <div id="game-wrapper">
+
+      <!-- ── Área central (lateral + canvas) ── -->
+      <div id="main-area">
+
+        <!-- Painel lateral: Stats / Equip / Itens (scroll contínuo) -->
+        <div id="side-panel">
+          <div id="side-panel-header">
+            <span>PERSONAGEM</span>
+            <button id="dock-toggle" title="Mover painel para o outro lado">&#8644;</button>
+          </div>
+
+          <div id="side-body">
+            <!-- Seção Stats -->
+            <div class="side-section-hdr" data-section="stats">
+              <span>◈ STATUS</span><span class="sec-arrow">▼</span>
+            </div>
+            <div class="side-section-body" id="sec-stats">
+              <div id="stats-panel"></div>
+            </div>
+
+            <!-- Seção Equipamentos -->
+            <div class="side-section-hdr" data-section="equip">
+              <span>◈ EQUIPAMENTOS</span><span class="sec-arrow">▼</span>
+            </div>
+            <div class="side-section-body" id="sec-equip">
+              <div id="equip-grid">
+                <div class="equip-slot equip-head"   title="Cabeça">Cab</div>
+                <div class="equip-slot equip-body"   title="Corpo">Corp</div>
+                <div class="equip-slot equip-weapon" title="Arma">Arma</div>
+                <div class="equip-slot equip-shield" title="Escudo">Esc</div>
+                <div class="equip-slot equip-legs"   title="Pernas">Pern</div>
+                <div class="equip-slot equip-feet"   title="Botas">Bot</div>
+                <div class="equip-slot equip-ring"   title="Anel">Anel</div>
+                <div class="equip-slot equip-amulet" title="Amuleto">Amu</div>
+              </div>
+            </div>
+
+            <!-- Seção Inventário -->
+            <div class="side-section-hdr" data-section="inv">
+              <span>◈ INVENTÁRIO</span><span class="sec-arrow">▼</span>
+            </div>
+            <div class="side-section-body" id="sec-inv">
+              <div id="inv-grid"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Coluna do canvas + spell dock -->
+        <div id="canvas-column">
+          <div id="canvas-wrapper">
+            <canvas id="gameCanvas"></canvas>
+
+            <!-- HUD overlay -->
+            <div id="ui">
+              <div>
+                <span id="p-name" style="color:#2ecc71;font-weight:bold;font-size:14px;text-transform:uppercase">---</span>
+              </div>
+              <div id="pos" style="color:#aaa;margin:4px 0 8px;font-family:monospace;font-size:10px">X 0 Y 0 Z 0</div>
+              <div class="stat-label">
+                <span>❤ HP</span>
+                <span id="hp-vals" style="color:#2ecc71">100/100</span>
+              </div>
+              <div class="bar-bg"><div id="hp-bar-fill" class="bar-fill"></div></div>
+              <div class="stat-label">
+                <span>🔷 MP</span>
+                <span id="mp-vals" style="color:#3498db">50/50</span>
+              </div>
+              <div class="bar-bg"><div id="mp-bar-fill" class="bar-fill"></div></div>
+              <div id="regen-info" style="font-size:9px;color:#555;margin-top:4px;text-align:right">♻ regen: —</div>
+              <div id="status-container"></div>
+            </div>
+
+            <!-- Controles de zoom -->
+            <div id="zoom-controls">
+              <button id="zoom-out">&#8722;</button>
+              <span id="zoom-label">100%</span>
+              <button id="zoom-in">&#43;</button>
+            </div>
+          </div>
+
+          <!-- SpellHUD dock (entre canvas e chat) -->
+          <div id="spell-dock"></div>
+        </div>
+      </div>
+
+      <!-- ── Painel inferior: Chat + Eventos + Logs ── -->
+      <div id="log-panel" class="tabbed-panel">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="chat">Chat</button>
+          <button class="tab-btn" data-tab="world">Eventos do Mundo</button>
+          <button class="tab-btn" data-tab="logs">Logs</button>
+        </div>
+        <div class="tab-content" id="tab-chat">
+          <div id="chat-messages"></div>
+          <div id="chat-input-row">
+            <input type="text" id="chat-input" placeholder="Falar..." maxlength="120" autocomplete="off" />
+            <button id="chat-send">&#9654;</button>
+          </div>
+        </div>
+        <div class="tab-content" id="tab-world" style="display:none"></div>
+        <div class="tab-content" id="tab-logs" style="display:none"></div>
+      </div>
+
+    </div>
+
+    <script type="module">
+      // ✅ FASE IMEDIATA: db.js substitui firebaseClient direto
+      // ❌ REMOVIDO: import { dbGet, dbSet, syncEntity, dbWatchServerTime } from './firebaseClient.js'
+      import {
+        getMap,
+        getPlayerData,
+        setPlayerData,
+        getAccount,
+        setAccount,
+        encodeUser,
+        formatDisplayName,
+        syncPlayer,
+        removePlayer,
+        watchPlayerData,
+        watchServerTime,
+        applyHpToPlayer,
+        syncEffect,
+        setPlayerActionCooldown,
+        syncChat,
+        watchChat,
+      } from "./core/db.js";
+
+      import {
+        ASSETS,
+        RPG_ENGINE,
+        GROUND_Z,
+        PLAYER_CLASSES,
+      } from "./core/config.js";
+      import { watchMonsterTemplates, getMonsterTemplates } from "./core/db.js";
+      import { setMonsterTemplates } from "./core/remoteTemplates.js";
+      import { AssetManager } from "./render/assetManager.js";
+      import { AnimationController } from "./render/animationController.js";
+      import { setupMovement } from "./gameplay/input.js";
+      import {
+        loadAllSprites,
+        monitorEffects,
+        handlePlayerSync,
+      } from "./gameplay/gameCore.js";
+      import { loadPack } from "./render/assetLoader.js";
+      import {
+        calculateCombatResult,
+        calculateNewHp,
+        isInAttackRange,
+        COMBAT,
+      } from "./gameplay/combatLogic.js";
+      import { submitPlayerAction } from "./core/db.js"; // ações delegadas ao worldEngine
+      import {
+        handleStatsChanges,
+        initCombatEngine,
+        emitHpDeltaText,
+        emitMissText,
+        emitStatusText,
+        buildCombatEffectPayload,
+      } from "./gameplay/combatEngine.js";
+      import { buildFloorIndex, setupCanvas } from "./render/mapRenderer.js";
+      import {
+        initWorldStore,
+        subscribe,
+        getMonsters,
+        getPlayers,
+      } from "./core/worldStore.js";
+      import { renderWorld } from "./render/worldRenderer.js";
+      import { initEventLog, pushLog } from "./gameplay/eventLog.js";
+      import { makePlayer } from "./core/schema.js";
+      import {
+        initSpellHUD,
+        updateSpellHUDPlayer,
+        setSpellHUDTarget,
+        resolveSpellTargetClick,
+      } from "./gameplay/spellHUD.js";
+      import {
+        startRegen,
+        stopRegen,
+        updateRegenPlayer,
+        setRegenMod,
+        clearRegenMod,
+        getCurrentRegenRates,
+      } from "./gameplay/regenSystem.js";
+
+      // ──────────────────────────────────────────────────────────────────
+      // Helpers de classe — formata nome e gera resumo básico a partir das stats
+      // ──────────────────────────────────────────────────────────────────
+      function formatClassLabel(key) {
+        if (!key) return "---";
+        return key.charAt(0).toUpperCase() + key.slice(1);
+      }
+
+      function buildClassSummary(cls) {
+        if (!cls) return "Classe padrão, equilibrada.";
+        const parts = [];
+        if ((cls.hp ?? 0) >= 110) parts.push("alta vitalidade");
+        if ((cls.mp ?? 0) >= 80) parts.push("alto mana");
+        if ((cls.atk ?? 0) >= 18) parts.push("forte ataque");
+        if ((cls.def ?? 0) >= 7) parts.push("boa defesa");
+        if ((cls.agi ?? 0) >= 12) parts.push("alta agilidade");
+        if (parts.length === 0) return "Classe balanceada.";
+        return parts.join(", ") + ".";
+      }
+      // ---------------------------------------------------------------------------
+      // BOOT LOGGER — painel de boot separado do game log
+      // ---------------------------------------------------------------------------
+      const bootLog = document.getElementById("boot-log");
+      function blog(msg, type = "info") {
+        const line = document.createElement("div");
+        line.className = `log-${type}`;
+        const ts = new Date().toLocaleTimeString("pt-BR", { hour12: false });
+        line.innerText = `${ts}  ${msg}`;
+        bootLog.appendChild(line);
+        bootLog.scrollTop = bootLog.scrollHeight;
+      }
+      function bootError(msg, err) {
+        blog(msg, "err");
+        if (err?.message) blog(err.message, "err");
+        if (err?.stack) console.error(err.stack);
+      }
+      function fetchJSON(path, label) {
+        blog(`fetch ${path}...`, "info");
+        return fetch(path).then(async (res) => {
+          blog(`HTTP ${res.status}`, res.ok ? "ok" : "err");
+          if (!res.ok) throw new Error(`${res.status} ${path}`);
+          const data = await res.json();
+          blog(`${label} ${Object.keys(data).length} entradas`, "ok");
+          return data;
+        });
+      }
+      function loadImage(src) {
+        return new Promise((resolve, reject) => {
+          blog(`carregando ${src}`, "info");
+          const img = new Image();
+          img.onload = () => {
+            blog(`atlas ${img.width}×${img.height}px`, "ok");
+            resolve(img);
+          };
+          img.onerror = () => reject(new Error(`Falha ao carregar ${src}`));
+          img.src = src;
+        });
+      }
+
+      // INIT DO PAINEL DE LOG (aba Logs)
+      initEventLog({
+        panelId: "tab-logs",
+        showSource: false,
+        filters: ["all", "damage", "death", "heal", "system", "move"],
+      });
+
+      // INIT EVENTOS DO MUNDO (aba Eventos)
+      window.initWorldEventPanel = function () {
+        initEventLog({
+          panelId: "tab-world",
+          showSource: true,
+          filters: ["all", "engine", "move", "field", "spawn"],
+        });
+      };
+      window.initWorldEventPanel();
+
+      // Alternância de abas
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", function () {
+          document
+            .querySelectorAll(".tab-btn")
+            .forEach((b) => b.classList.remove("active"));
+          btn.classList.add("active");
+          const tab = btn.getAttribute("data-tab");
+          document
+            .querySelectorAll(".tab-content")
+            .forEach((tc) => (tc.style.display = "none"));
+          // #tab-chat precisa de display:flex para o layout interno funcionar
+          document.getElementById("tab-" + tab).style.display =
+            tab === "chat" ? "flex" : "";
+        });
+      });
+
+      // ---------------------------------------------------------------------------
+      // LAYOUT — zoom do canvas
+      // ---------------------------------------------------------------------------
+      let zoomFactor = parseFloat(localStorage.getItem("canvasZoom") ?? "1.0");
+
+      function applyZoom() {
+        const c = document.getElementById("gameCanvas");
+        if (c) c.style.transform = `scale(${zoomFactor})`;
+        const lbl = document.getElementById("zoom-label");
+        if (lbl) lbl.textContent = `${Math.round(zoomFactor * 100)}%`;
+        localStorage.setItem("canvasZoom", String(zoomFactor));
+      }
+
+      document.getElementById("zoom-in").addEventListener("click", () => {
+        zoomFactor = Math.min(2.0, +(zoomFactor + 0.1).toFixed(1));
+        applyZoom();
+      });
+      document.getElementById("zoom-out").addEventListener("click", () => {
+        zoomFactor = Math.max(0.5, +(zoomFactor - 0.1).toFixed(1));
+        applyZoom();
+      });
+      document.addEventListener("wheel", (e) => {
+        if (!e.ctrlKey) return;
+        e.preventDefault();
+        const delta = e.deltaY > 0 ? -0.1 : 0.1;
+        zoomFactor = Math.max(0.5, Math.min(2.0, +(zoomFactor + delta).toFixed(1)));
+        applyZoom();
+      }, { passive: false });
+
+      // ---------------------------------------------------------------------------
+      // LAYOUT — dock do painel lateral (esquerda/direita)
+      // ---------------------------------------------------------------------------
+      const mainArea = document.getElementById("main-area");
+
+      function restoreDock() {
+        if (localStorage.getItem("dockSide") === "right")
+          mainArea.classList.add("dock-right");
+      }
+      restoreDock();
+
+      document.getElementById("dock-toggle").addEventListener("click", () => {
+        mainArea.classList.toggle("dock-right");
+        localStorage.setItem("dockSide",
+          mainArea.classList.contains("dock-right") ? "right" : "left");
+      });
+
+      // ---------------------------------------------------------------------------
+      // LAYOUT — grid de inventário (20 slots vazios)
+      // ---------------------------------------------------------------------------
+      (function buildInvGrid() {
+        const grid = document.getElementById("inv-grid");
+        if (!grid) return;
+        for (let i = 0; i < 20; i++) {
+          const slot = document.createElement("div");
+          slot.className = "inv-slot";
+          slot.title = `Slot ${i + 1}`;
+          grid.appendChild(slot);
+        }
+      })();
+
+      // ---------------------------------------------------------------------------
+      // LAYOUT — colapsar/expandir seções do painel lateral
+      // ---------------------------------------------------------------------------
+      document.querySelectorAll(".side-section-hdr").forEach((hdr) => {
+        const key = hdr.getAttribute("data-section");
+        const body = document.getElementById(`sec-${key}`);
+        if (!body) return;
+        // Restaura estado salvo
+        if (localStorage.getItem(`sideCollapsed_${key}`) === "1") {
+          hdr.classList.add("collapsed");
+          body.classList.add("collapsed");
+        }
+        hdr.addEventListener("click", () => {
+          const collapsed = hdr.classList.toggle("collapsed");
+          body.classList.toggle("collapsed", collapsed);
+          localStorage.setItem(`sideCollapsed_${key}`, collapsed ? "1" : "0");
+        });
+      });
+
+      // ---------------------------------------------------------------------------
+      // CHAT — proximidade (raio CHAT_RANGE tiles) + GM global
+      // ---------------------------------------------------------------------------
+      const CHAT_RANGE = 20;
+      const chatMessages = document.getElementById("chat-messages");
+
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
+      }
+
+      function appendChatLine(msg) {
+        const time = new Date(msg.ts ?? Date.now()).toLocaleTimeString("pt-BR", {
+          hour12: false,
+        });
+        const div = document.createElement("div");
+        div.className = "chat-line";
+        const nameClass = msg.isGM ? "chat-name gm" : "chat-name";
+        div.innerHTML =
+          `<span class="chat-ts">${time}</span> ` +
+          `<span class="${nameClass}">${escapeHtml(msg.name)}:</span> ` +
+          `<span class="chat-text">${escapeHtml(msg.msg)}</span>`;
+        chatMessages.appendChild(div);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+        while (chatMessages.children.length > 60)
+          chatMessages.removeChild(chatMessages.firstChild);
+      }
+
+      // Ouve mensagens — filtra por proximidade (exceto GM)
+      watchChat((msg) => {
+        if (!myPos) return;
+        if (!msg.isGM) {
+          const dx = Math.abs((msg.x ?? 0) - myPos.x);
+          const dy = Math.abs((msg.y ?? 0) - myPos.y);
+          const dz = Math.abs((msg.z ?? 0) - (myPos.z ?? 0));
+          if (dz > 1 || dx > CHAT_RANGE || dy > CHAT_RANGE) return;
+        }
+        appendChatLine(msg);
+      });
+
+      async function sendChatMsg() {
+        const input = document.getElementById("chat-input");
+        const text = input.value.trim();
+        if (!text || !myPos) return;
+        input.value = "";
+        const id = `chat_${Date.now()}_${myPos.id}`;
+        await syncChat(id, {
+          id,
+          playerId: myPos.id,
+          name: myPos.name,
+          msg: text,
+          x: myPos.x,
+          y: myPos.y,
+          z: myPos.z ?? 0,
+          ts: Date.now(),
+        });
+      }
+
+      document.getElementById("chat-send").addEventListener("click", sendChatMsg);
+      document.getElementById("chat-input").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.stopPropagation(); // não ativa teclas de movimento
+          sendChatMsg();
+        }
+      });
+
+      // ---------------------------------------------------------------------------
+      // ESTADO GLOBAL
+      // ---------------------------------------------------------------------------
+      const assetsMgn = new AssetManager();
+      const anim = new AnimationController();
+      const state = {
+        worldTiles: {},
+        floorIndex: null,
+        nexoData: {},
+        atlas: null,
+        animClock: 0,
+        lastTs: undefined,
+      };
+      const cam = { x: 0, y: 0, hoverX: 0, hoverY: 0 };
+
+      let canvas, ctx, canvasW, canvasH, cols, rows;
+      let myPos = null;
+      let currentAccount = null;
+      let serverOffset = 0;
+      let rafId = null;
+      let combatInterval = null;
+      let autoAttackInterval = null;
+      let targetLock = null;
+      let attackInProgress = false;
+      let lockEscHandler = null;
+      const BASIC_ATTACK_CD_KEY = "cdBasicAttack";
+      const AUTO_ATTACK_TICK_MS = 2000;
+
+      // Relógio do servidor
+      // ✅ watchServerTime de db.js (substitui dbWatchServerTime de firebaseClient)
+      watchServerTime((offset) => {
+        serverOffset = offset;
+      });
+
+      // templates de monstros carregados do Firebase
+      watchMonsterTemplates(async (data) => {
+        const tmpl = data || {};
+        setMonsterTemplates(tmpl);
+        const keys = Object.keys(tmpl);
+        blog(
+          `Monster templates recebidos: ${keys.length}${keys.length ? " → " + keys.join(", ") : ""}`,
+          "info",
+        );
+
+        // tentar carregar quaisquer packs referenciados pelos templates
+        try {
+          const packs = new Set();
+          keys.forEach((k) => {
+            const p = tmpl[k]?.appearance?.outfitPack;
+            if (p) packs.add(p);
+          });
+          for (const pack of packs) {
+            if (String(pack).startsWith("outfits_")) continue;
+            if (!assetsMgn.hasPack(pack)) {
+              blog(`Carregando pack faltante ${pack}...`, "info");
+              await loadPack(assetsMgn, pack);
+              blog(`Pack ${pack} carregado`, "ok");
+            }
+          }
+        } catch (e) {
+          console.warn("falha ao carregar packs de templates", e);
+        }
+      });
+
+      // também busca manualmente no boot (caso watch não dispare imediatamente)
+      async function fetchInitialTemplates() {
+        try {
+          const data = await getMonsterTemplates();
+          if (data) {
+            setMonsterTemplates(data);
+            const keys = Object.keys(data);
+            blog(
+              `Monster templates iniciais: ${keys.length}${keys.length ? " → " + keys.join(", ") : ""}`,
+              "info",
+            );
+          }
+        } catch (e) {
+          console.warn("erro ao buscar templates iniciais", e);
+        }
+      }
+      fetchInitialTemplates();
+
+      const getGameTime = () => Date.now() - serverOffset;
+
+      // ---------------------------------------------------------------------------
+      // BOOT
+      // ---------------------------------------------------------------------------
+      async function boot() {
+        blog("Boot iniciado.", "ok");
+        blog(
+          `Canvas ${RPG_ENGINE.canvasCols}x${RPG_ENGINE.canvasRows} SQMs`,
+          "info",
+        );
+
+        // 1/3 — Mapa
+        blog("[1/3] " + ASSETS.mapFile, "info");
+        try {
+          const data = await getMap(); // ✅ db.js
+          if (data && Object.keys(data).length > 0) {
+            state.worldTiles = data;
+            blog(
+              `Firebase: ${Object.keys(state.worldTiles).length} tiles`,
+              "ok",
+            );
+          } else throw new Error("Firebase vazio");
+        } catch {
+          blog("Firebase vazio, tentando local...", "warn");
+          try {
+            state.worldTiles = await fetchJSON(ASSETS.mapFile, "mapa");
+          } catch (e) {
+            bootError("Falha ao carregar mapa", e);
+            return false;
+          }
+        }
+        state.floorIndex = buildFloorIndex(state.worldTiles);
+        const z7count = state.floorIndex.get(GROUND_Z)?.size ?? 0;
+        blog(
+          `Índice: ${Object.keys(state.worldTiles).length} tiles  z${GROUND_Z}=${z7count}`,
+          "ok",
+        );
+
+        // 2/3 — nexodata
+        blog("[2/3] " + ASSETS.dataFile, "info");
+        try {
+          state.nexoData = await fetchJSON(ASSETS.dataFile, "data");
+          const vals = Object.values(state.nexoData);
+          blog(
+            `${vals.length} sprites  ${vals.filter((d) => d.isAnimated).length} animados`,
+            "ok",
+          );
+        } catch (e) {
+          bootError("Falha ao carregar " + ASSETS.dataFile, e);
+          return false;
+        }
+
+        // 3/3 — Atlas
+        blog("[3/3] " + ASSETS.atlasFile, "info");
+        try {
+          state.atlas = await loadImage(ASSETS.atlasFile);
+        } catch (e) {
+          bootError("Falha ao carregar " + ASSETS.atlasFile, e);
+          return false;
+        }
+
+        // WorldStore — inicia UMA vez
+        initWorldStore();
+        subscribe("monsters", (data) => {
+          handleStatsChanges("monsters", data);
+        });
+        subscribe("players", (data) => handleStatsChanges("players", data));
+        blog("WorldStore inicializado", "ok");
+
+        return true;
+      }
+
+      // ---------------------------------------------------------------------------
+      // botao de recarregar templates
+      // document.getElementById("btn-reload-templates").onclick = async () => {
+      //   try {
+      //     const data = await getMonsterTemplates();
+      //     setMonsterTemplates(data || {});
+      //     blog(`Monster templates recarregados: ${data ? Object.keys(data).length : 0}`, "info");
+      //   } catch (e) {
+      //     blog(`Falha ao recarregar templates: ${e.message}`, "err");
+      //   }
+      // };
+
+      // ---------------------------------------------------------------------------
+      // AUTH
+      // ---------------------------------------------------------------------------
+      document.getElementById("btnEntrar").onclick = handleLogin;
+
+      async function handleLogin() {
+        const emailRaw = document.getElementById("user-email").value.trim();
+        const pass = document.getElementById("user-pass").value;
+        const errorDiv = document.getElementById("login-error");
+
+        try {
+          // ✅ Busca account por email
+          const data = await getAccount(emailRaw);
+
+          // ✅ Só faz login se conta existe E senha está correta
+          if (data && data.pass === pass) {
+            errorDiv.style.display = "none";
+            currentAccount = { key: data.uuid, ...data };
+            showCharSelection();
+          } else {
+            // ✅ Mensagem genérica para qualquer erro (conta não existe ou senha errada)
+            errorDiv.innerText = "E-mail ou senha inválidos!";
+            errorDiv.style.display = "block";
+          }
+        } catch (err) {
+          console.error("LOGIN", err);
+          errorDiv.innerText = `Erro ao conectar: ${err.message}`;
+          errorDiv.style.display = "block";
+        }
+      }
+
+      // ---------------------------------------------------------------------------
+      // SELEÇÃO DE PERSONAGEM
+      // ---------------------------------------------------------------------------
+      async function showCharSelection() {
+        document.getElementById("auth-box").style.display = "none";
+        document.getElementById("char-selection").style.display = "block";
+        const container = document.getElementById("slots-container");
+        container.innerHTML = "";
+        const chars = currentAccount.characters ?? [];
+
+        for (let i = 0; i < 5; i++) {
+          const charId = chars[i];
+          const slot = document.createElement("div");
+          slot.className = "char-slot";
+          if (charId) {
+            // ✅ getPlayerData de db.js
+            const data = await getPlayerData(charId);
+            // Se personagem foi deletado do Firebase, trata como slot vazio
+            if (!data) {
+              // Remove o personagem deletado do array
+              const newCharacters = currentAccount.characters.filter(
+                (id) => id !== charId && id !== undefined,
+              );
+              currentAccount.characters = newCharacters;
+              await setAccount(currentAccount.key, currentAccount);
+              slot.innerHTML = '<div class="empty-slot">Criar Novo</div>';
+              slot.onclick = () => createCharacter(i);
+            } else {
+              const classKey = data.appearance?.class ?? data.class ?? "--";
+              const classLabel = formatClassLabel(
+                classKey === "--" ? classKey : classKey,
+              );
+              const level = data.stats?.level ?? 1;
+              slot.innerHTML = `<strong>${classLabel}</strong><br><small>Level ${level}</small>`;
+              slot.onclick = () => loadGame(charId);
+            }
+          } else {
+            slot.innerHTML = '<div class="empty-slot">Criar Novo</div>';
+            slot.onclick = () => createCharacter(i);
+          }
+          container.appendChild(slot);
+        }
+      }
+
+      // Abre o modal de seleção de classe
+      function createCharacter(index) {
+        const modal = document.getElementById("class-modal");
+        const grid = document.getElementById("class-grid");
+        grid.innerHTML = "";
+        Object.entries(PLAYER_CLASSES).forEach(([key, cls]) => {
+          const btn = document.createElement("div");
+          btn.className = "class-option";
+          btn.style.borderColor = cls.color || "#444";
+          const label = formatClassLabel(key);
+          const summary = buildClassSummary(cls);
+          btn.innerHTML = `<strong>${label}</strong><div style="margin-top:6px;font-size:12px;color:#ccc">${summary}</div>`;
+          btn.onclick = () => createCharacterFinal(index, key);
+          grid.appendChild(btn);
+        });
+        document.getElementById("class-cancel").onclick = () =>
+          (modal.style.display = "none");
+        modal.style.display = "flex";
+      }
+
+      // Cria personagem com a classe selecionada
+      async function createCharacterFinal(index, classKey) {
+        const charId = `char${getGameTime()}`;
+        const isAdmin = currentAccount.user === "admin";
+        const cls = PLAYER_CLASSES[classKey] || {};
+        const hp = Number(cls.hp ?? 100);
+        const newChar = makePlayer({
+          id: charId,
+          name: currentAccount.gameName,
+          class: classKey,
+          x: RPG_ENGINE.spawnX,
+          y: RPG_ENGINE.spawnY,
+          z: RPG_ENGINE.spawnZ,
+          direcao: "frente",
+          speed: cls.speed ?? RPG_ENGINE.defaultSpeed,
+          appearance: {
+            outfitId: isAdmin ? "GM" : 10000,
+            outfitPack: "outfits_01",
+            isAdmin,
+            class: classKey,
+          },
+          stats: {
+            hp: hp,
+            maxHp: hp,
+            level: 1,
+            atk: Number(cls.atk ?? 10),
+            def: Number(cls.def ?? 5),
+            agi: Number(cls.agi ?? 5),
+          },
+          spawnX: RPG_ENGINE.spawnX,
+          spawnY: RPG_ENGINE.spawnY,
+          spawnZ: RPG_ENGINE.spawnZ,
+        });
+        // Fecha modal
+        document.getElementById("class-modal").style.display = "none";
+        // Salva no Firebase
+        await setPlayerData(charId, newChar);
+        currentAccount.characters = currentAccount.characters ?? [];
+        // Insere sem deixar 'undefined' — se index no final, faz push, senão substitui
+        if (index >= currentAccount.characters.length) {
+          currentAccount.characters.push(charId);
+        } else {
+          currentAccount.characters[index] = charId;
+        }
+        await setAccount(currentAccount.key, currentAccount);
+        showCharSelection();
+      }
+
+      // ---------------------------------------------------------------------------
+      // LOAD DO JOGO
+      // ---------------------------------------------------------------------------
+      async function loadGame(charId) {
+        targetLock = null;
+        attackInProgress = false;
+        if (combatInterval) {
+          clearInterval(combatInterval);
+          combatInterval = null;
+        }
+        if (autoAttackInterval) {
+          clearInterval(autoAttackInterval);
+          autoAttackInterval = null;
+        }
+
+        canvas = document.getElementById("gameCanvas");
+        ctx = canvas.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+
+        const cv = setupCanvas(
+          canvas,
+          RPG_ENGINE.canvasCols,
+          RPG_ENGINE.canvasRows,
+        );
+        canvasW = cv.canvasW;
+        canvasH = cv.canvasH;
+        cols = cv.cols;
+        rows = cv.rows;
+
+        document.getElementById("char-selection").style.display = "none";
+        document.getElementById("game-wrapper").style.display = "flex";
+
+        blog("Entrando no mundo ⚔", "ok");
+        blog("packs de sprites...", "info");
+        await loadAllSprites(assetsMgn);
+        blog("packs carregados", "ok");
+
+        // ✅ getPlayerData de db.js
+        myPos = await getPlayerData(charId);
+        blog(
+          `Personagem: ${myPos.name}  ${myPos.x},${myPos.y},${myPos.z}`,
+          "ok",
+        );
+
+        myPos = makePlayer({ id: charId, ...myPos });
+        document.getElementById("p-name").innerText = myPos.name;
+
+        // Verifica spawn válido
+        const spawnKey = `${myPos.x},${myPos.y},${myPos.z ?? GROUND_Z}`;
+        if (!state.worldTiles[spawnKey]) {
+          blog(`Spawn ${spawnKey} fora do mapa — reposicionando...`, "warn");
+          myPos.x = RPG_ENGINE.spawnX;
+          myPos.y = RPG_ENGINE.spawnY;
+          myPos.z = RPG_ENGINE.spawnZ;
+          await setPlayerData(charId, myPos);
+          blog(`Reposicionado: ${myPos.x},${myPos.y},${myPos.z}`, "ok");
+        }
+
+        // CombatEngine
+        const { floatingTexts } = await import("./gameplay/gameCore.js");
+        initCombatEngine(floatingTexts, getMonsters, getPlayers);
+        updateUI(myPos);
+
+        // Watcher do próprio player
+        // Faz merge seletivo: só atualiza campos que o serverData realmente tem
+        watchPlayerData(charId, (serverData) => {
+          if (!serverData) return;
+          // Preserva campos locais que o Firebase pode não ter (appearance, name)
+          if (serverData.name) myPos.name = serverData.name;
+          if (serverData.stats) myPos.stats = serverData.stats;
+          if (serverData.appearance) myPos.appearance = serverData.appearance;
+          myPos.x = serverData.x ?? myPos.x;
+          myPos.y = serverData.y ?? myPos.y;
+          myPos.z = serverData.z ?? myPos.z;
+          myPos.status = serverData.status ?? null;
+          myPos.lastAttack = serverData.lastAttack ?? myPos.lastAttack;
+          myPos[BASIC_ATTACK_CD_KEY] =
+            serverData[BASIC_ATTACK_CD_KEY] ?? myPos[BASIC_ATTACK_CD_KEY];
+          handleStatsChanges("players", { [charId]: myPos });
+          updateRegenPlayer(myPos);
+          updateSpellHUDPlayer(myPos);
+          updateUI(myPos);
+        });
+
+        pushLog(
+          "rpg",
+          "system",
+          `${myPos.name} entrou no mundo — monstros:${Object.keys(getMonsters()).length} players:${Object.keys(getPlayers()).length}`,
+        );
+
+        monitorEffects();
+
+        // ── Sistema de Magias ────────────────────────────────────────────
+        initSpellHUD({
+          player: myPos,
+          playerId: charId,
+          getTargetLock: () => targetLock,
+          getMonsters: getMonsters,
+          getGameTime: getGameTime,
+          onCast: ({ spellId, ok, reason, damage, heal, hitCount }) => {
+            if (!ok) {
+              pushLog("rpg", "system", `[Magia] ${reason}`);
+              return;
+            }
+            if (damage)
+              pushLog(
+                "rpg",
+                "damage",
+                `${myPos.name} usou magia: ${damage} de dano`,
+              );
+            if (heal)
+              pushLog("rpg", "heal", `${myPos.name} se curou: +${heal} HP`);
+            if (hitCount !== undefined)
+              pushLog(
+                "rpg",
+                "damage",
+                `${myPos.name} atingiu ${hitCount} alvos com magia`,
+              );
+            updateSpellHUDPlayer(myPos);
+          },
+        });
+
+        // ── Regeneração de HP e MP ────────────────────────────────────────
+        startRegen({
+          player: myPos,
+          playerId: charId,
+          onRegen: ({ hp, mp }) => {
+            updateUI(myPos);
+            updateRegenHint(getCurrentRegenRates());
+          },
+        });
+        // Exibe taxas iniciais na HUD
+        updateRegenHint(getCurrentRegenRates());
+
+        // Sync inicial: garante que online_players tem todos os campos
+        // que o monsterManager precisa (stats, name, appearance)
+        syncPlayer(charId, {
+          ...myPos,
+          id: charId,
+          status: myPos.status ?? null,
+          stats: myPos.stats ?? { hp: 100, maxHp: 100 },
+          name: myPos.name ?? "Herói",
+          appearance: myPos.appearance ?? {
+            outfitId: 10000,
+            outfitPack: "outfits_01",
+          },
+        });
+
+        // Movimento
+        setupMovement(
+          myPos,
+          state.worldTiles,
+          getMonsters,
+          (nx, ny, nz, dir) => {
+            if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
+              myPos.oldX = myPos.x;
+              myPos.oldY = myPos.y;
+              myPos.x = nx;
+              myPos.y = ny;
+              myPos.z = nz;
+              myPos.direcao = dir;
+              myPos.lastMoveTime = Date.now();
+              handlePlayerSync(charId, myPos);
+              pushLog(
+                "rpg",
+                "move",
+                `${myPos.name} → ${nx},${ny} [${dir}]`,
+                myPos.appearance?.isAdmin,
+              );
+            }
+          },
+          false, // isAdmin: player nunca bypassa colisão
+          state.nexoData, // metadados para checar waypoints
+        );
+
+        function findMonsterAtTile(tileX, tileY) {
+          const monsters = getMonsters();
+          for (const [mid, mob] of Object.entries(monsters)) {
+            if (!mob) continue;
+            if ((mob.stats?.hp ?? 0) <= 0 || mob.dead) continue;
+            if (Math.round(mob.x) === tileX && Math.round(mob.y) === tileY) {
+              return { ...mob, id: mob.id ?? mid };
+            }
+          }
+          return null;
+        }
+
+        function clearTargetLock(reason = null) {
+          if (targetLock && reason) {
+            pushLog("rpg", "system", `Target removido: ${reason}`);
+          }
+          targetLock = null;
+        }
+
+        async function tryBasicAttack(targetMob) {
+          if (!targetMob || attackInProgress) return;
+          if (!isInAttackRange(myPos, targetMob, 1.5)) return;
+
+          // Cooldown local — evita spam de ações na fila antes do worldEngine responder
+          const nowGame = getGameTime();
+          const lastUsed = Math.max(
+            myPos.lastAttack ?? 0,
+            myPos[BASIC_ATTACK_CD_KEY] ?? 0,
+          );
+          if (nowGame - lastUsed < COMBAT.ATTACK_COOLDOWN_MS) return;
+
+          attackInProgress = true;
+          try {
+            // Marca cooldown local para não enviar spam
+            myPos.lastAttack = nowGame;
+            myPos[BASIC_ATTACK_CD_KEY] = nowGame;
+            setPlayerActionCooldown(charId, BASIC_ATTACK_CD_KEY, nowGame);
+
+            // ✅ CLIENT-SIDE PREDICTION: calcula e exibe resultado imediato
+            const combatResult = calculateCombatResult(
+              myPos.stats,
+              targetMob.stats,
+            );
+            if (combatResult.hit) {
+              const newHp = calculateNewHp(
+                targetMob.stats.hp,
+                -combatResult.damage,
+                targetMob.stats.maxHp,
+              );
+              const diff = newHp - (targetMob.stats?.hp ?? 0);
+              if (diff !== 0) {
+                emitHpDeltaText("monsters", targetMob.id, targetMob, diff);
+              }
+            } else {
+              emitMissText(targetMob);
+            }
+
+            // Envia intenção ao worldEngine — ele valida e aplica o dano real
+            await submitPlayerAction(charId, {
+              type: "attack",
+              targetId: targetMob.id,
+            });
+          } finally {
+            attackInProgress = false;
+          }
+        }
+
+        // Lock de alvo por botão direito
+        canvas.addEventListener("contextmenu", (e) => {
+          e.preventDefault();
+
+          const rect = canvas.getBoundingClientRect();
+          const tx = Math.floor((e.clientX - rect.left + cam.x) / 32);
+          const ty = Math.floor((e.clientY - rect.top + cam.y) / 32);
+          const target = findMonsterAtTile(tx, ty);
+
+          if (!target) {
+            clearTargetLock("nenhum alvo no tile");
+            return;
+          }
+
+          if (targetLock?.kind === "monster" && targetLock?.id === target.id) {
+            clearTargetLock("toggle manual");
+            return;
+          }
+
+          targetLock = {
+            id: target.id,
+            kind: "monster",
+            name: target.name ?? target.id,
+          };
+          pushLog("rpg", "system", `Target lock: ${targetLock.name}`);
+          setSpellHUDTarget(getMonsters()[target.id] ?? target);
+        });
+
+        // Handler para magias em modo "aguardando alvo" (clique esquerdo após hotkey)
+        window.addEventListener("spellTargetClick", async (e) => {
+          const { spellId, clientX, clientY, rect } = e.detail;
+          const tx = Math.floor((clientX - rect.left + cam.x) / 32);
+          const ty = Math.floor((clientY - rect.top + cam.y) / 32);
+          const mob = findMonsterAtTile(tx, ty);
+          if (!mob) {
+            pushLog("rpg", "system", "[Magia] Nenhum alvo no tile clicado");
+            return;
+          }
+          // Trava o alvo automaticamente ao usar magia
+          targetLock = {
+            id: mob.id,
+            kind: "monster",
+            name: mob.name ?? mob.id,
+          };
+          await resolveSpellTargetClick(spellId, mob);
+        });
+
+        if (lockEscHandler) {
+          window.removeEventListener("keydown", lockEscHandler);
+        }
+        lockEscHandler = (e) => {
+          if (e.key !== "Escape") return;
+          clearTargetLock("cancelado (ESC)");
+        };
+        window.addEventListener("keydown", lockEscHandler);
+
+        // Auto-ataque contínuo enquanto alvo estiver alcançável
+        autoAttackInterval = setInterval(async () => {
+          if (!targetLock || targetLock.kind !== "monster") return;
+
+          const targetMob = getMonsters()?.[targetLock.id] ?? null;
+          if (!targetMob || (targetMob.stats?.hp ?? 0) <= 0 || targetMob.dead) {
+            clearTargetLock("alvo inválido ou morto");
+            return;
+          }
+
+          await tryBasicAttack({
+            ...targetMob,
+            id: targetMob.id ?? targetLock.id,
+          });
+        }, AUTO_ATTACK_TICK_MS);
+
+        // Hover
+        canvas.addEventListener("mousemove", (e) => {
+          const rect = canvas.getBoundingClientRect();
+          cam.hoverX = Math.floor((e.clientX - rect.left + cam.x) / 32);
+          cam.hoverY = Math.floor((e.clientY - rect.top + cam.y) / 32);
+        });
+
+        // Status tick (burning, poisoned, etc.)
+        combatInterval = setInterval(async () => {
+          if (!myPos?.status) return;
+          for (const type in myPos.status) {
+            const effect = myPos.status[type];
+            if (effect?.damage) {
+              const newHp = calculateNewHp(
+                myPos.stats.hp,
+                -effect.damage,
+                myPos.stats.maxHp,
+              );
+              emitHpDeltaText(
+                "players",
+                charId,
+                myPos,
+                -Math.abs(effect.damage),
+                {
+                  color: "#ff7a2f",
+                },
+              );
+              emitStatusText(myPos, type);
+              // ✅ applyHpToPlayer de db.js (substitui applyDamage de combatEngine)
+              await applyHpToPlayer(charId, newHp);
+              pushLog(
+                "rpg",
+                "damage",
+                `${myPos.name} sofreu ${type}: ${effect.damage} HP`,
+              );
+            }
+          }
+        }, 500);
+
+        blog("Mundo carregado — boa aventura! ⚔", "ok");
+        setTimeout(() => {
+          document.getElementById("boot-overlay").style.display = "none";
+        }, 900);
+
+        if (rafId) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(renderLoop);
+      }
+
+      // ---------------------------------------------------------------------------
+      // UI
+      // ---------------------------------------------------------------------------
+      function updateUI(data) {
+        const hp = data.stats?.hp ?? 100;
+        const maxHp = data.stats?.maxHp ?? 100;
+        const mp = data.stats?.mp ?? 0;
+        const maxMp = data.stats?.maxMp ?? 50;
+
+        const hpPct = Math.max(0, Math.min(1, hp / maxHp)) * 100;
+        const mpPct = Math.max(0, Math.min(1, mp / maxMp)) * 100;
+
+        // Nome
+        if (data.name) document.getElementById("p-name").innerText = data.name;
+
+        // HP
+        document.getElementById("hp-vals").innerText =
+          `${Math.round(hp)} / ${maxHp}`;
+        const hpFill = document.getElementById("hp-bar-fill");
+        hpFill.style.width = `${hpPct}%`;
+        hpFill.style.backgroundColor =
+          hpPct > 60 ? "#2ecc71" : hpPct > 30 ? "#f1c40f" : "#e74c3c";
+
+        // MP
+        document.getElementById("mp-vals").innerText =
+          `${Math.round(mp)} / ${maxMp}`;
+        document.getElementById("mp-bar-fill").style.width = `${mpPct}%`;
+
+        // Posição
+        document.getElementById("pos").innerText =
+          `X ${data.x}  Y ${data.y}  Z ${data.z}`;
+
+        // Regen info (atualizado pelo regenSystem via updateRegenHint)
+        // (chamado separadamente para não re-importar aqui)
+
+        // Status badges
+        const sc = document.getElementById("status-container");
+        const icons = { burning: "🔥", poisoned: "☠", electrified: "⚡" };
+        sc.innerHTML = "";
+        if (data.status) {
+          for (const type in data.status) {
+            const badge = document.createElement("div");
+            badge.className = `status-badge status-${type}`;
+            badge.innerHTML = `<span>${icons[type] ?? "●"}</span>${type}`;
+            sc.appendChild(badge);
+          }
+        }
+
+        // Painel lateral Stats (sincroniza sempre que a UI atualiza)
+        updateSideStats(data);
+
+        // Aplica zoom salvo (apenas na primeira chamada após canvas pronto)
+        applyZoom();
+      }
+
+      function updateSideStats(player) {
+        const el = document.getElementById("stats-panel");
+        if (!el || !player) return;
+        const s = player.stats ?? {};
+        el.innerHTML =
+          `<div class="stat-row"><span>❤ HP</span><span>${Math.round(s.hp ?? 0)}/${s.maxHp ?? 0}</span></div>` +
+          `<div class="stat-row"><span>🔷 MP</span><span>${Math.round(s.mp ?? 0)}/${s.maxMp ?? 0}</span></div>` +
+          `<div class="stat-row"><span>⚔ ATK</span><span>${s.atk ?? 0}</span></div>` +
+          `<div class="stat-row"><span>🛡 DEF</span><span>${s.def ?? 0}</span></div>` +
+          `<div class="stat-row"><span>👟 AGI</span><span>${s.agi ?? 0}</span></div>` +
+          `<div class="stat-row"><span>⭐ LVL</span><span>${s.level ?? 1}</span></div>`;
+      }
+
+      function updateRegenHint({ hp, mp, tickMs }) {
+        const el = document.getElementById("regen-info");
+        if (!el) return;
+        const s = (tickMs / 1000).toFixed(0);
+        el.textContent = `♻ regen: +${hp} HP / +${mp} MP a cada ${s}s`;
+      }
+
+      // ---------------------------------------------------------------------------
+      // RENDER LOOP
+      // ---------------------------------------------------------------------------
+      function renderLoop(ts) {
+        if (!myPos) {
+          rafId = requestAnimationFrame(renderLoop);
+          return;
+        }
+        if (state.lastTs === undefined) state.lastTs = ts;
+        // mirror worldEngine: keep a running clock so tile animations and
+        // other time-based logic are consistent across screens
+        state.animClock += ts - state.lastTs;
+        state.lastTs = ts;
+
+        const myVisual = anim.getVisualPos(myPos);
+        cam.x = Math.round(myVisual.x - canvasW / 2 + 16);
+        cam.y = Math.round(myVisual.y - canvasH / 2 + 16);
+        renderWorld({
+          ctx,
+          camX: cam.x,
+          camY: cam.y,
+          activeZ: myPos.z ?? GROUND_Z,
+          animClock: state.animClock,
+          ts,
+          canvasW,
+          canvasH,
+          cols,
+          rows,
+          atlas: state.atlas,
+          nexoData: state.nexoData,
+          map: state.worldTiles,
+          floorIndex: state.floorIndex,
+          assets: assetsMgn,
+          anim,
+          roofFadeRadius: RPG_ENGINE.roofFadeRadius,
+          extraEntities: {
+            ...getMonsters(),
+            ...getPlayers(),
+            [myPos.id]: myPos,
+          },
+          renderOptions: {
+            showHP: true,
+            showName: true,
+            renderMode: "high",
+            isPlayer: true,
+            viewMode: "player",
+            lockTarget: targetLock,
+          },
+        });
+
+        rafId = requestAnimationFrame(renderLoop);
+      }
+
+      // ---------------------------------------------------------------------------
+      // CLEANUP
+      // ---------------------------------------------------------------------------
+      window.addEventListener("beforeunload", () => {
+        // ✅ removePlayer de db.js (substitui syncEntity(null) de firebaseClient)
+        stopRegen();
+        if (myPos) removePlayer(myPos.id);
+        if (combatInterval) clearInterval(combatInterval);
+        if (autoAttackInterval) clearInterval(autoAttackInterval);
+        if (lockEscHandler)
+          window.removeEventListener("keydown", lockEscHandler);
+        if (rafId) cancelAnimationFrame(rafId);
+      });
+
+      // ---------------------------------------------------------------------------
+      // BOOT → AUTH
+      // ---------------------------------------------------------------------------
+      boot().then((ok) => {
+        if (!ok) return;
+        document.getElementById("boot-overlay").style.display = "none";
+        document.getElementById("auth-box").style.display = "block";
+      });
+    </script>
+  </body>
+</html>

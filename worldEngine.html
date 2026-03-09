@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <title>World Engine — mmoRPGGame</title>
+    <link rel="icon" href="," />
+
+    <!-- Estilos compartilhados entre páginas do game -->
+    <link rel="stylesheet" href="./src/clients/shared/styles/base.css" />
+    <!-- Estilos específicos do World Engine -->
+    <link rel="stylesheet" href="./src/clients/world-engine/worldEngine.css" />
+  </head>
+  <body>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Boot overlay — visível até o init() completar
+    ═══════════════════════════════════════════════════════════ -->
+    <div id="boot-overlay">
+      <div id="boot-title">mmoRPGGame — WORLD ENGINE</div>
+      <div id="boot-log"></div>
+      <div id="event-panel" class="tabbed-panel">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="logs">Logs</button>
+          <button class="tab-btn" data-tab="world">Eventos do Mundo</button>
+        </div>
+        <div class="tab-content" id="tab-logs"></div>
+        <div class="tab-content" id="tab-world" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         HUD de debug (canto superior esquerdo)
+    ═══════════════════════════════════════════════════════════ -->
+    <div id="hud">
+      CAM&nbsp;<span id="hud-cam"></span><br />
+      HOVER <span id="hud-hover"></span><br />
+      TILES <span id="hud-tiles">0</span><br />
+      FLOOR <span id="hud-z">7</span><br />
+      ENT&nbsp;&nbsp;<span id="hud-ent">0</span><br />
+      WORLD <span id="hud-world">N/A</span><br />
+      GC&nbsp;&nbsp;&nbsp;<span id="hud-gc">0</span><br />
+      WAKE  <span id="hud-wake">N/A</span>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Painel de sincronização Firebase
+    ═══════════════════════════════════════════════════════════ -->
+    <div id="upload-panel" class="side-panel">
+      <div class="panel-title">FIREBASE SYNC</div>
+      <button class="upload-btn" id="btn-reload-world">Recarregar Mundo</button>
+      <button class="upload-btn" id="btn-schema-preview">Preview Schema</button>
+      <button class="upload-btn" id="btn-schema-run">Aplicar Schema</button>
+      <div id="upload-status">Pronto.</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Canvas + elementos de jogo
+    ═══════════════════════════════════════════════════════════ -->
+    <canvas id="gameCanvas"></canvas>
+    <div id="floor-hud"></div>
+    <div id="tick-hud">world tick</div>
+    <div id="tooltip">Mova o mouse sobre o mapa...</div>
+    <div id="controls-hint">
+      WASD mover<br />
+      PgUp/PgDn floor<br />
+      Scroll zoom<br />
+      Click info tile
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Bootstrap — mínimo necessário para iniciar o engine
+         Todo o resto é delegado ao Initializer
+    ═══════════════════════════════════════════════════════════ -->
+    <script type="module">
+      import { WORLDENGINE, FLOORRANGE, TILE_SIZE } from "./src/core/config.js";
+      import { WorldState }  from "./src/core/worldState.js";
+      import { CanvasSetup } from "./src/clients/world-engine/rendering/canvasSetup.js";
+      import { BootLogger }  from "./src/clients/world-engine/engine/bootLogger.js";
+      import { Initializer } from "./src/clients/world-engine/boot/initializer.js";
+
+      // ── Tab switching do painel de boot ────────────────────
+      document.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const target = btn.dataset.tab;
+          document.querySelectorAll(".tab-btn").forEach((b) =>
+            b.classList.toggle("active", b === btn),
+          );
+          document.querySelectorAll(".tab-content").forEach((c) => {
+            c.style.display = c.id === `tab-${target}` ? "" : "none";
+          });
+        });
+      });
+
+      // ── Boot ───────────────────────────────────────────────
+      (async function bootstrap() {
+        const logger = new BootLogger("boot-log");
+        logger.info("Boot iniciado.");
+        logger.info(
+          `Config: ${WORLDENGINE.canvasCols}x${WORLDENGINE.canvasRows} SQMs` +
+          `  tick ${WORLDENGINE.worldTickMs}ms`,
+        );
+
+        const canvas      = document.getElementById("gameCanvas");
+        const canvasSetup = new CanvasSetup(
+          canvas,
+          WORLDENGINE.canvasCols,
+          WORLDENGINE.canvasRows,
+        );
+        logger.ok(
+          `Canvas ${canvasSetup.canvasW}x${canvasSetup.canvasH}px` +
+          `  ${canvasSetup.cols}x${canvasSetup.rows} SQMs`,
+        );
+
+        const worldState  = new WorldState();
+        const initializer = new Initializer({
+          logger,
+          canvas,
+          canvasSetup,
+          worldState,
+          config: { WORLDENGINE, FLOORRANGE, TILE_SIZE },
+        });
+
+        try {
+          await initializer.init();
+          document.getElementById("boot-overlay").classList.add("hidden");
+        } catch (e) {
+          logger.error(`Falha no boot: ${e.message}`, e);
+        }
+      })();
+    </script>
+  </body>
+</html>

@@ -1,0 +1,1028 @@
+// ═══════════════════════════════════════════════════════════════
+// mapRenderer.js — Módulo de renderização de mapa (v4.0 OTClient Compatible)
+// ✅ Implementação fiel das regras do OTClient (opentibiabr/otclient)
+// ✅ Dois passes de renderização: drawGround() + draw()
+// ✅ Classificação por flags: bank, clip, bottom, top
+// ✅ Posicionamento bottom-right anchor com shift
+// ✅ Sistema de elevation acumulativo
+// ✅ Suporte a ASSETS_NOVO (metadata Python)
+// ═══════════════════════════════════════════════════════════════
+import {
+  TILE_SIZE,
+  GROUND_Z,
+  FLOOR_RANGE,
+  WORLD_ENGINE,
+} from "../core/config.js";
+
+// ═══════════════════════════════════════════════════════════════
+// CONFIGURAÇÕES
+// ═══════════════════════════════════════════════════════════════
+const USE_NEW_ASSETS = true; // true = ASSETS_NOVO, false = ASSETS (legado)
+const MAX_DRAW_ELEVATION = 16; // Limite máximo de elevation (OTClient)
+
+const _variantCache = new Map();
+const _sortedKeysCache = new Map();
+let _floorAlphaCache = null;
+let _floorAlphaCacheKey = "";
+const _spriteCategoryCache = new Map(); // spriteId -> { meta, category }
+const _spriteElevationCache = new Map(); // spriteId -> { meta, elevation }
+
+function _flattenTileItems(tileLayers, layerKeys) {
+  const keys =
+    layerKeys ??
+    Object.keys(tileLayers)
+      .map((k) => parseInt(k))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+
+  const out = [];
+  for (const layer of keys) {
+    const arr = tileLayers[String(layer)];
+    if (Array.isArray(arr) && arr.length) out.push(...arr);
+  }
+  return out;
+}
+
+function _getSpriteCategory(spriteId, nexoData) {
+  const sid = String(spriteId);
+  const spriteMeta = nexoData?.[sid];
+  if (!spriteMeta) return "common";
+
+  const cached = _spriteCategoryCache.get(sid);
+  if (cached?.meta === spriteMeta) return cached.category;
+
+  const category = classifyItemOT(spriteMeta);
+  _spriteCategoryCache.set(sid, { meta: spriteMeta, category });
+  return category;
+}
+
+function _getSpriteElevation(spriteId, nexoData) {
+  const sid = String(spriteId);
+  const spriteMeta = nexoData?.[sid];
+  if (!spriteMeta) return 0;
+
+  const cached = _spriteElevationCache.get(sid);
+  if (cached?.meta === spriteMeta) return cached.elevation;
+
+  const elevation = spriteMeta?.game?.height_elevation ?? 0;
+  _spriteElevationCache.set(sid, { meta: spriteMeta, elevation });
+  return elevation;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SETUP DE CANVAS
+// ═══════════════════════════════════════════════════════════════
+export function setupCanvas(canvas, cols, rows) {
+  canvas.width = cols * TILE_SIZE;
+  canvas.height = rows * TILE_SIZE;
+  return { canvasW: canvas.width, canvasH: canvas.height, cols, rows };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CÂMERA
+// ═══════════════════════════════════════════════════════════════
+export function centerCamera(worldPos, cols, rows) {
+  return {
+    x: worldPos.x - Math.floor(cols / 2),
+    y: worldPos.y - Math.floor(rows / 2),
+  };
+}
+
+export function screenToTile(px, py, camera, zoom = 1) {
+  return {
+    tx: Math.floor(px / TILE_SIZE / zoom + camera.x),
+    ty: Math.floor(py / TILE_SIZE / zoom + camera.y),
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ÍNDICE POR FLOOR
+// ═══════════════════════════════════════════════════════════════
+export function buildFloorIndex(map) {
+  const index = new Map();
+  for (const [key, value] of Object.entries(map)) {
+    const parts = key.split(",");
+    const tx = parseInt(parts[0]);
+    const ty = parseInt(parts[1]);
+    const z = parseInt(parts[2]);
+    let tileRecord;
+
+    if (Array.isArray(value)) {
+      tileRecord = { tx, ty, items: value, flatItems: value };
+    } else if (value && typeof value === "object") {
+      if (Array.isArray(value.items)) {
+        tileRecord = { tx, ty, items: value.items, flatItems: value.items };
+      } else {
+        const layerKeys = Object.keys(value)
+          .map((k) => parseInt(k))
+          .filter((n) => Number.isFinite(n))
+          .sort((a, b) => a - b);
+        tileRecord = {
+          tx,
+          ty,
+          layers: value,
+          layerKeys,
+          flatItems: _flattenTileItems(value, layerKeys),
+        };
+      }
+    } else {
+      tileRecord = { tx, ty, items: [], flatItems: [] };
+    }
+
+    if (!index.has(z)) index.set(z, new Map());
+    index.get(z).set(key, tileRecord);
+  }
+  return index;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CLASSIFICAÇÃO DE ITEMS (OTClient ThingAttr)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Classifica item conforme flags do OTClient
+ * Referência: thingtype.h - enum ThingAttr
+ */
+function classifyItemOT(metadata) {
+  if (!metadata) return "common";
+
+  const flags = metadata.flags_raw || {};
+  const game = metadata.game || {};
+
+  // ThingAttrGround (0) - flags.bank, mas apenas se category_type for ground
+  // Paredes/montanhas com bank (ex: 1128) devem ser tratadas como bottom
+  if (flags.bank || game.render_layer === 0) {
+    if (game.category_type === "wall") return "bottom";
+    return "ground";
+  }
+
+  // ThingAttrGroundBorder (1) - flags.clip (sem bottom)
+  if (flags.clip && !flags.bottom) return "groundBorder";
+
+  // ThingAttrOnBottom (2) - flags.bottom
+  if (flags.bottom) return "bottom";
+
+  // ThingAttrOnTop (3) - flags.top ou flags.topeffect
+  if (flags.top || flags.topeffect) return "top";
+
+  // Default: common item
+  return "common";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════
+function _tileHasAnySprites(tileValue) {
+  if (!tileValue) return false;
+  if (Array.isArray(tileValue)) return tileValue.length > 0;
+  if (tileValue && typeof tileValue === "object") {
+    if (Array.isArray(tileValue.items)) return tileValue.items.length > 0;
+    for (const arr of Object.values(tileValue)) {
+      if (Array.isArray(arr) && arr.length > 0) return true;
+    }
+  }
+  return false;
+}
+
+function _indexTileHasAnySprites(tileRecord) {
+  if (!tileRecord) return false;
+  if (Array.isArray(tileRecord.flatItems)) return tileRecord.flatItems.length > 0;
+  if (Array.isArray(tileRecord.items)) return tileRecord.items.length > 0;
+  if (tileRecord.layers) {
+    for (const layer of tileRecord.layerKeys ??
+      Object.keys(tileRecord.layers)) {
+      const arr = tileRecord.layers[String(layer)];
+      if (Array.isArray(arr) && arr.length > 0) return true;
+    }
+  }
+  return false;
+}
+
+function _getIsoOffsetSqm(z, activeZ) {
+  const baseZ = Math.min(activeZ ?? GROUND_Z, GROUND_Z);
+  if (z < baseZ) return 1;
+  return 0;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CÁLCULO DE POSIÇÃO (OTClient thingtype.cpp)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * ╔══════════════════════════════════════════════════════════════╗
+ * ║  FÓRMULA FINAL — NÃO ALTERAR                                 ║
+ * ║  Validada visualmente em 08/03/2026 — todos os sprites       ║
+ * ║  do mapa alinhados: grounds, borders, multi-tile, elevação   ║
+ * ╚══════════════════════════════════════════════════════════════╝
+ *
+ * Âncora BOTTOM-RIGHT para sprites multi-tile (w ou h > 32):
+ *   sizeW = ceil(sprite.w / 32)  → quantos tiles horizontais o sprite ocupa
+ *   sizeH = ceil(sprite.h / 32)  → quantos tiles verticais
+ *   drawX = screenX - (sizeW-1)*32 + bbox.x - shift.x - elevation
+ *   drawY = screenY - (sizeH-1)*32 + bbox.y - shift.y - elevation
+ *
+ * Sprites < 32px usam bbox.x/y para posicionamento DENTRO do tile:
+ *   - borda topo (32×8, bbox @0,0)   → drawY = sy (topo do tile)
+ *   - borda base (32×9, bbox @0,23)  → drawY = sy+23 (base do tile)
+ *   - borda esq  (8×32, bbox @0,0)   → drawX = sx (esquerda do tile)
+ *   - borda dir  (9×32, bbox @23,0)  → drawX = sx+23 (direita do tile)
+ *
+ * Elevation desloca em AMBOS os eixos (stacking isométrico OTClient).
+ * Usa dimensões REAIS do atlas (w/h) para o tile-span, NÃO o bbox.width/height.
+ */
+function calculateSpritePosition(
+  tileScreenX,
+  tileScreenY,
+  spriteInfo,
+  metadata,
+  elevation = 0,
+) {
+  const _bb = metadata?.bounding_box;
+  const bbox = (Array.isArray(_bb) ? _bb[0] : _bb) || { x: 0, y: 0 };
+  const shift = metadata?.flags_raw?.shift || { x: 0, y: 0 };
+
+  // Quantos tiles de 32px o sprite ocupa (dimensões REAIS do atlas)
+  const sizeW = Math.ceil(spriteInfo.w / 32);
+  const sizeH = Math.ceil(spriteInfo.h / 32);
+
+  // Offset multi-tile (âncora bottom-right) + offset dentro do tile (bbox.x/y)
+  // Elevation em X e Y para stacking isométrico (itens elevados sobem e vão para esquerda)
+  const drawX =
+    tileScreenX - (sizeW - 1) * 32 + (bbox.x || 0) - (shift.x || 0) - elevation;
+  const drawY =
+    tileScreenY - (sizeH - 1) * 32 + (bbox.y || 0) - (shift.y || 0) - elevation;
+
+  return { x: drawX, y: drawY };
+}
+
+// ═══════════════════════════════════════════════════════════════
+// HASH E VARIAÇÃO
+// ═══════════════════════════════════════════════════════════════
+function tileHash(tx, ty, spriteId) {
+  let h = (tx * 73856093) ^ (ty * 19349663) ^ (spriteId * 83492791);
+  h = (((h >>> 16) ^ h) * 0x45d9f3b) | 0;
+  h = (((h >>> 16) ^ h) * 0x45d9f3b) | 0;
+  h = (h >>> 16) ^ h;
+  return Math.abs(h);
+}
+
+export function getVariationIndex(tx, ty, spriteId, numVariacoes) {
+  if (numVariacoes <= 1) return 0;
+  const key = `${tx},${ty},${spriteId}`;
+  if (!_variantCache.has(key)) {
+    _variantCache.set(key, tileHash(tx, ty, spriteId) % numVariacoes);
+  }
+  return _variantCache.get(key);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ANIMAÇÃO
+// ═══════════════════════════════════════════════════════════════
+export function getAnimFrameIndex(spriteData, animClock) {
+  const anim = spriteData.animation;
+  if (!anim) return 0;
+
+  let durations;
+  if (Array.isArray(anim.durations) && anim.durations.length) {
+    durations = anim.durations;
+  } else if (Array.isArray(anim.phases) && anim.phases.length) {
+    durations = anim.phases.map((p) => p.d || 200);
+  } else {
+    return 0;
+  }
+
+  const totalMs = durations.reduce((s, d) => s + d, 0);
+  const clock = animClock % totalMs;
+  let acc = 0;
+  for (let i = 0; i < durations.length; i++) {
+    acc += durations[i];
+    if (clock < acc) return i;
+  }
+  return durations.length - 1;
+}
+
+/**
+ * Retorna o frame de animação para sprites com pattern W×H > 1.
+ * Quando o exporter declara total_frames > numFrames reais (ex: 14 frames
+ * declarados mas apenas 4 frames × 3 rows = 12 variants), truncamos o
+ * durations para numFrames a fim de que cada frame visual dure exatamente
+ * o tempo declarado — sem o ciclo inflado por total_frames extras.
+ */
+function _getPatternAnimFrame(spriteData, effectiveClock, numFrames) {
+  if (!spriteData.is_animated) return 0;
+  const anim = spriteData.animation;
+  const rawDurations =
+    Array.isArray(anim?.durations) && anim.durations.length
+      ? anim.durations
+      : Array.isArray(anim?.phases) && anim.phases.length
+        ? anim.phases.map((p) => p.d || 200)
+        : null;
+  if (!rawDurations) return 0;
+  // Se total_frames > numFrames, usa apenas os primeiros numFrames durations
+  const durations =
+    numFrames < rawDurations.length
+      ? rawDurations.slice(0, numFrames)
+      : rawDurations;
+  const totalMs = durations.reduce((s, d) => s + d, 0);
+  const clock = effectiveClock % totalMs;
+  let acc = 0;
+  for (let i = 0; i < durations.length; i++) {
+    acc += durations[i];
+    if (clock < acc) return i;
+  }
+  return durations.length - 1;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RESOLUÇÃO DE VARIANT (OTClient thingtype.cpp)
+// ═══════════════════════════════════════════════════════════════
+/** Retorna a CHAVE string da variante selecionada */
+function resolveVariantKey(spriteData, tx, ty, animClock) {
+  let sortedKeys = _sortedKeysCache.get(spriteData.id);
+  if (!sortedKeys) {
+    // Sort by physical atlas position (y row first, then x column).
+    // This is required because the Python exporter stores keys 10–13 before
+    // keys 1–9 in the atlas strip — numeric sort would produce wrong frame order.
+    sortedKeys = Object.keys(spriteData.variants)
+      .map(Number)
+      .sort((a, b) => {
+        const va = spriteData.variants[String(a)];
+        const vb = spriteData.variants[String(b)];
+        if (va.y !== vb.y) return va.y - vb.y;
+        return va.x - vb.x;
+      });
+    _sortedKeysCache.set(spriteData.id, sortedKeys);
+  }
+
+  const total = sortedKeys.length;
+  if (total === 0) return "0";
+
+  // Para itens não-sincronizados: cada tile usa um offset de fase diferente
+  let effectiveClock = animClock;
+  if (spriteData.is_animated && spriteData.animation?.synchronized === false) {
+    const anim = spriteData.animation;
+    const totalMs =
+      Array.isArray(anim.durations) && anim.durations.length
+        ? anim.durations.reduce((s, d) => s + d, 0)
+        : (anim.total_frames ?? 1) * 200;
+    effectiveClock = animClock + (tileHash(tx, ty, 0) % totalMs);
+  }
+
+  const W = spriteData.pattern?.width ?? 1;
+  const H = spriteData.pattern?.height ?? 1;
+
+  if (W === 1 && H === 1) {
+    const frame = spriteData.is_animated
+      ? getAnimFrameIndex(spriteData, effectiveClock) % total
+      : 0;
+    return String(sortedKeys[frame]);
+  }
+
+  // Posição modulo (OTClient spec): variante determinada pela posição do tile no grid
+  // Garante que tiles adjacentes do mesmo tipo encaixem corretamente
+  const numVar = W * H;
+  const numFrames = Math.max(1, Math.floor(total / numVar));
+  const base = (ty % H) * W + (tx % W);
+  const frame = _getPatternAnimFrame(spriteData, effectiveClock, numFrames);
+  return String(sortedKeys[Math.min(base + frame * numVar, total - 1)]);
+}
+
+export function resolveVariant(spriteData, tx, ty, animClock) {
+  let sortedKeys = _sortedKeysCache.get(spriteData.id);
+  if (!sortedKeys) {
+    sortedKeys = Object.keys(spriteData.variants)
+      .map(Number)
+      .sort((a, b) => {
+        const va = spriteData.variants[String(a)];
+        const vb = spriteData.variants[String(b)];
+        if (va.y !== vb.y) return va.y - vb.y;
+        return va.x - vb.x;
+      });
+    _sortedKeysCache.set(spriteData.id, sortedKeys);
+  }
+
+  const total = sortedKeys.length;
+
+  // Para itens não-sincronizados: cada tile usa um offset de fase diferente
+  let effectiveClock = animClock;
+  if (spriteData.is_animated && spriteData.animation?.synchronized === false) {
+    const anim = spriteData.animation;
+    const totalMs =
+      Array.isArray(anim.durations) && anim.durations.length
+        ? anim.durations.reduce((s, d) => s + d, 0)
+        : (anim.total_frames ?? 1) * 200;
+    effectiveClock = animClock + (tileHash(tx, ty, 0) % totalMs);
+  }
+
+  const W = spriteData.pattern?.width ?? 1;
+  const H = spriteData.pattern?.height ?? 1;
+
+  if (W === 1 && H === 1) {
+    const animFrame = spriteData.is_animated
+      ? getAnimFrameIndex(spriteData, effectiveClock) % total
+      : 0;
+    return spriteData.variants[String(sortedKeys[animFrame])];
+  }
+
+  // Posição modulo (OTClient spec)
+  const numVariacoes = W * H;
+  const numFrames = Math.max(1, Math.floor(total / numVariacoes));
+  const tipoBase = (ty % H) * W + (tx % W);
+  const animFrame = _getPatternAnimFrame(spriteData, effectiveClock, numFrames);
+  const variantIdx = tipoBase + animFrame * numVariacoes;
+  const clampedIdx = Math.min(variantIdx, total - 1);
+  return spriteData.variants[String(sortedKeys[clampedIdx])];
+}
+
+// ═══════════════════════════════════════════════════════════════
+// VARIANTE PARA STACKABLES (OTClient spec)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Retorna a chave de variante para itens stackables baseada na quantidade.
+ * Mapeamento: 0→0  1→1  2→2  3→3  4-9→4  10-24→5  25-49→6  50+→7
+ */
+function getStackableVariantKey(count) {
+  if (!count || count <= 1) return "0";
+  if (count === 2) return "1";
+  if (count === 3) return "2";
+  if (count <= 9) return "3";
+  if (count <= 24) return "4";
+  if (count <= 49) return "5";
+  if (count <= 99) return "6";
+  return "7";
+}
+
+// ═══════════════════════════════════════════════════════════════
+// DRAW SPRITE (com posicionamento OTClient)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Desenha sprite usando o multi-atlas do AssetManager.
+ * Animação: cada frame é uma entrada separada em data.variants —
+ * resolveVariantKey já retorna a chave correta para o frame atual.
+ *
+ * @param {number} elevation - elevação acumulada do tile (para bottom/common)
+ * @param {number} count     - quantidade do item (para stackables)
+ */
+function _drawSpriteFromAssets(
+  ctx,
+  assets,
+  nexoData,
+  spriteId,
+  sx,
+  sy,
+  tx,
+  ty,
+  animClock,
+  alpha,
+  elevation = 0,
+  count = 1,
+) {
+  const data = nexoData?.[String(spriteId)];
+  if (!data) return;
+
+  // Stackables usam variante por quantidade; demais usam posição modulo
+  const varKey = data.game?.is_stackable
+    ? getStackableVariantKey(count)
+    : resolveVariantKey(data, tx, ty, animClock);
+  const lookup =
+    assets.mapAtlasLookup?.get(`${spriteId}_${varKey}`) ??
+    assets.mapAtlasLookup?.get(`${spriteId}_0`);
+  if (!lookup) return;
+
+  // Usa mapAtlasesById (Map<atlas_index, atlas>) para lookup robusto
+  const atlasEntry =
+    assets.mapAtlasesById?.get(lookup.atlasIndex) ??
+    assets.mapAtlases?.[lookup.atlasIndex];
+  const atlasImage = atlasEntry?.image;
+  if (!atlasImage) return;
+
+  const { x: ax, y: ay, w, h } = lookup.variant;
+
+  // Calcular posição com bottom-right anchor + elevation
+  const pos = calculateSpritePosition(
+    sx,
+    sy,
+    { x: ax, y: ay, w, h },
+    data,
+    elevation,
+  );
+
+  if (alpha < 1.0) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+  }
+  ctx.drawImage(atlasImage, ax, ay, w, h, pos.x, pos.y, w, h);
+  if (alpha < 1.0) ctx.restore();
+}
+
+/**
+ * Draw sprite legado (fallback)
+ * @param {number} elevation - elevação acumulada do tile
+ */
+export function drawSprite(
+  ctx,
+  atlas,
+  nexoData,
+  spriteId,
+  sx,
+  sy,
+  tx,
+  ty,
+  animClock,
+  alpha = 1.0,
+  elevation = 0,
+) {
+  if (spriteId === 0) return;
+
+  const data = nexoData[String(spriteId)];
+  if (!data) {
+    if (window.DEBUG_MISSING_SPRITES !== true) {
+      window.DEBUG_MISSING_SPRITES = true;
+      console.warn(
+        `[mapRenderer] Sprite ${spriteId} não encontrado em nexoData`,
+      );
+    }
+    return;
+  }
+
+  const variant = resolveVariant(data, tx, ty, animClock);
+  if (!variant) return;
+
+  const { x: atlasX, y: atlasY, w, h } = variant;
+
+  // Calcular posição com bottom-right anchor + elevation
+  const pos = calculateSpritePosition(
+    sx,
+    sy,
+    { x: atlasX, y: atlasY, w, h },
+    data,
+    elevation,
+  );
+
+  if (alpha < 1.0) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+  }
+  ctx.drawImage(atlas, atlasX, atlasY, w, h, pos.x, pos.y, w, h);
+  if (alpha < 1.0) ctx.restore();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ROOF FADE
+// ═══════════════════════════════════════════════════════════════
+function _floorHasTilesNearPlayer(map, z, camera, activeZ, cols, rows, radius) {
+  const cx = Math.floor(camera.x + cols / 2);
+  const cy = Math.floor(camera.y + rows / 2);
+  const offsetSqm = _getIsoOffsetSqm(z, activeZ);
+  const baseX = cx - offsetSqm;
+  const baseY = cy - offsetSqm;
+
+  for (let dy = -radius; dy <= radius; dy++) {
+    for (let dx = -radius; dx <= radius; dx++) {
+      const tile = map[`${baseX + dx},${baseY + dy},${z}`];
+      if (_tileHasAnySprites(tile)) return true;
+    }
+  }
+  return false;
+}
+
+function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
+  const alphas = new Map();
+  for (let dz = FLOOR_RANGE; dz >= 0; dz--) {
+    alphas.set(dz, 1.0);
+  }
+
+  let fadeFromDz = null;
+  if (roofFadeRadius > 0) {
+    for (let dz = -1; dz >= -FLOOR_RANGE; dz--) {
+      const z = activeZ + dz;
+      if (
+        _floorHasTilesNearPlayer(
+          map,
+          z,
+          camera,
+          activeZ,
+          cols,
+          rows,
+          roofFadeRadius,
+        )
+      ) {
+        fadeFromDz = dz;
+        break;
+      }
+    }
+  }
+
+  for (let dz = -1; dz >= -FLOOR_RANGE; dz--) {
+    alphas.set(dz, fadeFromDz !== null && dz >= fadeFromDz ? 0.0 : 1.0);
+  }
+  return alphas;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// RENDER DO MAPA (DOIS PASSES - OTClient)
+// ═══════════════════════════════════════════════════════════════
+/**
+ * Renderiza mapa seguindo ordem OTClient (tile.cpp)
+ *
+ * PASSO 1: drawGround() para TODOS os tiles
+ *   → Ground + GroundBorder
+ *
+ * PASSO 2: draw() para TODOS os tiles
+ *   → Bottom Items (acumula elevation)
+ *   → Common Items (acumula elevation)
+ *   → Creatures (usam elevation)
+ *   → Effects (usam elevation)
+ *   → Top Items (NÃO usam elevation)
+ */
+export function renderMap(opts) {
+  const {
+    ctx,
+    canvasW,
+    canvasH,
+    map,
+    camera,
+    activeZ,
+    cols = WORLD_ENGINE.canvasCols,
+    rows = WORLD_ENGINE.canvasRows,
+    roofFadeRadius = 0,
+    clearCanvas = true,
+    skipGroundPass = false,
+    zPredicate = null,
+    spritePredicate = null,
+  } = opts;
+
+  if (clearCanvas) {
+    ctx.clearRect(0, 0, canvasW, canvasH);
+    ctx.fillStyle = "#111";
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    _floorAlphaCache = null;
+    _floorAlphaCacheKey = "";
+  }
+
+  const alphaKey = `${Math.round(camera.x * 10)},${Math.round(camera.y * 10)},${activeZ},${roofFadeRadius}`;
+  if (!_floorAlphaCache || _floorAlphaCacheKey !== alphaKey) {
+    _floorAlphaCache = _calcFloorAlphas(
+      map,
+      camera,
+      activeZ,
+      cols,
+      rows,
+      roofFadeRadius,
+    );
+    _floorAlphaCacheKey = alphaKey;
+  }
+
+  const floorAlphas = _floorAlphaCache;
+
+  // ═══════════════════════════════════════════════════════════
+  // PASSO 1: DRAW GROUND (todos os tiles)
+  // ═══════════════════════════════════════════════════════════
+  if (!skipGroundPass) {
+    for (let dz = FLOOR_RANGE; dz >= -FLOOR_RANGE; dz--) {
+      const z = activeZ + dz;
+      if (typeof zPredicate === "function" && !zPredicate(z, dz, activeZ)) {
+        continue;
+      }
+
+      _renderGroundPass({
+        ...opts,
+        z,
+        dz,
+        alpha: floorAlphas.get(dz) ?? 1.0,
+      });
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  // PASSO 2: DRAW PRINCIPAL (todos os tiles)
+  // ═══════════════════════════════════════════════════════════
+  for (let dz = FLOOR_RANGE; dz >= -FLOOR_RANGE; dz--) {
+    const z = activeZ + dz;
+    if (typeof zPredicate === "function" && !zPredicate(z, dz, activeZ)) {
+      continue;
+    }
+
+    _renderMainPass({
+      ...opts,
+      z,
+      dz,
+      alpha: floorAlphas.get(dz) ?? 1.0,
+    });
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PASSO 1: RENDER GROUND (Ground + GroundBorder)
+// ═══════════════════════════════════════════════════════════════
+function _renderGroundPass(opts) {
+  const {
+    ctx,
+    atlas,
+    nexoData: _nexoDataRaw,
+    assets,
+    map,
+    floorIndex,
+    camera,
+    z,
+    dz,
+    activeZ,
+    animClock,
+    canvasW,
+    canvasH,
+    cols = WORLD_ENGINE.canvasCols,
+    rows = WORLD_ENGINE.canvasRows,
+    alpha = 1.0,
+  } = opts;
+
+  const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
+  const useAssets = !!assets?.mapAtlasLookup && !!nexoData;
+  const floorOffset = 0; // Ground não usa floorOffset
+
+  if (floorIndex) {
+    const tiles = floorIndex.get(z);
+    if (!tiles) return;
+
+    const x0 = Math.floor(camera.x) - 2;
+    const y0 = Math.floor(camera.y) - 2;
+    const x1 = x0 + cols + 4;
+    const y1 = y0 + rows + 4;
+
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const tile = tiles.get(`${tx},${ty},${z}`);
+        if (!_indexTileHasAnySprites(tile)) continue;
+
+        const sx = Math.floor((tx - camera.x) * TILE_SIZE + floorOffset);
+        const sy = Math.floor((ty - camera.y) * TILE_SIZE + floorOffset);
+
+        // Extrair apenas ground e groundBorder
+        const _groundItems =
+          tile.flatItems ??
+          (tile.layers
+            ? _flattenTileItems(tile.layers, tile.layerKeys)
+            : (tile.items ?? []));
+
+        for (const item of _groundItems) {
+          const spriteId =
+            typeof item === "object" && item !== null ? item.id : item;
+          if (spriteId == null || spriteId === 0) continue;
+
+          const category = _getSpriteCategory(spriteId, nexoData);
+
+          // Apenas ground e groundBorder neste passo
+          if (category !== "ground" && category !== "groundBorder") continue;
+
+          if (useAssets) {
+            _drawSpriteFromAssets(
+              ctx,
+              assets,
+              nexoData,
+              spriteId,
+              sx,
+              sy,
+              tx,
+              ty,
+              animClock,
+              alpha,
+              0,
+            );
+          } else if (atlas && nexoData) {
+            drawSprite(
+              ctx,
+              atlas,
+              nexoData,
+              spriteId,
+              sx,
+              sy,
+              tx,
+              ty,
+              animClock,
+              alpha,
+              0,
+            );
+          }
+        }
+      }
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// PASSO 2: RENDER PRINCIPAL (Bottom → Common → Top)
+// ═══════════════════════════════════════════════════════════════
+function _renderMainPass(opts) {
+  const {
+    ctx,
+    atlas,
+    nexoData: _nexoDataRaw,
+    assets,
+    map,
+    floorIndex,
+    camera,
+    z,
+    dz,
+    activeZ,
+    animClock,
+    canvasW,
+    canvasH,
+    cols = WORLD_ENGINE.canvasCols,
+    rows = WORLD_ENGINE.canvasRows,
+    alpha = 1.0,
+    spritePredicate = null,
+  } = opts;
+
+  const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
+  const useAssets = !!assets?.mapAtlasLookup && !!nexoData;
+  const floorOffset = 0;
+
+  if (floorIndex) {
+    const tiles = floorIndex.get(z);
+    if (!tiles) return;
+
+    const x0 = Math.floor(camera.x) - 2;
+    const y0 = Math.floor(camera.y) - 2;
+    const x1 = x0 + cols + 4;
+    const y1 = y0 + rows + 4;
+
+    for (let ty = y0; ty <= y1; ty++) {
+      for (let tx = x0; tx <= x1; tx++) {
+        const tile = tiles.get(`${tx},${ty},${z}`);
+        if (!_indexTileHasAnySprites(tile)) continue;
+
+        const sx = Math.floor((tx - camera.x) * TILE_SIZE + floorOffset);
+        const sy = Math.floor((ty - camera.y) * TILE_SIZE + floorOffset);
+
+        // Separar items por categoria
+        const items = {
+          bottom: [],
+          common: [],
+          top: [],
+        };
+
+        const _allItems =
+          tile.flatItems ??
+          (tile.layers
+            ? _flattenTileItems(tile.layers, tile.layerKeys)
+            : (tile.items ?? []));
+
+        for (const item of _allItems) {
+          const spriteId =
+            typeof item === "object" && item !== null ? item.id : item;
+          if (spriteId == null || spriteId === 0) continue;
+
+          const spriteMeta = nexoData?.[String(spriteId)];
+          const category = _getSpriteCategory(spriteId, nexoData);
+
+          // Ignorar ground e groundBorder (já renderizados)
+          if (category === "ground" || category === "groundBorder") continue;
+
+          const info = {
+            spriteId,
+            spriteMeta,
+            category,
+            count:
+              typeof item === "object" && item !== null ? (item.count ?? 1) : 1,
+            tx,
+            ty,
+            z,
+            dz,
+            activeZ,
+          };
+
+          if (
+            spritePredicate &&
+            spritePredicate(spriteId, spriteMeta, info) === false
+          ) {
+            continue;
+          }
+
+          if (category === "bottom") {
+            items.bottom.push(info);
+          } else if (category === "top") {
+            items.top.push(info);
+          } else {
+            items.common.push(info);
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════
+        // ORDEM DE DRAW OTCLIENT:
+        // 1. Bottom Items (acumula elevation)
+        // 2. Common Items (acumula elevation)
+        // 3. Top Items (NÃO usa elevation)
+        // ═══════════════════════════════════════════════════════
+
+        let elevation = 0;
+
+        // Bottom items
+        for (const item of items.bottom) {
+          if (useAssets) {
+            _drawSpriteFromAssets(
+              ctx,
+              assets,
+              nexoData,
+              item.spriteId,
+              sx,
+              sy,
+              item.tx,
+              item.ty,
+              animClock,
+              alpha,
+              elevation,
+              item.count,
+            );
+          } else if (atlas && nexoData) {
+            drawSprite(
+              ctx,
+              atlas,
+              nexoData,
+              item.spriteId,
+              sx,
+              sy,
+              item.tx,
+              item.ty,
+              animClock,
+              alpha,
+              elevation,
+            );
+          }
+
+          // Acumular elevation (game.height_elevation conforme map_data.json)
+          const elev = _getSpriteElevation(item.spriteId, nexoData);
+          elevation = Math.min(elevation + elev, MAX_DRAW_ELEVATION);
+        }
+
+        // Common items
+        for (const item of items.common) {
+          if (useAssets) {
+            _drawSpriteFromAssets(
+              ctx,
+              assets,
+              nexoData,
+              item.spriteId,
+              sx,
+              sy,
+              item.tx,
+              item.ty,
+              animClock,
+              alpha,
+              elevation,
+              item.count,
+            );
+          } else if (atlas && nexoData) {
+            drawSprite(
+              ctx,
+              atlas,
+              nexoData,
+              item.spriteId,
+              sx,
+              sy,
+              item.tx,
+              item.ty,
+              animClock,
+              alpha,
+              elevation,
+            );
+          }
+
+          // Acumular elevation (game.height_elevation conforme map_data.json)
+          const elev = _getSpriteElevation(item.spriteId, nexoData);
+          elevation = Math.min(elevation + elev, MAX_DRAW_ELEVATION);
+        }
+
+        // Top items (sem elevation)
+        for (const item of items.top) {
+          if (useAssets) {
+            _drawSpriteFromAssets(
+              ctx,
+              assets,
+              nexoData,
+              item.spriteId,
+              sx,
+              sy,
+              item.tx,
+              item.ty,
+              animClock,
+              alpha,
+              0,
+              item.count,
+            );
+          } else if (atlas && nexoData) {
+            drawSprite(
+              ctx,
+              atlas,
+              nexoData,
+              item.spriteId,
+              sx,
+              sy,
+              item.tx,
+              item.ty,
+              animClock,
+              alpha,
+              0,
+            );
+          }
+        }
+      }
+    }
+  }
+}
