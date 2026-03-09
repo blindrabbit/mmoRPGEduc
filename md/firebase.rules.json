@@ -1,0 +1,275 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": false,
+
+    "online_players": {
+      "$playerId": {
+        ".read": true,
+        ".write": true,
+
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "direcao": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(frente|costas|lado|lado-esquerdo)$/))"
+        },
+        "speed": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 600)"
+        },
+        "lastMoveTime": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "lastAttack": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "lastAiTick": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "stats": {
+          "hp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "maxHp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 200000)"
+          },
+          "mp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "maxMp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "$other": {
+            ".validate": true
+          }
+        },
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
+
+    "players_data": {
+      "$playerId": {
+        ".read": true,
+        ".write": true,
+
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "direcao": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(frente|costas|lado|lado-esquerdo)$/))"
+        },
+        "speed": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 600)"
+        },
+        "spawnX": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "spawnY": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "spawnZ": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "stats": {
+          "hp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "maxHp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 200000)"
+          },
+          "mp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "maxMp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "$other": {
+            ".validate": true
+          }
+        },
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
+
+    "world_entities": {
+      "$monsterId": {
+        ".read": true,
+        ".write": true,
+
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "direcao": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(frente|costas|lado|lado-esquerdo)$/))"
+        },
+        "speed": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 600)"
+        },
+        "type": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(monster|corpse)$/))"
+        },
+        "stats": {
+          "hp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+          },
+          "maxHp": {
+            ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 200000)"
+          },
+          "$other": {
+            ".validate": true
+          }
+        },
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
+
+    "world_effects": {
+      "$effectId": {
+        ".read": true,
+        ".write": true,
+
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "startTime": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "expiry": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "effectDuration": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 86400000)"
+        },
+        "fieldDuration": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 86400000)"
+        },
+        "effectId": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "fieldId": {
+          ".validate": "!newData.exists() || newData.val() === null || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
+
+    "world_fields": {
+      "$fieldId": {
+        ".read": true,
+        ".write": true,
+
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "damage": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
+        },
+        "startTime": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "expiry": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "tickRate": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 50 && newData.val() <= 60000)"
+        },
+        "fieldDuration": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 86400000)"
+        },
+        "fieldId": {
+          ".validate": "!newData.exists() || newData.val() === null || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "effectId": {
+          ".validate": "!newData.exists() || newData.val() === null || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "lastTick": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
+        "$other": {
+          ".validate": true
+        }
+      }
+    },
+
+    "player_actions": {
+      "$actionId": {
+        ".read":  true,
+        ".write": true,
+
+        "id":       { ".validate": "newData.isString()" },
+        "playerId": { ".validate": "newData.isString()" },
+        "type":     { ".validate": "newData.isString() && newData.val().matches(/^(attack|spell)$/)" },
+        "ts":       { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "expiresAt":{ ".validate": "newData.isNumber() && newData.val() >= 0" },
+
+        "targetId": { ".validate": "!newData.exists() || newData.val() === null || newData.isString()" },
+        "spellId":  { ".validate": "!newData.exists() || newData.val() === null || newData.isString()" },
+
+        "$other":   { ".validate": false }
+      }
+    },
+
+    "world_state": {
+      ".read": true,
+      ".write": true
+    },
+
+    "monster_templates": {
+      ".read": true,
+      ".write": true
+    },
+
+    "world_tiles": {
+      ".read": true,
+      ".write": true
+    },
+
+    "world_tiles_data": {
+      ".read": true,
+      ".write": true
+    },
+
+    "accounts": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

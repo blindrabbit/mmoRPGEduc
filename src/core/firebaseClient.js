@@ -17,16 +17,7 @@ import {
   onChildRemoved,
   onChildChanged,
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
-
-const firebaseConfig = {
-  apiKey           : "AIzaSyD-jncgTANFm2WoCMNAYg0SvEV9THOUPyg",
-  authDomain       : "aula-apw.firebaseapp.com",
-  databaseURL      : "https://aula-apw-default-rtdb.firebaseio.com",
-  projectId        : "aula-apw",
-  storageBucket    : "aula-apw.appspot.com",
-  messagingSenderId: "534057882433",
-  appId            : "1:534057882433:web:a85b3a4d0af2bb5afa47c0",
-};
+import { firebaseConfig } from "./firebase.config.js";
 
 export const app = initializeApp(firebaseConfig);
 export const db  = getDatabase(app);
