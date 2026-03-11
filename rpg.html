@@ -1265,6 +1265,8 @@
         setPlayerActionCooldown,
         submitPlayerAction,
         createNewCharacter,
+        registerPlayerDisconnect,
+        dbTouchPresence,
       } from "./src/core/db.js";
       import {
         initWorldStore,
@@ -1496,6 +1498,7 @@
       let rafId = null;
       let combatInterval = null;
       let autoAttackInterval = null;
+      let _heartbeatInterval = null;
       let targetLock = null;
       let attackInProgress = false;
       let lockEscHandler = null;
@@ -1930,6 +1933,15 @@
           name: myPos.name ?? "Herói",
           appearance: _normalizeAppearance(myPos.appearance),
         });
+
+        // Presença: Firebase remove online_players/{uid} automaticamente se o
+        // WebSocket cair (crash, aba fechada, queda de rede).
+        registerPlayerDisconnect(uid);
+
+        // Heartbeat: atualiza lastSeen a cada 30s como segurança extra.
+        // O world-engine remove players sem heartbeat após 2 min.
+        dbTouchPresence(uid);
+        _heartbeatInterval = setInterval(() => dbTouchPresence(uid), 30_000);
 
         monitorEffects();
 
@@ -2388,6 +2400,7 @@
       // ── Cleanup ────────────────────────────────────────────────────────────
       function _cleanup() {
         stopRegen();
+        if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
         if (myPos) removePlayer(myPos.id);
         if (combatInterval) {
           clearInterval(combatInterval);

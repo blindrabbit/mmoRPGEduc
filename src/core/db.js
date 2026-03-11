@@ -18,6 +18,8 @@ import {
   dbRemove,
   dbUpdate as _dbUpdateClient,
   syncEntity as _syncEntity,
+  registerPlayerDisconnect,
+  dbTouchPresence,
 } from "./firebaseClient.js";
 import {
   makePlayer,
@@ -29,7 +31,7 @@ import {
 } from "./schema.js";
 
 // Re-exporta as primitivas para o playerManager.html e outros módulos
-export { dbGet, dbSet, dbWatch, dbRemove };
+export { dbGet, dbSet, dbWatch, dbRemove, registerPlayerDisconnect, dbTouchPresence };
 
 // ---------------------------------------------------------------------------
 // UTILITÁRIOS — Base64 & Formatação

@@ -471,8 +471,8 @@ export async function allocateStatPoint(playerId, statName, amount = 1) {
       availableStatPoints: available - amount,
       maxHp: newStats.maxHp,
       maxMp: newStats.maxMp,
-      hp: updates[`${playerStatsPath}/hp`],
-      mp: updates[`${playerStatsPath}/mp`],
+      hp: updates[`${onlinePath}/hp`],
+      mp: updates[`${onlinePath}/mp`],
     },
   });
 

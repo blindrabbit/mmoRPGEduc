@@ -477,19 +477,27 @@ function _bindFirebase() {
 
     const listEl = document.getElementById("monster-list");
     if (listEl) {
-      const entries = Object.values(monsters).slice(0, 20);
+      // Exclui entradas órfãs (sem espécie real, mortas ou sem posição válida)
+      const valid = Object.values(monsters).filter(
+        (m) =>
+          m.species && m.species !== "unknown" &&
+          !m.dead &&
+          (m.stats?.hp ?? 0) > 0 &&
+          (m.x !== 0 || m.y !== 0),
+      );
+      const entries = valid.slice(0, 20);
       listEl.innerHTML =
         entries
           .map(
             (m) =>
               `<div style="display:flex;justify-content:space-between;padding:1px 0;">
-           <span>${m.name ?? m.species ?? "?"} (${Math.round(m.x)},${Math.round(m.y)})</span>
+           <span>${m.name ?? m.species} (${Math.round(m.x)},${Math.round(m.y)})</span>
            <span style="color:#888">${m.stats?.hp ?? "?"}hp</span>
          </div>`,
           )
           .join("") +
-        (_monsterCount > 20
-          ? `<div style="color:#666">...e mais ${_monsterCount - 20}</div>`
+        (valid.length > 20
+          ? `<div style="color:#666">...e mais ${valid.length - 20}</div>`
           : "");
     }
   });

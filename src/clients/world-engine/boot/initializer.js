@@ -15,8 +15,13 @@ import { WorldStateHUD } from "../ui/worldStateHUD.js";
 import { Tooltip } from "../ui/tooltip.js";
 import { HUDRenderer } from "../rendering/hudRenderer.js";
 import { MetricsHUD } from "../ui/metricsHUD.js";
-import { GameLoop } from "../engine/gameLoop.js";
+import {
+  initGameLoop as initWorkerLoop,
+  startLoop,
+  syncGameEntities,
+} from "../engine/gameLoop.js";
 import { createProgressionUI } from "../../shared/ui/ProgressionUI.js";
+import { watchMonsters, watchPlayers, watchFields } from "../../../core/db.js";
 
 export class Initializer {
   constructor({ logger, canvas, canvasSetup, worldState, config }) {
@@ -47,6 +52,10 @@ export class Initializer {
 
     // Loop
     this.gameLoop = null;
+    this._rafId = null;
+
+    // Worker sync — armazena unsubscribers para limpeza posterior
+    this._workerUnsubscribers = [];
   }
 
   async init() {
@@ -62,8 +71,9 @@ export class Initializer {
     // 4. Inicializar UI
     this.initUI();
 
-    // 5. Inicializar game loop
+    // 5. Inicializar loop de rendering (rAF) + worker tick
     this.initGameLoop();
+    await this.initWorkerSync();
 
     // 6. Marcar como ready
     this.worldState.ready = true;
@@ -203,18 +213,51 @@ export class Initializer {
     this.metricsHUD.init();
   }
 
+  /**
+   * Loop de rendering leve via requestAnimationFrame.
+   * Apenas atualiza HUDs de estado (tick count, GC, wake lock).
+   * A lógica de jogo roda no WorldTick (main thread) e no worker.
+   */
   initGameLoop() {
-    const { WORLDENGINE, TILE_SIZE } = this.config;
-    this.gameLoop = new GameLoop({
-      canvas: this.canvas,
-      ctx: this.canvas.getContext("2d"),
-      worldState: this.worldState,
-      canvasSetup: this.canvasSetup,
-      config: { WORLDENGINE, TILE_SIZE },
-      logger: this.logger,
-      onUpdate: () => this.hudRenderer.update(),
+    const tick = () => {
+      this.hudRenderer.update();
+      this._rafId = requestAnimationFrame(tick);
+    };
+    this._rafId = requestAnimationFrame(tick);
+    this.logger.ok("[GameLoop] Loop de rendering iniciado (rAF).");
+  }
+
+  /**
+   * Inicializa o worker de tick e configura sync contínuo Firebase → Worker.
+   * Os watchers fornecem o snapshot inicial na primeira chamada (sem necessidade
+   * de busca separada).
+   */
+  async initWorkerSync() {
+    const { WORLDENGINE } = this.config;
+
+    const ok = await initWorkerLoop({
+      tickInterval: WORLDENGINE.worldTickMs ?? 100,
+      // onTick vazio: WorldTick na main thread já cuida da lógica como fallback
+      onTick: () => {},
     });
-    this.gameLoop.start();
+
+    if (!ok) {
+      this.logger.warn(
+        "[Worker] Falha ao iniciar worker — usando só main thread.",
+      );
+      return;
+    }
+
+    // Firebase → Worker: a primeira chamada de cada watcher já envia o snapshot
+    // inicial, as chamadas seguintes enviam deltas em tempo real.
+    this._workerUnsubscribers = [
+      watchMonsters((monsters) => syncGameEntities({ monsters })),
+      watchPlayers((players) => syncGameEntities({ players })),
+      watchFields((fields) => syncGameEntities({ fields })),
+    ];
+
+    startLoop();
+    this.logger.ok("[Worker] Game loop worker iniciado e Firebase sync ativo.");
   }
 
   initProgressionUI() {
@@ -250,18 +293,15 @@ export class Initializer {
       }
 
       // Atualizar UI quando player stats mudarem (ENTITY_UPDATE)
-      const unsubEntity = worldEvents.subscribe(
-        EVENT_TYPES.ENTITY_UPDATE,
-        (e) => {
-          if (
-            e.type === "player" &&
-            e.id === window.currentPlayerId &&
-            e.updates?.stats
-          ) {
-            this.progressionUI.updatePlayerStats(e.updates.stats);
-          }
-        },
-      );
+      worldEvents.subscribe(EVENT_TYPES.ENTITY_UPDATE, (e) => {
+        if (
+          e.type === "player" &&
+          e.id === window.currentPlayerId &&
+          e.updates?.stats
+        ) {
+          this.progressionUI.updatePlayerStats(e.updates.stats);
+        }
+      });
 
       this.logger.ok("✓ ProgressionUI inicializado com sucesso");
     } catch (error) {
@@ -269,5 +309,14 @@ export class Initializer {
         `⚠ Falha ao inicializar ProgressionUI: ${error?.message ?? error}`,
       );
     }
+  }
+
+  /** Limpeza completa — chamar ao fechar/recarregar a aba do world-engine. */
+  destroy() {
+    if (this._rafId) cancelAnimationFrame(this._rafId);
+    for (const unsub of this._workerUnsubscribers) unsub?.();
+    this._workerUnsubscribers = [];
+    this.worldTick?.stop();
+    this.transientGC?.stop();
   }
 }

@@ -16,6 +16,7 @@ import {
   onChildAdded,
   onChildRemoved,
   onChildChanged,
+  onDisconnect,
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
 import { firebaseConfig } from "./firebase.config.js";
 
@@ -122,4 +123,28 @@ export function dbWatchServerTime(onOffset) {
   return onValue(ref(db, "worldstate/serverTime"), (snap) => {
     if (snap.exists()) onOffset(Date.now() - snap.val());
   });
+}
+
+// ---------------------------------------------------------------------------
+// PRESENÇA — onDisconnect + heartbeat
+// ---------------------------------------------------------------------------
+
+/**
+ * Registra remoção automática do player no Firebase quando o WebSocket cair.
+ * O servidor Firebase executa o hook mesmo em crash ou queda de rede.
+ * Deve ser chamado logo após o player entrar no jogo.
+ * @param {string} playerId
+ */
+export function registerPlayerDisconnect(playerId) {
+  onDisconnect(ref(db, `online_players/${playerId}`)).remove();
+}
+
+/**
+ * Atualiza o timestamp de presença do player.
+ * Chame a cada ~30s para manter o player ativo.
+ * O world-engine remove players sem heartbeat após STALE_THRESHOLD_MS.
+ * @param {string} playerId
+ */
+export function dbTouchPresence(playerId) {
+  return set(ref(db, `online_players/${playerId}/lastSeen`), Date.now());
 }

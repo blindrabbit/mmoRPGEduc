@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // worldTick.js — Timer de tick do mundo + IA de monstros
 // ═══════════════════════════════════════════════════════════════
-import { initWorldStore, setTickRunning } from "../../../core/worldStore.js";
+import { initWorldStore, setTickRunning, getPlayers } from "../../../core/worldStore.js";
 import {
   initMonsterManager,
   tickMonsters,
@@ -11,6 +11,7 @@ import {
   watchPlayerActions,
   deletePlayerAction,
   deletePlayerActions,
+  removePlayer,
 } from "../../../core/db.js";
 import {
   enqueueAction,
@@ -22,6 +23,13 @@ import {
   getCombatTickBucket,
   shouldRunCombatTick,
 } from "../../../gameplay/combatScheduler.js";
+
+// Players sem heartbeat por mais de STALE_MS são considerados desconectados.
+// O onDisconnect do Firebase já cuida da maioria dos casos; este é o safety-net.
+const STALE_MS      = 2 * 60 * 1000; // 2 min  — com heartbeat (lastSeen)
+const STALE_MOVE_MS = 5 * 60 * 1000; // 5 min  — fallback via lastMoveTime
+// Verificar a cada ~30s (120 ticks × 250ms)
+const STALE_CHECK_INTERVAL = 120;
 
 export class WorldTick {
   /**
@@ -103,7 +111,35 @@ export class WorldTick {
       }
     }
 
+    // Limpeza periódica de players obsoletos (sem heartbeat por > STALE_MS)
+    if (this.worldState.tickCount % STALE_CHECK_INTERVAL === 0) {
+      await this._cleanStalePlayers(now);
+    }
+
     setTickRunning(false);
+  }
+
+  async _cleanStalePlayers(now) {
+    const players = getPlayers() ?? {};
+    for (const [id, player] of Object.entries(players)) {
+      const lastSeen = player?.lastSeen ?? 0;
+      const lastMove = player?.lastMoveTime ?? 0;
+      let stale = false;
+
+      if (lastSeen > 0) {
+        // Heartbeat ativo: timeout curto (2 min)
+        stale = now - lastSeen > STALE_MS;
+      } else if (lastMove > 0) {
+        // Sem heartbeat (cliente antigo ou falha): usa último movimento (5 min)
+        stale = now - lastMove > STALE_MOVE_MS;
+      }
+      // Se nenhum timestamp existe, não toca — evita remover admin/spectator
+
+      if (stale) {
+        this.logger?.warn(`[WorldTick] Player inativo removido: ${id}`);
+        await removePlayer(id).catch(() => {});
+      }
+    }
   }
 
   stop() {
