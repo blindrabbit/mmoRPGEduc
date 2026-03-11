@@ -49,7 +49,8 @@ export class WorkerBridge {
     // Tentar usar worker se disponível e habilitado
     if (this.options.enableWorker && typeof Worker !== "undefined") {
       try {
-        this._worker = new Worker(this.options.workerPath);
+        // { type: "module" } é obrigatório para workers que usam import/export
+        this._worker = new Worker(this.options.workerPath, { type: "module" });
         this._setupWorkerListeners();
         this._useWorker = true;
 
@@ -93,12 +94,15 @@ export class WorkerBridge {
       console.error("[WorkerBridge] Worker error:", error);
       if (this._onError) this._onError({ type: "worker_error", error });
 
-      // Tentar fallback se worker falhar
-      if (this.options.fallbackToMain && !this._core) {
-        console.warn("[WorkerBridge] Falling back to main thread");
-        this._useWorker = false;
-        // Re-iniciar em main thread seria ideal aqui
+      // Rejeitar _waitForResponse pendente imediatamente (evita esperar o timeout)
+      const pending = this._pendingRequests.get(MESSAGE_TYPE.INIT_RESPONSE);
+      if (pending) {
+        pending.reject(new Error(`Worker failed to load: ${error?.message ?? error}`));
+        this._pendingRequests.delete(MESSAGE_TYPE.INIT_RESPONSE);
       }
+
+      // Marcar worker como inválido para acionar fallback no catch de init()
+      this._useWorker = false;
     };
   }
 
