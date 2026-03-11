@@ -91,6 +91,23 @@
   border-color: #888;
 }
 
+/* ── Painéis arrastáveis ───────────────────────────────────── */
+.we-draggable-panel {
+  cursor: grab;
+  user-select: none;
+}
+
+.we-draggable-panel.dragging {
+  cursor: grabbing;
+}
+
+.we-draggable-panel input,
+.we-draggable-panel textarea,
+.we-draggable-panel select,
+.we-draggable-panel button {
+  user-select: text;
+}
+
 /* ── Floor HUD (centro inferior) ────────────────────────────── */
 #floor-hud {
   position: fixed;
@@ -194,12 +211,13 @@
 /* ── Painel GM (sidebar direita) ───────────────────────────── */
 #gm-panel {
   position: fixed;
-  top: 0;
-  right: 0;
+  top: 10px;
+  right: 10px;
   width: 280px;
-  height: 100vh;
+  max-height: calc(100vh - 20px);
+  height: auto;
   background: rgba(10, 10, 20, 0.96);
-  border-left: 1px solid #333;
+  border: 1px solid #333;
   overflow-y: auto;
   z-index: 20;
   padding: 8px;

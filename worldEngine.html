@@ -92,6 +92,7 @@
       import { BootLogger } from "./src/clients/world-engine/engine/bootLogger.js";
       import { Initializer } from "./src/clients/world-engine/boot/initializer.js";
       import { initAdminPanel } from "./src/clients/world-engine/adminPanel.js";
+      import { initDraggableHUDPanels } from "./src/clients/world-engine/ui/draggablePanels.js";
 
       // ── Tab switching do painel de boot ────────────────────
       document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -147,6 +148,9 @@
             adminName: "WorldEngine",
             containerId: "gm-panel",
           });
+
+          // Permite arrastar todos os painéis HUD pela tela
+          initDraggableHUDPanels();
 
           // Expostos para os botões onclick do adminPanel
           window.changeZ = (delta) => {
