@@ -75,6 +75,7 @@ function checkCollision(x, y, z, worldTiles, entities, nexoData) {
   // Colisão com outras entidades no mesmo tile
   for (const id in entities) {
     const ent = entities[id];
+    if (!ent || ent.dead || (ent.stats?.hp ?? 1) <= 0) continue;
     if (
       ent.id !== "GM_ADMIN" &&
       ent.x === x &&

@@ -43,7 +43,7 @@ import {
 } from "./combatLogic.js";
 
 import {
-  resolveAttack,
+  processAttack,
   emitDamage,
   emitHeal,
   buildCombatEffectPayload,
@@ -51,6 +51,7 @@ import {
 
 import { createField } from "./magic/fieldSystem.js";
 import { pushLog } from "./eventLog.js";
+import { registerDamage, registerLastHit } from "./progression/xpManager.js";
 
 // ---------------------------------------------------------------------------
 // COOLDOWNS — gerenciados aqui, não no cliente
@@ -150,33 +151,58 @@ async function _processAttack(action, player, now) {
 
   _setCooldown(playerId, "basicAttack", COMBAT.ATTACK_COOLDOWN_MS);
 
-  // Usar combatService para resolução autoritativa
-  const result = resolveAttack(playerId, player, targetId, target, { now });
+  // Usa o serviço autoritativo com tipos explícitos.
+  const result = await processAttack({
+    attackerId: playerId,
+    defenderId: targetId,
+    attackerType: "player",
+    defenderType: "monster",
+    options: { now },
+  });
 
-  const updates = {};
-  if (result.fxPayload)
-    updates[`world_effects/${result.fxId}`] = result.fxPayload;
-
-  if (result.hit) {
-    if (result.newHp <= 0 && !target.dead) {
-      handleMonsterDeathLocal(
-        targetId,
-        { ...target, stats: { ...target.stats, hp: result.newHp } },
-        updates,
-        now,
-      );
-    } else {
-      updates[`world_entities/${targetId}/stats/hp`] = result.newHp;
-    }
-    await batchWrite(updates);
+  if (!result?.success) {
     pushLog(
-      "damage",
-      `${player.name} atacou ${target.name ?? targetId}: ${result.damage} HP`,
+      "error",
+      `${player.name} falhou ao atacar ${target.name ?? targetId}: ${result?.error ?? "erro desconhecido"}`,
     );
-  } else {
-    if (result.fxPayload) await syncEffect(result.fxId, result.fxPayload);
-    pushLog("damage", `${player.name} errou ${target.name ?? targetId} [MISS]`);
+    return;
   }
+
+  const fxId = `atk_${playerId}_${targetId}_${now}`;
+  const fxPayload = buildCombatEffectPayload({
+    effectId: result.missed ? 3 : 1,
+    x: target.x,
+    y: target.y,
+    z: target.z ?? 7,
+    duration: 700,
+    startTime: now,
+  });
+  if (fxPayload) {
+    await syncEffect(fxId, fxPayload);
+  }
+
+  if (result.missed) {
+    pushLog("damage", `${player.name} errou ${target.name ?? targetId} [MISS]`);
+    return;
+  }
+
+  if (result.killed && !target.dead) {
+    const updates = {};
+    handleMonsterDeathLocal(
+      targetId,
+      { ...target, stats: { ...target.stats, hp: 0 } },
+      updates,
+      now,
+    );
+    if (Object.keys(updates).length > 0) {
+      await batchWrite(updates);
+    }
+  }
+
+  pushLog(
+    "damage",
+    `${player.name} atacou ${target.name ?? targetId}: ${result.damage} HP`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -286,14 +312,28 @@ async function _processSpell(action, player, now) {
     }
 
     if (newHp <= 0 && !target.dead) {
+      // Registrar dano para XP
+      if (damage > 0) {
+        registerDamage(targetId, playerId, damage);
+        registerLastHit(targetId, playerId);
+      }
       handleMonsterDeathLocal(
         targetId,
-        { ...target, stats: { ...target.stats, hp: newHp } },
+        {
+          ...target,
+          lastHitBy: playerId,
+          stats: { ...target.stats, hp: newHp },
+        },
         updates,
         now,
       );
     } else {
+      // Registrar dano para XP mesmo se não matou
+      if (damage > 0) {
+        registerDamage(targetId, playerId, damage);
+      }
       updates[`world_entities/${targetId}/stats/hp`] = newHp;
+      updates[`world_entities/${targetId}/lastHitBy`] = playerId;
     }
     await batchWrite(updates);
     pushLog(
@@ -337,6 +377,7 @@ async function _processSpell(action, player, now) {
     const monsters = getMonsters();
     const radius = spell.aoeRadius ?? 2;
     const hits = [];
+    const fxUpdates = {};
 
     for (const [mid, mob] of Object.entries(monsters)) {
       if (!mob || (mob.stats?.hp ?? 0) <= 0 || mob.dead) continue;
@@ -351,12 +392,15 @@ async function _processSpell(action, player, now) {
         attackerId: playerId,
         spellId,
       });
+      // Registrar dano para XP
+      if (damage > 0) {
+        registerDamage(mid, playerId, damage);
+      }
       hits.push({ id: mid, mob, newHp, damage });
     }
 
     if (spell.effectId) {
       const radiusCeil = Math.ceil(radius);
-      const fxUpdates = {};
       for (let dx = -radiusCeil; dx <= radiusCeil; dx++) {
         for (let dy = -radiusCeil; dy <= radiusCeil; dy++) {
           if (Math.hypot(dx, dy) > radius + 0.5) continue;
@@ -371,23 +415,29 @@ async function _processSpell(action, player, now) {
           });
         }
       }
-      await batchWrite(fxUpdates);
     }
 
     const dmgUpdates = {};
     for (const { id, mob, newHp } of hits) {
       if (newHp <= 0 && !mob.dead) {
+        // Registrar último hit para XP
+        registerLastHit(id, playerId);
         handleMonsterDeathLocal(
           id,
-          { ...mob, stats: { ...mob.stats, hp: newHp } },
+          { ...mob, lastHitBy: playerId, stats: { ...mob.stats, hp: newHp } },
           dmgUpdates,
           now,
         );
       } else {
         dmgUpdates[`world_entities/${id}/stats/hp`] = newHp;
+        dmgUpdates[`world_entities/${id}/lastHitBy`] = playerId;
       }
     }
-    if (Object.keys(dmgUpdates).length > 0) await batchWrite(dmgUpdates);
+
+    const combinedUpdates = { ...fxUpdates, ...dmgUpdates };
+    if (Object.keys(combinedUpdates).length > 0) {
+      await batchWrite(combinedUpdates);
+    }
     pushLog(
       "damage",
       `${player.name} usou ${spell.name}: atingiu ${hits.length} alvos`,

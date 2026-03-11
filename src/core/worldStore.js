@@ -27,6 +27,7 @@ import {
   setMonsterTemplates,
 } from "./remoteTemplates.js";
 import { normalizeCollection, normalizeEntity } from "./schema.js";
+import { worldEvents, EVENT_TYPES } from "./events.js";
 
 // ---------------------------------------------------------------------------
 // ESTADO INTERNO
@@ -38,6 +39,10 @@ const state = {
   fields: {}, // world_fields
   chat: [], // world_chat (array de mensagens recentes)
 };
+
+// Maps para acesso rápido por ID (usados por funções newer)
+const _monsters = new Map(); // espelho do state.monsters para .get/.set/.delete
+const _players = new Map(); // espelho do state.players para .get/.set/.delete
 
 // Subscribers por canal
 const subs = {
@@ -148,16 +153,6 @@ export const getFields = () => state.fields;
 export const getChat = () => state.chat;
 
 // ---------------------------------------------------------------------------
-// SETTER — usado pelo monsterManager via applyToMob
-// Atualiza só o estado local sem sobrescrever campos de IA
-// ---------------------------------------------------------------------------
-export function applyMonstersLocal(id, obj) {
-  if (!state.monsters[id]) state.monsters[id] = {};
-  Object.assign(state.monsters[id], obj);
-  // Não notifica subscribers — mudança local de IA, não visual
-}
-
-// ---------------------------------------------------------------------------
 // SUBSCRIBE — qualquer tela recebe updates em tempo real
 // canal: 'monsters' | 'players' | 'effects' | 'fields'
 // ---------------------------------------------------------------------------
@@ -184,6 +179,7 @@ function mergeMonsters(incoming) {
   if (!incoming) {
     // Firebase deletou o nó inteiro (ex: clearMonsters)
     state.monsters = {};
+    _monsters.clear();
     return;
   }
 
@@ -297,12 +293,19 @@ function mergeMonsters(incoming) {
       state.monsters[id] = merged;
     }
   }
+
+  // Sincroniza o Map _monsters com state.monsters
+  _monsters.clear();
+  for (const id in state.monsters) {
+    _monsters.set(id, state.monsters[id]);
+  }
 }
 
 // Mescla players preservando interpolação local de movimento
 function mergePlayers(incoming) {
   if (!incoming) {
     state.players = {};
+    _players.clear();
     return;
   }
 
@@ -350,4 +353,142 @@ function mergePlayers(incoming) {
       oldY: oldYForInterp ?? entry.oldY,
     };
   }
+
+  // Sincroniza o Map _players com state.players
+  _players.clear();
+  for (const id in state.players) {
+    _players.set(id, state.players[id]);
+  }
 }
+
+// =============================================================================
+// worldStore.js — mmoRPGEduc (ATUALIZADO)
+// ADICIONAR no final do arquivo, após as funções existentes:
+// =============================================================================
+
+// ---------------------------------------------------------------------------
+// EXPORTS PARA PROGRESSION/COMBAT (ADICIONAR)
+// ---------------------------------------------------------------------------
+
+/**
+ * Obtém um player específico pelo ID
+ * @param {string} playerId
+ * @returns {Object|undefined}
+ */
+export function getPlayer(playerId) {
+  return state.players?.[playerId];
+}
+
+/**
+ * Obtém um monstro específico pelo ID
+ * @param {string} monsterId
+ * @returns {Object|undefined}
+ */
+export function getMonster(monsterId) {
+  return state.monsters?.[monsterId];
+}
+
+/**
+ * Atualiza player localmente (para sync com Firebase)
+ * @param {string} playerId
+ * @param {Object} updates
+ */
+export function applyPlayersLocal(playerId, updates) {
+  const player = state.players?.[playerId];
+  if (!player) return;
+
+  const merged = {
+    ...player,
+    ...updates,
+    ...(updates?.stats
+      ? { stats: { ...(player.stats ?? {}), ...updates.stats } }
+      : {}),
+  };
+
+  state.players[playerId] = merged;
+  _players.set(playerId, merged);
+  notify("players", state.players);
+
+  // Emite evento para UI atualizar
+  if (
+    typeof worldEvents !== "undefined" &&
+    typeof EVENT_TYPES !== "undefined"
+  ) {
+    worldEvents.emit(EVENT_TYPES.ENTITY_UPDATE, {
+      type: "player",
+      id: playerId,
+      updates: merged,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+/**
+ * Atualiza monstro localmente
+ * @param {string} monsterId
+ * @param {Object} updates
+ */
+export function applyMonstersLocal(monsterId, updates) {
+  const monster = state.monsters[monsterId] ?? _monsters.get(monsterId);
+  if (!monster) return;
+
+  const merged = {
+    ...monster,
+    ...updates,
+    ...(updates?.stats
+      ? { stats: { ...(monster.stats ?? {}), ...updates.stats } }
+      : {}),
+  };
+
+  state.monsters[monsterId] = merged;
+  _monsters.set(monsterId, merged);
+  notify("monsters", state.monsters);
+
+  worldEvents.emit(EVENT_TYPES.ENTITY_UPDATE, {
+    type: "monster",
+    id: monsterId,
+    updates: merged,
+    timestamp: Date.now(),
+  });
+}
+
+/**
+ * Remove player do cache local
+ */
+export function removePlayerLocal(playerId) {
+  delete state.players?.[playerId];
+  _players.delete(playerId);
+  notify("players", state.players);
+  if (
+    typeof worldEvents !== "undefined" &&
+    typeof EVENT_TYPES !== "undefined"
+  ) {
+    worldEvents.emit(EVENT_TYPES.ENTITY_DESPAWN, {
+      type: "player",
+      id: playerId,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+/**
+ * Remove monstro do cache local
+ */
+export function removeMonsterLocal(monsterId) {
+  delete state.monsters?.[monsterId];
+  _monsters.delete(monsterId);
+  notify("monsters", state.monsters);
+  if (
+    typeof worldEvents !== "undefined" &&
+    typeof EVENT_TYPES !== "undefined"
+  ) {
+    worldEvents.emit(EVENT_TYPES.ENTITY_DESPAWN, {
+      type: "monster",
+      id: monsterId,
+      timestamp: Date.now(),
+    });
+  }
+}
+
+// Re-exportar estado para compatibilidade (se necessario)
+export { state };

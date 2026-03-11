@@ -225,6 +225,11 @@ async function _triggerSpell(spellId) {
     } else {
       // Sem alvo → entra em modo "aguardando clique"
       _enterPendingMode(spellId);
+      _onCast?.({
+        spellId,
+        ok: false,
+        reason: "Selecione um alvo com clique esquerdo no mapa.",
+      });
     }
   } else {
     // SELF ou AOE → não precisa de alvo, dispara direto

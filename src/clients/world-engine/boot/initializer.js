@@ -2,6 +2,7 @@
 // initializer.js — Orquestração da inicialização
 // ═══════════════════════════════════════════════════════════════
 import { NEW_ASSETS } from "../../../core/config.js";
+import { worldEvents, EVENT_TYPES } from "../../../core/events.js";
 import { WorldTick } from "../engine/worldTick.js";
 import { TransientGC } from "../engine/transientGC.js";
 import { WakeLockService } from "../services/wakeLock.js";
@@ -15,6 +16,7 @@ import { Tooltip } from "../ui/tooltip.js";
 import { HUDRenderer } from "../rendering/hudRenderer.js";
 import { MetricsHUD } from "../ui/metricsHUD.js";
 import { GameLoop } from "../engine/gameLoop.js";
+import { createProgressionUI } from "../../shared/ui/ProgressionUI.js";
 
 export class Initializer {
   constructor({ logger, canvas, canvasSetup, worldState, config }) {
@@ -41,6 +43,7 @@ export class Initializer {
     this.metricsHUD = null;
     this.tooltip = null;
     this.hudRenderer = null;
+    this.progressionUI = null;
 
     // Loop
     this.gameLoop = null;
@@ -67,6 +70,9 @@ export class Initializer {
 
     // 7. Iniciar Firebase sync buttons
     this.firebaseSync?.setupButtons();
+
+    // 8. Inicializar Progression UI (FASE 4)
+    this.initProgressionUI();
   }
 
   async loadMapAssets() {
@@ -209,5 +215,59 @@ export class Initializer {
       onUpdate: () => this.hudRenderer.update(),
     });
     this.gameLoop.start();
+  }
+
+  initProgressionUI() {
+    // =========================================================================
+    // PROGRESSION UI (FASE 4) — Bootstrap
+    // =========================================================================
+
+    try {
+      // Criar instância de ProgressionUI com elementos do DOM
+      this.progressionUI = createProgressionUI({
+        xpBarElement: document.getElementById("xp-bar-fill"),
+        xpTextElement: document.getElementById("xp-text"),
+        levelElement: document.getElementById("player-level"),
+        statPointsElement: document.getElementById("stat-points-available"),
+        levelUpModal: document.getElementById("level-up-modal"),
+        statButtons: {
+          FOR: document.getElementById("btn-alloc-for"),
+          INT: document.getElementById("btn-alloc-int"),
+          AGI: document.getElementById("btn-alloc-agi"),
+          VIT: document.getElementById("btn-alloc-vit"),
+        },
+        statValues: {
+          FOR: document.getElementById("stat-val-for"),
+          INT: document.getElementById("stat-val-int"),
+          AGI: document.getElementById("stat-val-agi"),
+          VIT: document.getElementById("stat-val-vit"),
+        },
+      });
+
+      // Definir player ID atual (ajustar conforme sua lógica de auth)
+      if (window.currentPlayerId) {
+        this.progressionUI.setCurrentPlayerId(window.currentPlayerId);
+      }
+
+      // Atualizar UI quando player stats mudarem (ENTITY_UPDATE)
+      const unsubEntity = worldEvents.subscribe(
+        EVENT_TYPES.ENTITY_UPDATE,
+        (e) => {
+          if (
+            e.type === "player" &&
+            e.id === window.currentPlayerId &&
+            e.updates?.stats
+          ) {
+            this.progressionUI.updatePlayerStats(e.updates.stats);
+          }
+        },
+      );
+
+      this.logger.ok("✓ ProgressionUI inicializado com sucesso");
+    } catch (error) {
+      this.logger.warn(
+        `⚠ Falha ao inicializar ProgressionUI: ${error?.message ?? error}`,
+      );
+    }
   }
 }

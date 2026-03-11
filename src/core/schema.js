@@ -28,6 +28,62 @@ function normalizeOutfitPack(pack, fallback) {
   return aliases[raw] ?? raw;
 }
 
+export const COMBAT_PROFILE_FACTORS = Object.freeze({
+  balanced: {
+    attack: { FOR: 1.35, INT: 0.35, AGI: 0.15, VIT: 0.1 },
+    defense: { VIT: 0.6, AGI: 0.25, FOR: 0.1, INT: 0.05 },
+    agility: 1,
+  },
+  skirmisher: {
+    attack: { FOR: 1.2, INT: 0.15, AGI: 0.45, VIT: 0.05 },
+    defense: { VIT: 0.35, AGI: 0.45, FOR: 0.1, INT: 0.05 },
+    agility: 1.08,
+  },
+  caster: {
+    attack: { FOR: 0.2, INT: 1.45, AGI: 0.2, VIT: 0.05 },
+    defense: { VIT: 0.4, AGI: 0.2, FOR: 0.05, INT: 0.1 },
+    agility: 0.95,
+  },
+  tank: {
+    attack: { FOR: 1.05, INT: 0.1, AGI: 0.1, VIT: 0.35 },
+    defense: { VIT: 0.95, AGI: 0.15, FOR: 0.15, INT: 0.05 },
+    agility: 0.82,
+  },
+  boss: {
+    attack: { FOR: 1.4, INT: 0.9, AGI: 0.25, VIT: 0.15 },
+    defense: { VIT: 0.9, AGI: 0.3, FOR: 0.2, INT: 0.1 },
+    agility: 1,
+  },
+});
+
+export function deriveCombatStatsFromAttributes({
+  FOR = 0,
+  INT = 0,
+  AGI = 0,
+  VIT = 0,
+  combatProfile = "balanced",
+} = {}) {
+  const profile =
+    COMBAT_PROFILE_FACTORS[combatProfile] ?? COMBAT_PROFILE_FACTORS.balanced;
+  const weightedAttack =
+    FOR * profile.attack.FOR +
+    INT * profile.attack.INT +
+    AGI * profile.attack.AGI +
+    VIT * profile.attack.VIT;
+  const weightedDefense =
+    VIT * profile.defense.VIT +
+    AGI * profile.defense.AGI +
+    FOR * profile.defense.FOR +
+    INT * profile.defense.INT;
+
+  return {
+    atk: Math.max(1, Math.round(weightedAttack)),
+    def: Math.max(0, Math.round(weightedDefense)),
+    agi: Math.max(1, Math.round(AGI * profile.agility)),
+    combatProfile,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // APPEARANCE — estrutura canônica de visual de qualquer entidade
 // Resolve o bug: speed estava dentro de appearance em players
@@ -55,20 +111,78 @@ export function makeStats({
   maxHp = 100,
   mp = 50,
   maxMp = 50,
-  atk = 10,
-  def = 5,
-  agi = 10,
+  atk,
+  def,
+  agi,
+  FOR,
+  INT,
+  AGI,
+  VIT,
+  combatProfile,
   level = 1,
+  xp,
+  totalXp,
+  availableStatPoints,
+  allocatedStats,
+  xpValue,
+  elite,
+  ml,
+  magic,
+  resistances,
+  ...extra
 } = {}) {
+  const forResolved = FOR == null ? null : toNumber(FOR, 0);
+  const intResolved = INT == null ? null : toNumber(INT, 0);
+  const agiPrimaryResolved = AGI == null ? null : toNumber(AGI, 0);
+  const vitResolved = VIT == null ? null : toNumber(VIT, 0);
+  const combatProfileResolved = combatProfile ?? "balanced";
+  const derivedCombatStats =
+    forResolved == null &&
+    intResolved == null &&
+    agiPrimaryResolved == null &&
+    vitResolved == null
+      ? { atk: 10, def: 5, agi: 10, combatProfile: combatProfileResolved }
+      : deriveCombatStatsFromAttributes({
+          FOR: forResolved ?? 0,
+          INT: intResolved ?? 0,
+          AGI: agiPrimaryResolved ?? 0,
+          VIT: vitResolved ?? 0,
+          combatProfile: combatProfileResolved,
+        });
+
   return {
+    ...extra,
     hp: toNumber(hp, 100),
     maxHp: toNumber(maxHp, 100),
     mp: toNumber(mp, 50),
     maxMp: toNumber(maxMp, 50),
-    atk: toNumber(atk, 10),
-    def: toNumber(def, 5),
-    agi: toNumber(agi, 10),
-    level: toNumber(level, 1),
+    atk: toNumber(atk, derivedCombatStats.atk),
+    def: toNumber(def, derivedCombatStats.def),
+    agi: toNumber(agi, derivedCombatStats.agi),
+    ...(combatProfile !== undefined ||
+    forResolved != null ||
+    intResolved != null ||
+    agiPrimaryResolved != null ||
+    vitResolved != null
+      ? { combatProfile: combatProfileResolved }
+      : {}),
+    ...(forResolved == null ? {} : { FOR: forResolved }),
+    ...(intResolved == null ? {} : { INT: intResolved }),
+    ...(agiPrimaryResolved == null ? {} : { AGI: agiPrimaryResolved }),
+    ...(vitResolved == null ? {} : { VIT: vitResolved }),
+    ...(xpValue === undefined ? {} : { xpValue: toNumber(xpValue, 10) }),
+    ...(elite === undefined ? {} : { elite: Boolean(elite) }),
+    ...(ml === undefined ? {} : { ml: toNumber(ml, 0) }),
+    ...(magic === undefined ? {} : { magic: toNumber(magic, 0) }),
+    ...(xp === undefined ? {} : { xp: toNumber(xp, 0) }),
+    ...(totalXp === undefined ? {} : { totalXp: toNumber(totalXp, 0) }),
+    ...(availableStatPoints === undefined
+      ? {}
+      : { availableStatPoints: toNumber(availableStatPoints, 0) }),
+    ...(allocatedStats === undefined
+      ? {}
+      : { allocatedStats: allocatedStats ?? null }),
+    ...(resistances === undefined ? {} : { resistances: { ...resistances } }),
   };
 }
 
@@ -97,6 +211,22 @@ export function makePlayer({
   const isAdminResolved = isAdmin || appearance?.isAdmin === true;
   const speedResolved = speed ?? appearance?.speed ?? 120;
   const classResolved = appearance?.class ?? playerClass ?? null;
+  const statsRaw = stats && typeof stats === "object" ? stats : {};
+  const playerStatsSeed = {
+    level: 1,
+    xp: 0,
+    totalXp: 0,
+    availableStatPoints: 0,
+    allocatedStats: { FOR: 0, INT: 0, AGI: 0, VIT: 0 },
+    ...statsRaw,
+    allocatedStats: {
+      FOR: 0,
+      INT: 0,
+      AGI: 0,
+      VIT: 0,
+      ...(statsRaw?.allocatedStats ?? {}),
+    },
+  };
 
   return {
     ...extra,
@@ -115,7 +245,7 @@ export function makePlayer({
       isAdminResolved,
       classResolved,
     ),
-    stats: makeStats(stats),
+    stats: makeStats(playerStatsSeed),
     spawnX: toNumber(spawnX, toNumber(x, 0)),
     spawnY: toNumber(spawnY, toNumber(y, 0)),
     spawnZ: toNumber(spawnZ, toNumber(z, 7)),

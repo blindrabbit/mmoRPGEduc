@@ -228,6 +228,23 @@ export const SPELL_SETS = {
   ],
 };
 
+function normalizeClassName(className) {
+  if (!className) return null;
+  const raw = String(className)
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const aliases = {
+    guerreiro: "cavaleiro",
+    sacerdote: "clerigo",
+    druida: "druid",
+  };
+
+  return aliases[raw] ?? raw;
+}
+
 // ---------------------------------------------------------------------------
 // HELPERS
 // ---------------------------------------------------------------------------
@@ -237,18 +254,20 @@ export function getSpell(spellId) {
 }
 
 export function getDefaultSpellSet(className) {
-  return SPELL_SETS[className] ?? [];
+  const cls = normalizeClassName(className);
+  return SPELL_SETS[cls] ?? [];
 }
 
 export function canCastSpell(spell, player) {
   if (!spell) return { ok: false, reason: "Magia inexistente" };
   const level = player?.stats?.level ?? 1;
   const mp = player?.stats?.mp ?? 0;
-  const cls = player?.class ?? null;
+  const cls = normalizeClassName(player?.class);
 
   if (level < spell.minLevel)
     return { ok: false, reason: `Requer level ${spell.minLevel}` };
-  if (spell.classes !== null && !spell.classes.includes(cls)) {
+  const allowed = spell.classes?.map(normalizeClassName) ?? null;
+  if (allowed !== null && !allowed.includes(cls)) {
     return {
       ok: false,
       reason: `Apenas ${spell.classes.join(" ou ")} pode usar`,

@@ -131,6 +131,8 @@ const COMMANDS = [
         species: speciesKey,
         name: template.name,
         type: "monster",
+        recommendedPlayerLevel: template.recommendedPlayerLevel,
+        threatTier: template.threatTier,
         x: ctx.targetTile.x,
         y: ctx.targetTile.y,
         z: ctx.adminPos.z ?? GROUND_Z,

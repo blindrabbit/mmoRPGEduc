@@ -230,7 +230,125 @@
         display: block;
       }
 
-      /* ── Layout principal ────────────────────────────── */
+      /* New Character Creation */
+      .char-card-add {
+        background: #0d1117;
+        border: 2px dashed #2ecc71;
+        border-radius: 6px;
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 64px;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+        font: bold 16px monospace;
+        color: #2ecc71;
+      }
+      .char-card-add:hover {
+        border-color: #27ae60;
+        background: #1a2a1a;
+        color: #27ae60;
+      }
+
+      /* Class Selection Modal */
+      #class-selection-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.8);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
+      }
+      #class-selection-modal.active {
+        display: flex;
+      }
+      .class-modal-content {
+        background: #111;
+        border: 1px solid #1a2a3a;
+        border-radius: 10px;
+        padding: 28px 32px;
+        width: 450px;
+      }
+      .class-modal-content h2 {
+        color: #2ecc71;
+        font: bold 13px monospace;
+        letter-spacing: 1px;
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .class-modal-content p {
+        color: #aaa;
+        font: 11px monospace;
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .class-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .class-btn {
+        background: #1a1a2e;
+        border: 1px solid #1a2a3a;
+        border-radius: 6px;
+        padding: 16px;
+        cursor: pointer;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
+      }
+      .class-btn:hover,
+      .class-btn.selected {
+        border-color: #2ecc71;
+        background: #1a2a1a;
+      }
+      .class-btn-icon {
+        font-size: 32px;
+      }
+      .class-btn-name {
+        color: #eee;
+        font: bold 11px monospace;
+        letter-spacing: 1px;
+      }
+      .class-btn-desc {
+        color: #666;
+        font: 9px monospace;
+        text-align: center;
+      }
+      .class-modal-actions {
+        display: flex;
+        gap: 12px;
+        justify-content: center;
+      }
+      .class-modal-actions button {
+        background: #1a3a2a;
+        border: 1px solid #2ecc71;
+        color: #2ecc71;
+        font: bold 11px monospace;
+        padding: 8px 20px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .class-modal-actions button:hover {
+        background: #2ecc71;
+        color: #000;
+      }
+      .class-modal-actions button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      /* Layout principal */
       #game-wrapper {
         display: none;
         flex-direction: column;
@@ -275,6 +393,67 @@
         color: #2ecc71;
         font: bold 10px monospace;
         letter-spacing: 1px;
+      }
+      #side-player-summary {
+        padding: 8px;
+        background: #0b1016;
+        border-bottom: 1px solid #1a2a3a;
+        flex-shrink: 0;
+      }
+      #side-player-name {
+        color: #2ecc71;
+        font: bold 12px monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      #side-player-pos {
+        margin-top: 4px;
+        color: #94a3b8;
+        font: 9px monospace;
+        letter-spacing: 0.4px;
+      }
+      .side-mini-label {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 6px;
+        color: #7f8c8d;
+        font: 10px monospace;
+      }
+      .side-mini-label span:last-child {
+        font-weight: bold;
+      }
+      .side-bar-bg {
+        width: 100%;
+        height: 8px;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        border-radius: 3px;
+        overflow: hidden;
+        margin-top: 3px;
+      }
+      .side-bar-fill {
+        height: 100%;
+        width: 0%;
+        transition: width 0.2s linear;
+      }
+      #side-hp-bar-fill {
+        background: linear-gradient(90deg, #2ecc71, #27ae60);
+      }
+      #side-mp-bar-fill {
+        background: linear-gradient(90deg, #3498db, #2980b9);
+      }
+      #side-regen-info {
+        margin-top: 8px;
+        color: #64748b;
+        font: 8px monospace;
+        text-align: right;
+      }
+      #side-status-container {
+        margin-top: 8px;
+        display: flex;
+        gap: 4px;
+        flex-wrap: wrap;
       }
       #dock-toggle {
         background: none;
@@ -468,60 +647,19 @@
         transform-origin: center center;
       }
 
-      /* HUD overlay */
-      #ui {
-        position: absolute;
-        top: 12px;
-        left: 12px;
-        pointer-events: none;
-        background: rgba(0, 0, 0, 0.82);
-        padding: 12px;
-        font-size: 11px;
-        border: 1px solid #333;
-        width: 200px;
-        border-radius: 6px;
-        box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
-        z-index: 5;
-      }
       .stat-label {
         font-weight: bold;
-        margin-top: 8px;
-        font-size: 11px;
+        margin-top: 6px;
+        font-size: 10px;
         display: flex;
         justify-content: space-between;
         align-items: center;
-      }
-      .bar-bg {
-        width: 100%;
-        height: 12px;
-        background: #2a2a2a;
-        margin-top: 4px;
-        border-radius: 3px;
-        overflow: hidden;
-        border: 1px solid #111;
-      }
-      .bar-fill {
-        height: 100%;
-        transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      }
-      #hp-bar-fill {
-        background: #2ecc71;
-        width: 100%;
-      }
-      #mp-bar-fill {
-        background: #3498db;
-        width: 100%;
-      }
-      #status-container {
-        margin-top: 10px;
-        display: flex;
-        gap: 5px;
-        flex-wrap: wrap;
+        color: #cbd5e1;
       }
       .status-badge {
-        padding: 3px 8px;
-        border-radius: 4px;
-        font-size: 10px;
+        padding: 2px 7px;
+        border-radius: 999px;
+        font-size: 9px;
         font-weight: bold;
         text-transform: uppercase;
         border: 1px solid rgba(255, 255, 255, 0.2);
@@ -742,6 +880,45 @@
       </div>
     </div>
 
+    <!-- Class Selection Modal (New Character) -->
+    <div id="class-selection-modal">
+      <div class="class-modal-content">
+        <h2>◈ ESCOLHER PROFISSÃO</h2>
+        <p>Selecione a profissão para seu novo personagem</p>
+        <div class="class-grid">
+          <button class="class-btn" data-class="Cavaleiro" title="Cavaleiro">
+            <div class="class-btn-icon">🛡️</div>
+            <div class="class-btn-name">Cavaleiro</div>
+            <div class="class-btn-desc">Alto HP e DEF</div>
+          </button>
+          <button class="class-btn" data-class="Mago" title="Mago">
+            <div class="class-btn-icon">🔮</div>
+            <div class="class-btn-name">Mago</div>
+            <div class="class-btn-desc">Alto INT e MP</div>
+          </button>
+          <button class="class-btn" data-class="Arqueiro" title="Arqueiro">
+            <div class="class-btn-icon">🏹</div>
+            <div class="class-btn-name">Arqueiro</div>
+            <div class="class-btn-desc">Alto AGI e crit</div>
+          </button>
+          <button class="class-btn" data-class="Druid" title="Druid">
+            <div class="class-btn-icon">🌿</div>
+            <div class="class-btn-name">Druid</div>
+            <div class="class-btn-desc">Equilibrado</div>
+          </button>
+          <button class="class-btn" data-class="Clerigo" title="Clerigo">
+            <div class="class-btn-icon">✨</div>
+            <div class="class-btn-name">Clérigo</div>
+            <div class="class-btn-desc">Cura e suporte</div>
+          </button>
+        </div>
+        <div class="class-modal-actions">
+          <button id="class-confirm-btn" disabled>Confirmar</button>
+          <button id="class-cancel-btn">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Layout principal -->
     <div id="game-wrapper">
       <!-- Área central -->
@@ -753,12 +930,183 @@
             <button id="dock-toggle" title="Mover painel">&#8644;</button>
           </div>
 
+          <div id="side-player-summary">
+            <div id="side-player-name">---</div>
+            <div id="side-player-pos">X 0 Y 0 Z 0</div>
+            <div class="side-mini-label">
+              <span>❤ HP</span>
+              <span id="side-hp-vals">100/100</span>
+            </div>
+            <div class="side-bar-bg">
+              <div id="side-hp-bar-fill" class="side-bar-fill"></div>
+            </div>
+            <div class="side-mini-label">
+              <span>🔷 MP</span>
+              <span id="side-mp-vals">0/50</span>
+            </div>
+            <div class="side-bar-bg">
+              <div id="side-mp-bar-fill" class="side-bar-fill"></div>
+            </div>
+            <div id="side-regen-info">♻ regen: —</div>
+            <div id="side-status-container"></div>
+          </div>
+
           <div id="side-body">
             <div class="side-section-hdr" data-section="stats">
               <span>◈ STATUS</span><span class="sec-arrow">▼</span>
             </div>
             <div class="side-section-body" id="sec-stats">
               <div id="stats-panel"></div>
+              <div
+                id="hud-progression"
+                style="
+                  margin-top: 12px;
+                  padding-top: 8px;
+                  border-top: 1px solid #1a2a3a;
+                "
+              >
+                <div class="stat-label">
+                  <span
+                    id="player-level"
+                    style="color: #f1c40f; font-weight: bold"
+                    >Level 1</span
+                  >
+                </div>
+                <div
+                  class="xp-bar-container"
+                  style="
+                    background: #111827;
+                    height: 10px;
+                    border: 1px solid #333;
+                    border-radius: 3px;
+                    margin: 4px 0;
+                    overflow: hidden;
+                  "
+                >
+                  <div
+                    id="xp-bar-fill"
+                    class="xp-bar-fill"
+                    style="
+                      width: 0%;
+                      height: 100%;
+                      background: linear-gradient(90deg, #2ecc71, #27ae60);
+                      transition: width 0.3s;
+                    "
+                  ></div>
+                </div>
+                <div
+                  id="xp-text"
+                  style="font-size: 9px; color: #aaa; text-align: right"
+                >
+                  0 / 10 XP
+                </div>
+                <div
+                  id="stat-points-available"
+                  style="
+                    font-size: 10px;
+                    color: #f1c40f;
+                    margin-top: 4px;
+                    font-weight: bold;
+                  "
+                >
+                  Pontos: 0
+                </div>
+              </div>
+
+              <div
+                id="stat-allocation-panel"
+                style="
+                  margin-top: 10px;
+                  padding: 8px;
+                  background: #0d1117;
+                  border: 1px solid #1a2a3a;
+                  border-radius: 4px;
+                  display: flex;
+                  flex-direction: column;
+                  gap: 4px;
+                "
+              >
+                <button
+                  id="btn-alloc-for"
+                  style="
+                    background: #1a3a2a;
+                    border: 1px solid #2ecc71;
+                    color: #2ecc71;
+                    padding: 4px 8px;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    font-size: 10px;
+                    font-family: monospace;
+                    width: 100%;
+                    text-align: left;
+                  "
+                >
+                  + FOR
+                  <span id="stat-val-for" style="float: right; color: #aaa"
+                    >0</span
+                  >
+                </button>
+                <button
+                  id="btn-alloc-int"
+                  style="
+                    background: #1a3a2a;
+                    border: 1px solid #3498db;
+                    color: #3498db;
+                    padding: 4px 8px;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    font-size: 10px;
+                    font-family: monospace;
+                    width: 100%;
+                    text-align: left;
+                  "
+                >
+                  + INT
+                  <span id="stat-val-int" style="float: right; color: #aaa"
+                    >0</span
+                  >
+                </button>
+                <button
+                  id="btn-alloc-agi"
+                  style="
+                    background: #1a3a2a;
+                    border: 1px solid #e74c3c;
+                    color: #e74c3c;
+                    padding: 4px 8px;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    font-size: 10px;
+                    font-family: monospace;
+                    width: 100%;
+                    text-align: left;
+                  "
+                >
+                  + AGI
+                  <span id="stat-val-agi" style="float: right; color: #aaa"
+                    >0</span
+                  >
+                </button>
+                <button
+                  id="btn-alloc-vit"
+                  style="
+                    background: #1a3a2a;
+                    border: 1px solid #f39c12;
+                    color: #f39c12;
+                    padding: 4px 8px;
+                    border-radius: 3px;
+                    cursor: pointer;
+                    font-size: 10px;
+                    font-family: monospace;
+                    width: 100%;
+                    text-align: left;
+                  "
+                >
+                  + VIT
+                  <span id="stat-val-vit" style="float: right; color: #aaa"
+                    >0</span
+                  >
+                </button>
+              </div>
             </div>
 
             <div class="side-section-hdr" data-section="equip">
@@ -792,54 +1140,6 @@
         <div id="canvas-column">
           <div id="canvas-wrapper">
             <canvas id="gameCanvas"></canvas>
-
-            <!-- HUD overlay -->
-            <div id="ui">
-              <div>
-                <span
-                  id="p-name"
-                  style="
-                    color: #2ecc71;
-                    font-weight: bold;
-                    font-size: 14px;
-                    text-transform: uppercase;
-                  "
-                  >---</span
-                >
-              </div>
-              <div
-                id="pos"
-                style="color: #aaa; margin: 4px 0 8px; font-size: 10px"
-              >
-                X 0 Y 0 Z 0
-              </div>
-              <div class="stat-label">
-                <span>❤ HP</span>
-                <span id="hp-vals" style="color: #2ecc71">100/100</span>
-              </div>
-              <div class="bar-bg">
-                <div id="hp-bar-fill" class="bar-fill"></div>
-              </div>
-              <div class="stat-label">
-                <span>🔷 MP</span>
-                <span id="mp-vals" style="color: #3498db">0/50</span>
-              </div>
-              <div class="bar-bg">
-                <div id="mp-bar-fill" class="bar-fill"></div>
-              </div>
-              <div
-                id="regen-info"
-                style="
-                  font-size: 9px;
-                  color: #555;
-                  margin-top: 4px;
-                  text-align: right;
-                "
-              >
-                ♻ regen: —
-              </div>
-              <div id="status-container"></div>
-            </div>
 
             <!-- Zoom -->
             <div id="zoom-controls">
@@ -878,6 +1178,65 @@
       </div>
     </div>
 
+    <!-- Level Up Modal (FASE 4) -->
+    <div
+      id="level-up-modal"
+      class="modal"
+      style="
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+      "
+    >
+      <div
+        class="modal-content"
+        style="
+          background: #111827;
+          border: 2px solid #f1c40f;
+          border-radius: 8px;
+          padding: 24px;
+          text-align: center;
+          min-width: 320px;
+          box-shadow: 0 0 20px rgba(241, 196, 15, 0.3);
+        "
+      >
+        <h2 style="color: #f1c40f; font-size: 24px; margin-bottom: 12px">
+          🎉 Level Up!
+        </h2>
+        <p style="color: #eee; font-size: 14px; margin-bottom: 8px">
+          Você alcançou o nível
+          <span class="level-number" style="color: #2ecc71; font-weight: bold"
+            >2</span
+          >!
+        </p>
+        <p style="color: #aaa; font-size: 12px; margin-bottom: 16px">
+          +<span class="points-gained" style="color: #f1c40f; font-weight: bold"
+            >3</span
+          >
+          pontos de atributo
+        </p>
+        <button
+          class="modal-close"
+          style="
+            background: #1a3a2a;
+            border: 1px solid #2ecc71;
+            color: #2ecc71;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: monospace;
+            font-weight: bold;
+          "
+        >
+          Fechar
+        </button>
+      </div>
+    </div>
+
     <script type="module">
       import { AssetManager } from "./src/render/assetManager.js";
       import { AnimationController } from "./src/render/animationController.js";
@@ -913,6 +1272,7 @@
         applyHpToPlayer,
         setPlayerActionCooldown,
         submitPlayerAction,
+        createNewCharacter,
       } from "./src/core/db.js";
       import {
         initWorldStore,
@@ -932,6 +1292,11 @@
         isInAttackRange,
         COMBAT,
       } from "./src/gameplay/combatLogic.js";
+      import {
+        calculateTotalStats,
+        getAttackPower,
+        getDefense,
+      } from "./src/gameplay/progression/progressionSystem.js";
       import { setupMovement } from "./src/gameplay/input.js";
       import { handlePlayerSync } from "./src/gameplay/playerManager.js";
       import {
@@ -1143,6 +1508,8 @@
       let attackInProgress = false;
       let lockEscHandler = null;
       let serverOffset = 0;
+      let _lastPlayerXp = null;
+      let _lastPlayerTotalXp = null;
 
       const BASIC_ATTACK_CD_KEY = "cdBasicAttack";
       const AUTO_ATTACK_TICK_MS = 2000;
@@ -1153,6 +1520,29 @@
         if (value === null || value === undefined) return fallback;
         const n = Number(value);
         return Number.isFinite(n) ? n : fallback;
+      }
+
+      function _xpToNextLevel(level) {
+        const lvl = Math.max(1, Number(level) || 1);
+        return Math.floor(100 * Math.pow(1.15, lvl - 1));
+      }
+
+      function _pushXpFloatingText(deltaXp, entity) {
+        const amount = Math.max(0, Math.round(Number(deltaXp) || 0));
+        if (!amount || !entity) return;
+        floatingTexts.push({
+          x: entity.x,
+          y: entity.y,
+          text: `+${amount} XP`,
+          color: "#ffffff",
+          startTime: Date.now(),
+          duration: 1100,
+          font: "bold 12px Tahoma",
+          strokeStyle: "#111111",
+          strokeWidth: 2,
+          rise: 34,
+          driftX: 0,
+        });
       }
 
       function _normalizeAppearance(appearance, fallbackId = 128) {
@@ -1216,6 +1606,8 @@
       // Cada personagem está em players_data/<charId>
       const MAX_CHARS = 5;
       let _selectedChar = null; // { charId, data }
+      let _currentCharSlot = null; // slot index para criar novo personagem
+      let _selectedClass = null; // classe selecionada para novo personagem
 
       async function showCharacterSelect() {
         const account = _currentAccount;
@@ -1232,15 +1624,24 @@
           const charId = charIds[i];
 
           if (!charId) {
-            // Slot vazio
-            const card = document.createElement("div");
-            card.className = "char-card";
-            card.style.opacity = "0.4";
-            card.innerHTML =
-              `<div class="char-avatar" style="font-size:24px;color:#333">+</div>` +
-              `<div class="char-info"><div class="char-name" style="color:#555">Slot vazio</div>` +
-              `<div class="char-meta">Fale com o GM para criar um personagem</div></div>`;
-            list.appendChild(card);
+            // Slot vazio — botão para criar novo personagem
+            const addBtn = document.createElement("button");
+            addBtn.className = "char-card-add";
+            addBtn.innerHTML = "+ NOVO";
+            addBtn.addEventListener("click", async () => {
+              // Abrir modal de seleção de profissão
+              _currentCharSlot = i;
+              _selectedClass = null;
+              document
+                .getElementById("class-selection-modal")
+                .classList.add("active");
+              // Remover seleção anterior dos botões de classe
+              document.querySelectorAll(".class-btn").forEach((btn) => {
+                btn.classList.remove("selected");
+              });
+              document.getElementById("class-confirm-btn").disabled = true;
+            });
+            list.appendChild(addBtn);
             continue;
           }
 
@@ -1303,6 +1704,64 @@
         document.getElementById("char-overlay").style.display = "none";
         startGame(_selectedChar.charId, _selectedChar.data);
       });
+
+      // ── Class Selection Modal ──────────────────────────────────────────────
+      document.querySelectorAll(".class-btn").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          document.querySelectorAll(".class-btn").forEach((b) => {
+            b.classList.remove("selected");
+          });
+          btn.classList.add("selected");
+          _selectedClass = btn.dataset.class;
+          document.getElementById("class-confirm-btn").disabled = false;
+        });
+      });
+
+      document
+        .getElementById("class-confirm-btn")
+        .addEventListener("click", async () => {
+          if (!_selectedClass || _currentCharSlot === null) return;
+
+          try {
+            document.getElementById("class-confirm-btn").disabled = true;
+
+            // Criar novo personagem via função centralizada
+            const newCharId = await createNewCharacter(
+              _currentAccount.uuid,
+              _currentCharSlot,
+              _selectedClass,
+            );
+
+            // Adicionar ID do novo personagem à conta localmente
+            if (!_currentAccount.characters) {
+              _currentAccount.characters = [];
+            }
+            _currentAccount.characters[_currentCharSlot] = newCharId;
+
+            // Fechar modal e recarregar lista de personagens
+            document
+              .getElementById("class-selection-modal")
+              .classList.remove("active");
+            _currentCharSlot = null;
+            _selectedClass = null;
+
+            blog(`✓ Personagem criado com sucesso!`, "ok");
+            await showCharacterSelect();
+          } catch (err) {
+            blog(`✗ Erro ao criar personagem: ${err?.message ?? err}`, "err");
+            document.getElementById("class-confirm-btn").disabled = false;
+          }
+        });
+
+      document
+        .getElementById("class-cancel-btn")
+        .addEventListener("click", () => {
+          document
+            .getElementById("class-selection-modal")
+            .classList.remove("active");
+          _currentCharSlot = null;
+          _selectedClass = null;
+        });
 
       // ── Boot (carrega mapa e assets antes do login) ────────────────────────
       async function boot() {
@@ -1405,7 +1864,10 @@
           type: "player",
         };
 
-        document.getElementById("p-name").innerText = myPos.name;
+        _lastPlayerXp = Number(myPos.stats?.xp ?? 0);
+        _lastPlayerTotalXp = Number(myPos.stats?.totalXp);
+        if (!Number.isFinite(_lastPlayerTotalXp)) _lastPlayerTotalXp = null;
+
         document.getElementById("game-wrapper").style.display = "flex";
         activeZ = myPos.z;
         applyZoom();
@@ -1420,7 +1882,29 @@
         watchPlayerData(uid, (serverData) => {
           if (!serverData) return;
           if (serverData.name) myPos.name = serverData.name;
-          if (serverData.stats) myPos.stats = serverData.stats;
+          if (serverData.stats) {
+            const nextStats = serverData.stats;
+            const nextTotalXp = Number(nextStats.totalXp);
+            const nextXp = Number(nextStats.xp ?? 0);
+
+            if (Number.isFinite(nextTotalXp)) {
+              if (
+                Number.isFinite(_lastPlayerTotalXp) &&
+                nextTotalXp > _lastPlayerTotalXp
+              ) {
+                _pushXpFloatingText(nextTotalXp - _lastPlayerTotalXp, myPos);
+              }
+              _lastPlayerTotalXp = nextTotalXp;
+              _lastPlayerXp = nextXp;
+            } else {
+              if (Number.isFinite(_lastPlayerXp) && nextXp > _lastPlayerXp) {
+                _pushXpFloatingText(nextXp - _lastPlayerXp, myPos);
+              }
+              _lastPlayerXp = nextXp;
+            }
+
+            myPos.stats = nextStats;
+          }
           if (serverData.appearance)
             myPos.appearance = _normalizeAppearance(serverData.appearance);
           myPos.x = _numOr(serverData.x, myPos.x);
@@ -1690,24 +2174,53 @@
         const maxMp = data.stats?.maxMp ?? 50;
         const hpPct = Math.max(0, Math.min(1, hp / maxHp)) * 100;
         const mpPct = Math.max(0, Math.min(1, mp / maxMp)) * 100;
-
-        if (data.name) document.getElementById("p-name").innerText = data.name;
-        document.getElementById("hp-vals").innerText =
-          `${Math.round(hp)} / ${maxHp}`;
-        const hpFill = document.getElementById("hp-bar-fill");
-        hpFill.style.width = `${hpPct}%`;
-        hpFill.style.backgroundColor =
+        const hpColor =
           hpPct > 60 ? "#2ecc71" : hpPct > 30 ? "#f1c40f" : "#e74c3c";
-        document.getElementById("mp-vals").innerText =
-          `${Math.round(mp)} / ${maxMp}`;
-        document.getElementById("mp-bar-fill").style.width = `${mpPct}%`;
-        document.getElementById("pos").innerText =
-          `X ${data.x}  Y ${data.y}  Z ${data.z}`;
+        const name = data.name ?? "---";
 
-        const sc = document.getElementById("status-container");
+        const sideNameEl = document.getElementById("side-player-name");
+        if (sideNameEl) sideNameEl.innerText = name;
+
+        const hpValsText = `${Math.round(hp)} / ${maxHp}`;
+        const mpValsText = `${Math.round(mp)} / ${maxMp}`;
+        const sideHpValsEl = document.getElementById("side-hp-vals");
+        if (sideHpValsEl) sideHpValsEl.innerText = hpValsText;
+
+        const sideHpFill = document.getElementById("side-hp-bar-fill");
+        if (sideHpFill) {
+          sideHpFill.style.width = `${hpPct}%`;
+          sideHpFill.style.background = hpColor;
+        }
+
+        const sideMpValsEl = document.getElementById("side-mp-vals");
+        if (sideMpValsEl) sideMpValsEl.innerText = mpValsText;
+
+        const sideMpFill = document.getElementById("side-mp-bar-fill");
+        if (sideMpFill) sideMpFill.style.width = `${mpPct}%`;
+        const sidePosEl = document.getElementById("side-player-pos");
+        if (sidePosEl) {
+          sidePosEl.innerText = `X ${data.x}  Y ${data.y}  Z ${data.z}`;
+        }
+
+        const level = Number(data.stats?.level ?? 1) || 1;
+        const xp = Math.max(0, Number(data.stats?.xp ?? 0) || 0);
+        const xpToNext = Math.max(1, _xpToNextLevel(level));
+        const xpPct = Math.max(0, Math.min(1, xp / xpToNext)) * 100;
+        const levelEl = document.getElementById("player-level");
+        const xpFillEl = document.getElementById("xp-bar-fill");
+        const xpTextEl = document.getElementById("xp-text");
+        const pointsEl = document.getElementById("stat-points-available");
+        if (levelEl) levelEl.textContent = `Level ${level}`;
+        if (xpFillEl) xpFillEl.style.width = `${xpPct}%`;
+        if (xpTextEl) xpTextEl.textContent = `${xp} / ${xpToNext} XP`;
+        if (pointsEl) {
+          pointsEl.textContent = `Pontos: ${Number(data.stats?.availableStatPoints ?? 0) || 0}`;
+        }
+
+        const sc = document.getElementById("side-status-container");
         const icons = { burning: "🔥", poisoned: "☠", electrified: "⚡" };
-        sc.innerHTML = "";
-        if (data.status) {
+        if (sc) sc.innerHTML = "";
+        if (sc && data.status) {
           for (const type in data.status) {
             const badge = document.createElement("div");
             badge.className = `status-badge status-${type}`;
@@ -1723,17 +2236,28 @@
         const el = document.getElementById("stats-panel");
         if (!el || !player) return;
         const s = player.stats ?? {};
+        const calculated = calculateTotalStats(player);
+        const total = calculated.totalStats ?? {};
+        const attackPower = Math.round(getAttackPower(player));
+        const defensePower = Math.round(getDefense(player, 0));
+        const spellPower = Math.round(calculated.spellPower ?? 0);
+        const healPower = Math.round(calculated.healPower ?? 0);
         el.innerHTML =
           `<div class="stat-row"><span>❤ HP</span><span>${Math.round(s.hp ?? 0)}/${s.maxHp ?? 0}</span></div>` +
           `<div class="stat-row"><span>🔷 MP</span><span>${Math.round(s.mp ?? 0)}/${s.maxMp ?? 0}</span></div>` +
-          `<div class="stat-row"><span>⚔ ATK</span><span>${s.atk ?? 0}</span></div>` +
-          `<div class="stat-row"><span>🛡 DEF</span><span>${s.def ?? 0}</span></div>` +
-          `<div class="stat-row"><span>👟 AGI</span><span>${s.agi ?? 0}</span></div>` +
+          `<div class="stat-row"><span>💪 FOR</span><span>${Math.round(total.FOR ?? 0)}</span></div>` +
+          `<div class="stat-row"><span>✨ INT</span><span>${Math.round(total.INT ?? 0)}</span></div>` +
+          `<div class="stat-row"><span>👟 AGI</span><span>${Math.round(total.AGI ?? 0)}</span></div>` +
+          `<div class="stat-row"><span>🛡 VIT</span><span>${Math.round(total.VIT ?? 0)}</span></div>` +
+          `<div class="stat-row"><span>⚔ PODER</span><span>${attackPower}</span></div>` +
+          `<div class="stat-row"><span>🧱 RESIST</span><span>${defensePower}</span></div>` +
+          `<div class="stat-row"><span>🔮 MAGIA</span><span>${spellPower}</span></div>` +
+          `<div class="stat-row"><span>💚 CURA</span><span>${healPower}</span></div>` +
           `<div class="stat-row"><span>⭐ LVL</span><span>${s.level ?? 1}</span></div>`;
       }
 
       function updateRegenHint({ hp, mp, tickMs } = {}) {
-        const el = document.getElementById("regen-info");
+        const el = document.getElementById("side-regen-info");
         if (!el || hp === undefined) return;
         el.textContent = `♻ regen: +${hp} HP / +${mp} MP a cada ${Math.round(tickMs / 1000)}s`;
       }

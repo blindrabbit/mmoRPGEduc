@@ -18,8 +18,9 @@ import { getPlayer, applyPlayersLocal } from "../../core/worldStore.js";
 // =============================================================================
 
 export const PROGRESSION_CONFIG = Object.freeze({
-  // XP necessário por nível: 100 * 1.15^(level-1)
-  xpToNextLevel: (level) => Math.floor(100 * Math.pow(1.15, level - 1)),
+  // XP necessário por nível: 10 * 1.15^(level-1)
+  // Ex.: nivel 1->2 = 10 XP (progressão inicial mais rápida)
+  xpToNextLevel: (level) => Math.floor(10 * Math.pow(1.15, level - 1)),
 
   // Pontos de atributo por nível
   statPointsPerLevel: 3,
@@ -188,6 +189,24 @@ export function initializePlayerStats(playerClass) {
     PROGRESSION_CONFIG.classGrowth[playerClass] ||
     PROGRESSION_CONFIG.classGrowth.cavaleiro;
 
+  const baseFOR = 5 + classConfig.growth.FOR * 0;
+  const baseINT = 5 + classConfig.growth.INT * 0;
+  const baseAGI = 5 + classConfig.growth.AGI * 0;
+  const baseVIT = 5 + classConfig.growth.VIT * 0;
+  const baseAtk = Math.round(
+    (classConfig.primary === "INT" ? baseINT : baseFOR) * 1.5,
+  );
+  const baseDef = Math.round(baseVIT * 0.5 + baseAGI * 0.2);
+  const baseCritChance = classConfig.critPerAgi
+    ? Number(((baseAGI * classConfig.critPerAgi) / 100).toFixed(4))
+    : Number((0.05 + baseAGI * 0.005).toFixed(4));
+  const baseSpellPower = Math.round(
+    classConfig.spellPowerPerInt ? baseINT * classConfig.spellPowerPerInt : 0,
+  );
+  const baseHealPower = Math.round(
+    classConfig.healPowerPerInt ? baseINT * classConfig.healPowerPerInt : 0,
+  );
+
   return {
     level: 1,
     xp: 0,
@@ -198,6 +217,52 @@ export function initializePlayerStats(playerClass) {
     maxMp: 50 + 5 * classConfig.mpPerInt,
     hp: 100 + 5 * classConfig.hpPerVit,
     mp: 50 + 5 * classConfig.mpPerInt,
+    FOR: baseFOR,
+    INT: baseINT,
+    AGI: baseAGI,
+    VIT: baseVIT,
+    atk: baseAtk,
+    def: baseDef,
+    agi: baseAGI,
+    spellPower: baseSpellPower,
+    healPower: baseHealPower,
+    critChance: baseCritChance,
+  };
+}
+
+function buildDerivedStatSnapshot(calculatedStats) {
+  const total = calculatedStats?.totalStats ?? {
+    FOR: 0,
+    INT: 0,
+    AGI: 0,
+    VIT: 0,
+  };
+  const classConfig =
+    calculatedStats?.classConfig ?? PROGRESSION_CONFIG.classGrowth.cavaleiro;
+
+  const attackSource = classConfig.primary === "INT" ? total.INT : total.FOR;
+  const atk = Math.max(1, Math.round(attackSource * 1.5));
+  const def = Math.max(0, Math.round(total.VIT * 0.5 + total.AGI * 0.2));
+  const agi = Math.max(1, Math.round(total.AGI));
+  const spellPower = Math.round(calculatedStats?.spellPower ?? 0);
+  const healPower = Math.round(calculatedStats?.healPower ?? 0);
+  const critChance = Number(
+    (
+      calculatedStats?.critChance ?? 0.05 + Number(total.AGI ?? 0) * 0.005
+    ).toFixed(4),
+  );
+
+  return {
+    FOR: Number(total.FOR ?? 0),
+    INT: Number(total.INT ?? 0),
+    AGI: Number(total.AGI ?? 0),
+    VIT: Number(total.VIT ?? 0),
+    atk,
+    def,
+    agi,
+    spellPower,
+    healPower,
+    critChance,
   };
 }
 
@@ -223,29 +288,43 @@ export async function processXpGain(playerId, xpAmount, source = "monster") {
 
   // Calcular pontos de atributo ganhos
   const pointsGained = levelsGained * PROGRESSION_CONFIG.statPointsPerLevel;
+  const levelUpStats = leveledUp
+    ? calculateTotalStats({
+        ...player,
+        stats: { ...player.stats, level: levelData.level },
+      })
+    : null;
 
   // Preparar atualizações
   const updates = {};
-  const playerStatsPath =
-    PATHS.playerStats?.(playerId) || `online_players/${playerId}/stats`;
+  const statsPaths = [
+    PATHS.playerStats?.(playerId) || `online_players/${playerId}/stats`,
+    PATHS.playerDataStats?.(playerId) || `players_data/${playerId}/stats`,
+  ];
 
-  updates[`${playerStatsPath}/xp`] = levelData.currentXp;
-  updates[`${playerStatsPath}/totalXp`] = newXpTotal;
+  for (const playerStatsPath of statsPaths) {
+    updates[`${playerStatsPath}/xp`] = levelData.currentXp;
+    updates[`${playerStatsPath}/totalXp`] = newXpTotal;
+  }
 
   if (leveledUp) {
-    updates[`${playerStatsPath}/level`] = levelData.level;
-    updates[`${playerStatsPath}/availableStatPoints`] =
-      (player.stats?.availableStatPoints ?? 0) + pointsGained;
+    const derived = buildDerivedStatSnapshot(levelUpStats);
 
-    // Recalcular HP/MP máximos e curar completamente no level up
-    const newStats = calculateTotalStats({
-      ...player,
-      stats: { ...player.stats, level: levelData.level },
-    });
-    updates[`${playerStatsPath}/maxHp`] = newStats.maxHp;
-    updates[`${playerStatsPath}/maxMp`] = newStats.maxMp;
-    updates[`${playerStatsPath}/hp`] = newStats.maxHp; // Cura completa no level up
-    updates[`${playerStatsPath}/mp`] = newStats.maxMp;
+    for (const playerStatsPath of statsPaths) {
+      updates[`${playerStatsPath}/level`] = levelData.level;
+      updates[`${playerStatsPath}/availableStatPoints`] =
+        (player.stats?.availableStatPoints ?? 0) + pointsGained;
+    }
+
+    for (const playerStatsPath of statsPaths) {
+      updates[`${playerStatsPath}/maxHp`] = levelUpStats.maxHp;
+      updates[`${playerStatsPath}/maxMp`] = levelUpStats.maxMp;
+      updates[`${playerStatsPath}/hp`] = levelUpStats.maxHp; // Cura completa no level up
+      updates[`${playerStatsPath}/mp`] = levelUpStats.maxMp;
+      for (const [key, value] of Object.entries(derived)) {
+        updates[`${playerStatsPath}/${key}`] = value;
+      }
+    }
   }
 
   // Aplicar atualizações no Firebase
@@ -260,8 +339,11 @@ export async function processXpGain(playerId, xpAmount, source = "monster") {
       level: levelData.level,
       availableStatPoints:
         (player.stats?.availableStatPoints ?? 0) + pointsGained,
-      maxHp: updates[`${playerStatsPath}/maxHp`] ?? player.stats?.maxHp,
-      maxMp: updates[`${playerStatsPath}/maxMp`] ?? player.stats?.maxMp,
+      maxHp: levelUpStats?.maxHp ?? player.stats?.maxHp,
+      maxMp: levelUpStats?.maxMp ?? player.stats?.maxMp,
+      hp: levelUpStats?.maxHp ?? player.stats?.hp,
+      mp: levelUpStats?.maxMp ?? player.stats?.mp,
+      ...(levelUpStats ? buildDerivedStatSnapshot(levelUpStats) : {}),
     },
   });
 
@@ -347,19 +429,31 @@ export async function allocateStatPoint(playerId, statName, amount = 1) {
 
   // Preparar atualizações
   const updates = {};
-  const playerStatsPath =
-    PATHS.playerStats?.(playerId) || `online_players/${playerId}/stats`;
+  const derived = buildDerivedStatSnapshot(newStats);
+  const statsPaths = [
+    PATHS.playerStats?.(playerId) || `online_players/${playerId}/stats`,
+    PATHS.playerDataStats?.(playerId) || `players_data/${playerId}/stats`,
+  ];
 
-  updates[`${playerStatsPath}/allocatedStats`] = newAllocated;
-  updates[`${playerStatsPath}/availableStatPoints`] = available - amount;
-  updates[`${playerStatsPath}/maxHp`] = newStats.maxHp;
-  updates[`${playerStatsPath}/maxMp`] = newStats.maxMp;
+  for (const playerStatsPath of statsPaths) {
+    updates[`${playerStatsPath}/allocatedStats`] = newAllocated;
+    updates[`${playerStatsPath}/availableStatPoints`] = available - amount;
+    updates[`${playerStatsPath}/maxHp`] = newStats.maxHp;
+    updates[`${playerStatsPath}/maxMp`] = newStats.maxMp;
+    for (const [key, value] of Object.entries(derived)) {
+      updates[`${playerStatsPath}/${key}`] = value;
+    }
+  }
 
   // Atualizar HP/MP atuais proporcionalmente
   const hpRatio = (player.stats?.hp ?? 100) / (player.stats?.maxHp ?? 100);
   const mpRatio = (player.stats?.mp ?? 50) / (player.stats?.maxMp ?? 50);
-  updates[`${playerStatsPath}/hp`] = Math.floor(newStats.maxHp * hpRatio);
-  updates[`${playerStatsPath}/mp`] = Math.floor(newStats.maxMp * mpRatio);
+  const nextHp = Math.floor(newStats.maxHp * hpRatio);
+  const nextMp = Math.floor(newStats.maxMp * mpRatio);
+  for (const playerStatsPath of statsPaths) {
+    updates[`${playerStatsPath}/hp`] = nextHp;
+    updates[`${playerStatsPath}/mp`] = nextMp;
+  }
 
   await batchWrite(updates);
 
@@ -371,8 +465,9 @@ export async function allocateStatPoint(playerId, statName, amount = 1) {
       availableStatPoints: available - amount,
       maxHp: newStats.maxHp,
       maxMp: newStats.maxMp,
-      hp: updates[`${playerStatsPath}/hp`],
-      mp: updates[`${playerStatsPath}/mp`],
+      hp: nextHp,
+      mp: nextMp,
+      ...derived,
     },
   });
 
@@ -456,13 +551,21 @@ export async function recalculatePlayerStats(playerId) {
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
   const newStats = calculateTotalStats(player);
+  const derived = buildDerivedStatSnapshot(newStats);
 
   const updates = {};
-  const playerStatsPath =
-    PATHS.playerStats?.(playerId) || `online_players/${playerId}/stats`;
+  const statsPaths = [
+    PATHS.playerStats?.(playerId) || `online_players/${playerId}/stats`,
+    PATHS.playerDataStats?.(playerId) || `players_data/${playerId}/stats`,
+  ];
 
-  updates[`${playerStatsPath}/maxHp`] = newStats.maxHp;
-  updates[`${playerStatsPath}/maxMp`] = newStats.maxMp;
+  for (const playerStatsPath of statsPaths) {
+    updates[`${playerStatsPath}/maxHp`] = newStats.maxHp;
+    updates[`${playerStatsPath}/maxMp`] = newStats.maxMp;
+    for (const [key, value] of Object.entries(derived)) {
+      updates[`${playerStatsPath}/${key}`] = value;
+    }
+  }
 
   await batchWrite(updates);
 
@@ -471,6 +574,7 @@ export async function recalculatePlayerStats(playerId) {
       ...player.stats,
       maxHp: newStats.maxHp,
       maxMp: newStats.maxMp,
+      ...derived,
     },
   });
 

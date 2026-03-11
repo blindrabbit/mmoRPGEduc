@@ -59,10 +59,21 @@ export async function distributeXpOnDeath(monsterId, monster, killerId) {
 
   // Calcular XP total do monstro
   const totalXp = calculateMonsterXp(monster);
+  if (totalXp <= 0) {
+    _damageDealt.delete(monsterId);
+    return;
+  }
 
   if (!damageMap || damageMap.size === 0) {
-    // Ninguém causou dano registrado, XP vai pro killer
-    await _awardXp(killerId, monster, totalXp, "monster_kill");
+    // Ninguém causou dano registrado; tenta fallback no killer direto.
+    if (killerId) {
+      await _awardXp(killerId, monster, totalXp, "monster_kill");
+    } else {
+      console.warn(
+        "[xpManager] Morte sem killer e sem dano registrado:",
+        monsterId,
+      );
+    }
     _damageDealt.delete(monsterId);
     return;
   }
@@ -83,6 +94,14 @@ export async function distributeXpOnDeath(monsterId, monster, killerId) {
     }
   }
 
+  if (totalDamage <= 0) {
+    if (lastHitter) {
+      await _awardXp(lastHitter, monster, totalXp, "monster_kill");
+    }
+    _damageDealt.delete(monsterId);
+    return;
+  }
+
   // Distribuir XP proporcionalmente ao dano causado
   const promises = [];
   for (const [playerId, data] of damageMap.entries()) {
@@ -97,6 +116,12 @@ export async function distributeXpOnDeath(monsterId, monster, killerId) {
     if (xpToAward > 0) {
       promises.push(_awardXp(playerId, monster, xpToAward, "monster_share"));
     }
+  }
+
+  if (promises.length === 0 && lastHitter) {
+    promises.push(
+      _awardXp(lastHitter, monster, Math.max(1, totalXp), "monster_kill"),
+    );
   }
 
   await Promise.all(promises);
@@ -177,4 +202,24 @@ export function getDamageData(monsterId) {
  */
 export function resetDamageData(monsterId) {
   _damageDealt.delete(monsterId);
+}
+
+/**
+ * Obtém o ID do jogador que deu o último hit
+ * @param {string} monsterId
+ * @returns {string|null} ID do jogador ou null
+ */
+export function getLastHitter(monsterId) {
+  const damageMap = _damageDealt.get(monsterId);
+  if (!damageMap || damageMap.size === 0) return null;
+
+  let lastHitter = null;
+  let maxLastHit = 0;
+  for (const [playerId, data] of damageMap.entries()) {
+    if (data.lastHit > maxLastHit) {
+      maxLastHit = data.lastHit;
+      lastHitter = playerId;
+    }
+  }
+  return lastHitter;
 }

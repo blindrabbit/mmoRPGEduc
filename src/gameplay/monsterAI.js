@@ -308,6 +308,7 @@ export function isTileBlocked(
   for (const id in monsters) {
     if (id === selfId) continue;
     const m = monsters[id];
+    if (!m || m.dead || (m.stats?.hp ?? 1) <= 0) continue;
     if (Math.round(m.x) === x && Math.round(m.y) === y && (m.z ?? 7) === z) {
       return true;
     }
@@ -316,6 +317,7 @@ export function isTileBlocked(
   // Jogador na mesma posição
   for (const pid in players) {
     const p = players[pid];
+    if (!p || p.dead || (p.stats?.hp ?? 1) <= 0) continue;
     if (Math.round(p.x) === x && Math.round(p.y) === y && (p.z ?? 7) === z) {
       return true;
     }

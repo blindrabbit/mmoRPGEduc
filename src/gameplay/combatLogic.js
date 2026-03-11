@@ -134,13 +134,16 @@ export function calculatePhysicalAttack(
  * @returns {{ hit: boolean, damage: number, critical: boolean }}
  */
 export function calculateCombatResult(atkStats, defStats) {
+  const attackerAgi = atkStats?.agility ?? atkStats?.agi ?? atkStats?.AGI ?? 0;
+  const defenderAgi = defStats?.agility ?? defStats?.agi ?? defStats?.AGI ?? 0;
   const atkValue =
-    (atkStats?.atk ?? 0) + (atkStats?.sword ?? atkStats?.distance ?? 0) * 0.8;
-  const defValue = defStats?.def ?? 0;
+    (atkStats?.attackPower ?? atkStats?.atk ?? 0) +
+    (atkStats?.sword ?? atkStats?.distance ?? 0) * 0.8;
+  const defValue = defStats?.defense ?? defStats?.def ?? 0;
   const defSkill = defStats?.shielding ?? 0;
   const hitChance = COMBAT.HIT_CHANCE_FORMULA(
-    (atkStats?.hit ?? 50) + (atkStats?.sword ?? 0) * 0.5,
-    defSkill * 0.8,
+    (atkStats?.hit ?? 50) + attackerAgi * 1.2 + (atkStats?.sword ?? 0) * 0.5,
+    defSkill * 0.8 + defValue * 0.4 + defenderAgi * 0.8,
     1,
   );
 
@@ -150,8 +153,9 @@ export function calculateCombatResult(atkStats, defStats) {
 
   const baseDamage = COMBAT.DAMAGE_FORMULA.melee(atkValue, defValue);
   const atkSkill = atkStats?.sword ?? atkStats?.distance ?? 0;
+  const critChance = atkStats?.critChance ?? (attackerAgi > 50 ? 0.05 : 0);
 
-  if (atkSkill > 50 && Math.random() < 0.05) {
+  if ((atkSkill > 50 || critChance > 0) && Math.random() < critChance) {
     return { hit: true, damage: Math.round(baseDamage * 1.5), critical: true };
   }
 

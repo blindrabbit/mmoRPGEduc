@@ -16,6 +16,13 @@
 //   type: "ranged" → projétil à distância
 //   type: "area"   → atinge múltiplos tiles via shape
 //   chance         → chance de executar no turno (0..1 ou 0..100)
+
+// ── CAMPOS DE STATUS (novo modelo) ───────────────────────────
+//   FOR → força física / ataque base
+//   INT → poder mágico / afinidade arcana
+//   AGI → acerto, esquiva e mobilidade
+//   VIT → resistência e defesa base
+//   combatProfile → perfil de derivação: balanced, skirmisher, caster, tank, boss
 //
 // ── SHAPE (ataques em área) ───────────────────────────────────
 //   M = posição do monstro
@@ -42,6 +49,8 @@ export const MONSTER_TEMPLATES = {
   rat: {
     name: "Rat",
     species: "rat",
+    recommendedPlayerLevel: 1,
+    threatTier: "starter",
 
     appearance: {
       outfitId: "rat",
@@ -50,12 +59,15 @@ export const MONSTER_TEMPLATES = {
     },
 
     stats: {
-      hp: 250,
-      maxHp: 250,
-      atk: 5,
-      def: 0,
-      agi: 10,
+      hp: 36,
+      maxHp: 36,
+      FOR: 3,
+      INT: 0,
+      AGI: 8,
+      VIT: 2,
+      combatProfile: "skirmisher",
       level: 1,
+      xpValue: 10,
     },
 
     behavior: {
@@ -74,7 +86,7 @@ export const MONSTER_TEMPLATES = {
         name: "Mordida",
         type: "melee",
         range: 1,
-        damage: 5,
+        damage: 6,
         cooldown: 1500,
         chance: 1,
         effectId: 1, // ID do efeito no atlas de monstros
@@ -85,9 +97,9 @@ export const MONSTER_TEMPLATES = {
         name: "Onda de Fogo",
         type: "area",
         range: 3,
-        damage: 1,
+        damage: 4,
         cooldown: 4000,
-        chance: 0.35,
+        chance: 0.2,
         isPersistent: false,
         effectId: 7, // ID do efeito no atlas de monstros
         effectDuration: 1200,
@@ -99,14 +111,14 @@ export const MONSTER_TEMPLATES = {
         name: "Campo de Fogo",
         type: "area",
         range: 1,
-        damage: 10,
-        cooldown: 5000,
-        chance: 0.25,
+        damage: 3,
+        cooldown: 7000,
+        chance: 0.12,
         isPersistent: true,
         isField: true,
         fieldId: 2118,
-        fieldDuration: 60000,
-        tickRate: 1000,
+        fieldDuration: 4000,
+        tickRate: 1500,
         statusType: "burning",
         effectId: 16,
         effectDuration: 1200,
@@ -121,6 +133,8 @@ export const MONSTER_TEMPLATES = {
   skeleton_mage: {
     name: "Skeleton Mage",
     species: "skeleton_mage",
+    recommendedPlayerLevel: 5,
+    threatTier: "elite",
 
     appearance: {
       outfitId: "2005",
@@ -129,12 +143,15 @@ export const MONSTER_TEMPLATES = {
     },
 
     stats: {
-      hp: 60,
-      maxHp: 60,
-      atk: 15,
-      def: 2,
-      agi: 5,
+      hp: 96,
+      maxHp: 96,
+      FOR: 2,
+      INT: 16,
+      AGI: 9,
+      VIT: 5,
+      combatProfile: "caster",
       level: 6,
+      xpValue: 18,
     },
 
     behavior: {
@@ -152,17 +169,17 @@ export const MONSTER_TEMPLATES = {
         name: "Bola de Fogo",
         type: "ranged",
         range: 5,
-        damage: 15,
-        cooldown: 3000,
+        damage: 17,
+        cooldown: 2800,
         chance: 0.75,
       },
       {
         name: "Explosão de Energia",
         type: "ranged",
         range: 2,
-        damage: 25,
-        cooldown: 5000,
-        chance: 0.3,
+        damage: 26,
+        cooldown: 5200,
+        chance: 0.28,
       },
     ],
   },
@@ -173,6 +190,8 @@ export const MONSTER_TEMPLATES = {
   dragon: {
     name: "Red Dragon",
     species: "dragon",
+    recommendedPlayerLevel: 18,
+    threatTier: "boss",
 
     appearance: {
       outfitId: "3000",
@@ -181,12 +200,15 @@ export const MONSTER_TEMPLATES = {
     },
 
     stats: {
-      hp: 5000,
-      maxHp: 5000,
-      atk: 50,
-      def: 20,
-      agi: 8,
+      hp: 1800,
+      maxHp: 1800,
+      FOR: 26,
+      INT: 18,
+      AGI: 12,
+      VIT: 22,
+      combatProfile: "boss",
       level: 25,
+      xpValue: 48,
     },
 
     behavior: {
@@ -207,8 +229,8 @@ export const MONSTER_TEMPLATES = {
         name: "Baforada de Fogo",
         type: "area",
         range: 4,
-        damage: 40,
-        cooldown: 5000,
+        damage: 44,
+        cooldown: 4500,
         chance: 0.45,
         isPersistent: false,
         effectId: 1,
@@ -219,7 +241,7 @@ export const MONSTER_TEMPLATES = {
         name: "Mordida",
         type: "melee",
         range: 1,
-        damage: 20,
+        damage: 30,
         cooldown: 2000,
         chance: 1,
       },
@@ -232,6 +254,8 @@ export const MONSTER_TEMPLATES = {
   slime: {
     name: "Slime",
     species: "slime",
+    recommendedPlayerLevel: 2,
+    threatTier: "normal",
 
     appearance: {
       outfitId: "slime",
@@ -240,12 +264,15 @@ export const MONSTER_TEMPLATES = {
     },
 
     stats: {
-      hp: 40,
-      maxHp: 40,
-      atk: 3,
-      def: 5,
-      agi: 2,
+      hp: 72,
+      maxHp: 72,
+      FOR: 4,
+      INT: 1,
+      AGI: 2,
+      VIT: 11,
+      combatProfile: "tank",
       level: 3,
+      xpValue: 14,
     },
 
     behavior: {
@@ -266,8 +293,8 @@ export const MONSTER_TEMPLATES = {
         name: "Gosma",
         type: "melee",
         range: 1,
-        damage: 3,
-        cooldown: 2000,
+        damage: 7,
+        cooldown: 2200,
         chance: 1,
       },
       {
@@ -275,11 +302,11 @@ export const MONSTER_TEMPLATES = {
         type: "area",
         range: 1,
         damage: 5,
-        cooldown: 8000,
-        chance: 0.4,
+        cooldown: 7000,
+        chance: 0.35,
         isPersistent: true,
         isField: true,
-        fieldDuration: 10000,
+        fieldDuration: 8000,
         tickRate: 1500,
         statusType: "poison",
         effectId: 2,

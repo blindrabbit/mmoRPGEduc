@@ -15,7 +15,7 @@ import {
   calculateNewHp,
   calculateFinalDamage,
   COMBAT,
-} from "./combatLogic.js";
+} from "../combatLogic.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
 import { applyHpToPlayer, applyHpToMonster } from "../../core/db.js";
 import {
@@ -26,10 +26,86 @@ import {
 } from "../../core/worldStore.js";
 import { registerDamage, registerLastHit } from "../progression/xpManager.js";
 import {
+  calculateTotalStats,
   getAttackPower,
   getCritChance,
   getDefense,
 } from "../progression/progressionSystem.js";
+
+// =============================================================================
+// COMBAT EFFECT PRESETS
+// =============================================================================
+export const COMBAT_EFFECT_PRESETS = {
+  attackHit: {
+    effectId: 1,
+    spriteId: 187376,
+    duration: 700,
+  },
+  attackMiss: {
+    effectId: 3,
+    spriteId: 187394,
+    duration: 700,
+  },
+  burning: {
+    effectId: null,
+    spriteId: null,
+    duration: 900,
+  },
+  electrified: {
+    effectId: null,
+    spriteId: null,
+    duration: 900,
+  },
+  poisoned: {
+    effectId: null,
+    spriteId: null,
+    duration: 900,
+  },
+};
+
+/**
+ * Obter preset de efeito de combate
+ * @param {string} key - Chave do preset (attackHit, burning, etc)
+ * @returns {Object|null} Dados do preset ou null se não encontrado
+ */
+export function getCombatEffectPreset(key) {
+  return COMBAT_EFFECT_PRESETS[key] ?? null;
+}
+
+function getEntityAgility(entity, entityType) {
+  if (entityType === "player") {
+    return calculateTotalStats(entity).totalStats.AGI;
+  }
+  return entity?.stats?.AGI ?? entity?.stats?.agi ?? 5;
+}
+
+function getEntityAttackPower(entity, entityType) {
+  if (entityType === "player") {
+    return getAttackPower(entity);
+  }
+
+  if (entity?.stats?.atk != null) {
+    return entity.stats.atk;
+  }
+
+  const strength = entity?.stats?.FOR ?? 5;
+  const intellect = entity?.stats?.INT ?? 0;
+  return Math.round(strength * 1.5 + intellect * 0.5);
+}
+
+function getEntityDefensePower(entity, entityType) {
+  if (entityType === "player") {
+    return getDefense(entity, entity?.stats?.def ?? 0);
+  }
+
+  if (entity?.stats?.def != null) {
+    return entity.stats.def;
+  }
+
+  const vitality = entity?.stats?.VIT ?? 5;
+  const agility = entity?.stats?.AGI ?? entity?.stats?.agi ?? 5;
+  return Math.round(vitality * 0.6 + agility * 0.2);
+}
 
 // =============================================================================
 // FUNÇÕES PRINCIPAIS
@@ -61,28 +137,24 @@ export async function processAttack({
 
   // Calcular stats de ataque/defesa com atributos
   const atkStats = {
-    atk: attacker.stats?.atk ?? 10,
-    agi: attacker.stats?.agi ?? 5,
+    atk: attacker.stats?.atk ?? getEntityAttackPower(attacker, attackerType),
+    attackPower: getEntityAttackPower(attacker, attackerType),
+    agi: attacker.stats?.agi ?? getEntityAgility(attacker, attackerType),
+    agility: getEntityAgility(attacker, attackerType),
     level: attacker.stats?.level ?? 1,
-    // Para jogadores, usar atributos
     ...(attackerType === "player"
       ? {
-          attackPower: getAttackPower(attacker),
           critChance: getCritChance(attacker),
         }
       : {}),
   };
 
   const defStats = {
-    def: defender.stats?.def ?? 5,
-    agi: defender.stats?.agi ?? 5,
+    def: defender.stats?.def ?? getEntityDefensePower(defender, defenderType),
+    defense: getEntityDefensePower(defender, defenderType),
+    agi: defender.stats?.agi ?? getEntityAgility(defender, defenderType),
+    agility: getEntityAgility(defender, defenderType),
     level: defender.stats?.level ?? 1,
-    // Para jogadores, usar atributos
-    ...(defenderType === "player"
-      ? {
-          defense: getDefense(defender, defender.stats?.def),
-        }
-      : {}),
   };
 
   // Calcular resultado do combate (função pura)
@@ -132,7 +204,10 @@ export async function processAttack({
     applyPlayersLocal(defenderId, { stats: { ...defender.stats, hp: newHp } });
   } else {
     await applyHpToMonster(defenderId, newHp);
-    applyMonstersLocal(defenderId, { stats: { ...defender.stats, hp: newHp } });
+    applyMonstersLocal(defenderId, {
+      stats: { ...defender.stats, hp: newHp },
+      ...(attackerType === "player" ? { lastHitBy: attackerId } : {}),
+    });
 
     // Registrar dano para XP (apenas em monstros)
     if (attackerType === "player" && damage > 0) {
@@ -209,7 +284,10 @@ export async function applyDirectDamage({
     applyPlayersLocal(targetId, { stats: { ...target.stats, hp: newHp } });
   } else {
     await applyHpToMonster(targetId, newHp);
-    applyMonstersLocal(targetId, { stats: { ...target.stats, hp: newHp } });
+    applyMonstersLocal(targetId, {
+      stats: { ...target.stats, hp: newHp },
+      ...(sourceId ? { lastHitBy: sourceId } : {}),
+    });
 
     // Registrar dano para XP
     if (sourceId && damage > 0) {
@@ -330,8 +408,11 @@ export function resolveAttack(
   target,
   options = {},
 ) {
-  const attackerType = attacker.id?.includes("player") ? "player" : "monster";
-  const defenderType = target.id?.includes("player") ? "player" : "monster";
+  const attackerType =
+    options.attackerType ??
+    (attacker?.type === "monster" ? "monster" : "player");
+  const defenderType =
+    options.defenderType ?? (target?.type === "monster" ? "monster" : "player");
 
   return processAttack({
     attackerId,

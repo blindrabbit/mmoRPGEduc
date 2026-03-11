@@ -11,7 +11,7 @@
 // =============================================================================
 
 import { getSpell, canCastSpell, SPELL_TYPE } from "./spellBook.js";
-import { submitPlayerAction, applyMpToPlayer } from "../core/db.js";
+import { submitPlayerAction } from "../core/db.js";
 import { worldEvents, EVENT_TYPES } from "../core/events.js";
 
 // ---------------------------------------------------------------------------
@@ -75,7 +75,7 @@ export async function castSpell({
   _setCooldown(playerId, spellId, spell.cooldownMs);
   const newMp = Math.max(0, (player.stats?.mp ?? 0) - spell.mpCost);
   player.stats = { ...player.stats, mp: newMp };
-  await applyMpToPlayer(playerId, newMp);
+  // Não bloqueia UX com escrita local em banco: o worldEngine aplica MP autoritativamente.
 
   // ✅ Emitir evento de cast para UI mostrar efeito visual imediato (prediction)
   worldEvents.emit(EVENT_TYPES.SPELL_CAST, {

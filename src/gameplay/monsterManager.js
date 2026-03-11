@@ -19,6 +19,7 @@
 // ✅ FASE IMEDIATA: só db.js, zero firebaseClient direto
 import {
   batchWrite,
+  dbRemove,
   applyHpToPlayer,
   respawnPlayer,
   PATHS,
@@ -58,14 +59,21 @@ import {
   getMonsterAttackCooldownKey,
   normalizeCombatCooldownMs,
 } from "./combatScheduler.js";
+import {
+  calculateTotalStats,
+  getDefense,
+} from "./progression/progressionSystem.js";
 import { pushLog } from "./eventLog.js";
 import {
   getMonsters,
   getPlayers,
   getFields,
   applyMonstersLocal,
+  removeMonsterLocal,
 } from "../core/worldStore.js";
 
+import { distributeXpOnDeath } from "./progression/xpManager.js";
+import { getLastHitter } from "./progression/xpManager.js";
 // ---------------------------------------------------------------------------
 // ESTADO INTERNO
 // ---------------------------------------------------------------------------
@@ -196,62 +204,71 @@ export async function tickMonsters({
 // ---------------------------------------------------------------------------
 // MORTE DE MONSTRO (exportada para actionProcessor usar)
 // ---------------------------------------------------------------------------
-export function handleMonsterDeathLocal(id, mob, updates, now) {
-  const template = MONSTER_TEMPLATES[mob.species];
-  const removeDelay = Math.min(
-    template?.corpseDuration ?? MAX_CORPSE_LINGER_MS,
-    MAX_CORPSE_LINGER_MS,
-  );
-
-  // Marca monstro como morto — atualiza store E Firebase
-  applyToMob(
-    id,
-    {
-      dead: true,
-      type: "corpse",
-      stats: { ...mob.stats, hp: 0 },
-    },
-    updates,
-  );
-
-  // Cria corpse em world_effects (onde gameCore lê para renderizar)
-  const corpseId = `corpse${id}`;
-  mergeUpdate(updates, `${PATHS.effects}/${corpseId}`, {
-    type: "corpse",
-    x: mob.x,
-    y: mob.y,
-    z: mob.z ?? 7,
-    startTime: now,
-    expiry: now + removeDelay,
-    outfitPack: template?.appearance?.outfitPack ?? "monstros_01",
-    stages: {
-      growth: template?.corpseFrames?.[0] ?? 496,
-      sustain: template?.corpseFrames?.[1] ?? 497,
-      decay: template?.corpseFrames?.[2] ?? template?.corpseFrames?.[1] ?? 497,
-    },
+// SUBSTITUIR a função handleMonsterDeathLocal existente por:
+export async function handleMonsterDeathLocal(
+  monsterId,
+  monster,
+  updates,
+  now,
+) {
+  // Reflete morte no cache local imediatamente para IA/render não bloquearem o SQM.
+  applyMonstersLocal(monsterId, {
+    dead: true,
+    stats: { ...(monster?.stats ?? {}), hp: 0 },
+    diedAt: now,
   });
 
-  pushLog(
-    `death:monster`,
-    `${mob.name ?? mob.species} foi eliminado`,
-    mob.x,
-    mob.y,
-    `z${mob.z ?? 7}`,
-  );
+  // Marcar como morto
+  updates[`${PATHS.monster(monsterId)}/dead`] = true;
+  updates[`${PATHS.monster(monsterId)}/stats/hp`] = 0;
 
-  // Remove nós após expirar o cadáver
+  // Registrar tempo de morte para respawn
+  updates[`${PATHS.monster(monsterId)}/diedAt`] = now;
+
+  // Remove o nó morto em janela curta para não manter colisão/fantasma por muito tempo.
+  setTimeout(async () => {
+    const monsters = getMonsters();
+    const latest = monsters?.[monsterId];
+    if (latest && !latest.dead) return;
+
+    try {
+      await dbRemove(PATHS.monster(monsterId));
+    } catch (error) {
+      console.error("[monsterManager] Erro ao remover monstro morto:", error);
+    } finally {
+      removeMonsterLocal(monsterId);
+    }
+  }, MAX_CORPSE_LINGER_MS);
+
+  // ✅ DISTRIBUIR XP PARA JOGADORES (INTEGRAÇÃO REAL)
+  // Obtém killer ID dos dados de dano registrados em xpManager.
+  const killerId = getLastHitter(monsterId) ?? monster?.lastHitBy ?? null;
+  // Não bloqueia distribuição só porque o killerId não foi resolvido no primeiro lookup.
   setTimeout(async () => {
     try {
-      // ✅ batchWrite substitui o dbUpdate duplo
-      await batchWrite({
-        [`${PATHS.monsters}/${id}`]: null,
-        [`${PATHS.effects}/${corpseId}`]: null,
-      });
-      pushLog("system", `Cadáver removido`, mob.name ?? id);
-    } catch (e) {
-      console.error("handleMonsterDeathLocal remove error", e);
+      const latestMonster = getMonsters()?.[monsterId] ?? monster;
+      const resolvedKillerId =
+        getLastHitter(monsterId) ??
+        latestMonster?.lastHitBy ??
+        monster?.lastHitBy ??
+        killerId ??
+        null;
+      await distributeXpOnDeath(monsterId, latestMonster, resolvedKillerId);
+    } catch (error) {
+      console.error("[monsterManager] Erro ao distribuir XP:", error);
     }
-  }, removeDelay);
+  }, 60);
+
+  // Emitir evento de morte para clientes
+  worldEvents.emit(EVENT_TYPES.COMBAT_KILL, {
+    defenderId: monsterId,
+    defenderType: "monster",
+    killerId,
+    xpValue: monster.stats?.xpValue ?? 10,
+    timestamp: now,
+  });
+
+  pushLog("kill", `${monster.name ?? monsterId} foi derrotado`);
 }
 
 // ---------------------------------------------------------------------------
@@ -576,9 +593,23 @@ async function executeAttack(id, mob, target, attack, updates, now) {
   // Guard: alvo sem stats ainda sincronizados (race condition Firebase)
   if (!target?.stats?.hp || !target?.id) return;
 
+  const targetTotals = calculateTotalStats(target);
   const combatResult = calculateCombatResult(
-    MONSTER_TEMPLATES[mob.species]?.stats,
-    target.stats,
+    {
+      atk: mob.stats?.atk ?? MONSTER_TEMPLATES[mob.species]?.stats?.atk ?? 10,
+      attackPower:
+        mob.stats?.atk ?? MONSTER_TEMPLATES[mob.species]?.stats?.atk ?? 10,
+      agi: mob.stats?.agi ?? mob.stats?.AGI ?? 5,
+      agility: mob.stats?.AGI ?? mob.stats?.agi ?? 5,
+      level: mob.stats?.level ?? 1,
+    },
+    {
+      def: target.stats?.def ?? 0,
+      defense: getDefense(target, target.stats?.def ?? 0),
+      agi: targetTotals.totalStats.AGI,
+      agility: targetTotals.totalStats.AGI,
+      level: target.stats?.level ?? 1,
+    },
   );
 
   if (combatResult.hit) {
@@ -858,32 +889,4 @@ export async function tickFields() {
   }
 
   if (Object.keys(updates).length > 0) await batchWrite(updates);
-}
-
-// =============================================================================
-// ADICIONAR NO FINAL DO ARQUIVO
-// =============================================================================
-
-import { distributeXpOnDeath } from "./progression/xpManager.js";
-
-// =============================================================================
-// ATUALIZAR handleMonsterDeathLocal PARA DISTRIBUIR XP
-// =============================================================================
-
-// Na função handleMonsterDeathLocal, após atualizar HP para 0:
-export async function handleMonsterDeathLocal(
-  monsterId,
-  monster,
-  updates,
-  now,
-) {
-  // ... código existente de morte ...
-
-  // ✅ ADICIONAR: Distribuir XP para jogadores
-  const killerId = monster.lastHitBy || null;
-  if (killerId) {
-    await distributeXpOnDeath(monsterId, monster, killerId);
-  }
-
-  // ... restante do código ...
 }

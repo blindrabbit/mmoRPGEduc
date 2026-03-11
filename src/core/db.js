@@ -126,6 +126,26 @@ const WRITE_GUARD = {
 };
 
 const VALID_DIRECTIONS = new Set(["frente", "costas", "lado", "lado-esquerdo"]);
+const PLAYER_VOLATILE_ROOT_KEY_RE =
+  /^(cd[A-Z][A-Za-z0-9]*|lastAttack|lastMoveTime)$/;
+
+function isPlayersDataVolatilePath(path) {
+  const match = String(path ?? "").match(/^players_data\/[^/]+\/([^/]+)$/);
+  if (!match) return false;
+  return PLAYER_VOLATILE_ROOT_KEY_RE.test(match[1]);
+}
+
+function stripPlayerPersistentVolatileFields(player) {
+  if (!player || typeof player !== "object") return player;
+
+  const cleaned = { ...player };
+  for (const key of Object.keys(cleaned)) {
+    if (PLAYER_VOLATILE_ROOT_KEY_RE.test(key)) {
+      delete cleaned[key];
+    }
+  }
+  return cleaned;
+}
 
 function toNumberOrNull(value) {
   const parsed = Number(value);
@@ -232,6 +252,10 @@ function enforceEntityBounds(entity, type) {
 }
 
 function sanitizePrimitivePath(path, value) {
+  if (isPlayersDataVolatilePath(path)) {
+    return undefined;
+  }
+
   if (value === null) return null;
 
   const numericField = toNumberOrNull(value);
@@ -304,7 +328,14 @@ function sanitizeObjectPath(path, value) {
     /^players_data\/[^/]+$/.test(path)
   ) {
     const id = path.split("/")[1];
-    return enforceEntityBounds(makePlayer({ id, ...value }), "player");
+    const normalizedPlayer = enforceEntityBounds(
+      makePlayer({ id, ...value }),
+      "player",
+    );
+    if (/^players_data\/[^/]+$/.test(path)) {
+      return stripPlayerPersistentVolatileFields(normalizedPlayer);
+    }
+    return normalizedPlayer;
   }
 
   if (/^world_entities\/[^/]+$/.test(path)) {
@@ -426,6 +457,84 @@ export const saveAccount = (uuid, data) => {
  */
 export const deleteAccount = (uuid) => {
   return dbSet(`accounts/${uuid}`, null);
+};
+
+/**
+ * ✅ ALTO NÍVEL: Criar novo personagem (FASE 4)
+ * Gera ID, cria dados do personagem, salva em Firebase, e atualiza a conta
+ * @param {string} uuid - UUID da conta
+ * @param {number} slotIndex - Índice do slot (0-4)
+ * @param {string} PlayerClass - Classe do personagem (Cavaleiro, Mago, etc)
+ * @returns {string} ID do novo personagem
+ */
+export const createNewCharacter = async (uuid, slotIndex, playerClass) => {
+  const normalizeClass = (value) => {
+    const raw = String(value ?? "cavaleiro")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+    const aliases = {
+      guerreiro: "cavaleiro",
+      sacerdote: "clerigo",
+      druida: "druid",
+    };
+    return aliases[raw] ?? raw;
+  };
+
+  const normalizedClass = normalizeClass(playerClass);
+
+  // Gerar ID único para o novo personagem
+  const newCharId =
+    "chr_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+
+  // 1. Importar initializePlayerStats para gerar estatísticas da classe
+  const { initializePlayerStats } =
+    await import("../gameplay/progression/progressionSystem.js");
+
+  // 2. Gerar estatísticas baseadas na classe
+  let stats = { level: 1, xp: 0, totalXp: 0 };
+  try {
+    const classStats = initializePlayerStats(normalizedClass);
+    if (classStats && typeof classStats === "object") {
+      stats = classStats;
+    }
+  } catch (e) {
+    // Fallback para estatísticas genéricas se houver erro
+    stats = {
+      level: 1,
+      currentXp: 0,
+      totalXp: 0,
+      hp: 100,
+      maxHp: 100,
+      mp: 50,
+      maxMp: 50,
+      availableStatPoints: 0,
+      allocatedStats: { FOR: 0, INT: 0, AGI: 0, VIT: 0 },
+    };
+  }
+
+  // 3. Montar dados completos do novo personagem
+  const newCharData = {
+    name: `${normalizedClass} ${slotIndex + 1}`,
+    class: normalizedClass,
+    appearance: { class: normalizedClass },
+    x: 960,
+    y: 960,
+    z: 7,
+    direcao: "frente",
+    stats: stats,
+    spells: {},
+  };
+
+  // 4. Salvar personagem em players_data/{charId}
+  await dbSet(PATHS.playerData(newCharId), newCharData);
+
+  // 5. Adicionar charId à lista de personagens da conta em accounts/{uuid}/characters/{slotIndex}
+  const accountCharPath = `accounts/${uuid}/characters/${slotIndex}`;
+  await dbSet(accountCharPath, newCharId);
+
+  return newCharId;
 };
 
 // ---------------------------------------------------------------------------
@@ -664,9 +773,7 @@ export function spendMpAndSetCooldown(
   const ts = Math.max(0, Math.round(Number(timestamp) || Date.now()));
   return batchWrite({
     [`${PATHS.player(id)}/${cdKey}`]: ts,
-    [`${PATHS.playerData(id)}/${cdKey}`]: ts,
     [`${PATHS.player(id)}/lastAttack`]: ts,
-    [`${PATHS.playerData(id)}/lastAttack`]: ts,
     [`${PATHS.playerDataStats(id)}/mp`]: Number(newMp),
     [`${PATHS.playerStats(id)}/mp`]: Number(newMp),
   });
@@ -692,9 +799,7 @@ export function setPlayerActionCooldown(id, actionKey, timestamp = Date.now()) {
   const ts = Math.max(0, Math.round(Number(timestamp) || Date.now()));
   return dbUpdate({
     [`${PATHS.player(id)}/${cdKey}`]: ts,
-    [`${PATHS.playerData(id)}/${cdKey}`]: ts,
     [`${PATHS.player(id)}/lastAttack`]: ts,
-    [`${PATHS.playerData(id)}/lastAttack`]: ts,
   });
 }
 
@@ -827,11 +932,15 @@ function buildMigrationUpdates(raw, type, rootPath) {
   let changed = 0;
 
   const normalized = normalizeCollection(raw, type);
-  for (const [id, nextValue] of Object.entries(normalized)) {
+  for (const [id, candidateValue] of Object.entries(normalized)) {
     scanned++;
+    const nodePath = `${rootPath}/${id}`;
+    const nextValue = sanitizeValueByPath(nodePath, candidateValue);
+    if (nextValue === undefined) continue;
+
     const prevValue = raw?.[id] ?? null;
     if (stableStringify(prevValue) !== stableStringify(nextValue)) {
-      updates[`${rootPath}/${id}`] = nextValue;
+      updates[nodePath] = nextValue;
       changed++;
     }
   }

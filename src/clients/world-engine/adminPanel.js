@@ -25,32 +25,25 @@ import {
   watchChat,
 } from "../../core/db.js";
 import { getPlayers, getMonsters } from "../../core/worldStore.js";
+import { makeMonster } from "../../core/schema.js";
+import { MONSTER_TEMPLATES } from "../../gameplay/monsterData.js";
+import { migrateMonstersToCurrentTemplates } from "../../gameplay/monsterMigration.js";
 
 // ---------------------------------------------------------------------------
 // CONSTANTES
 // ---------------------------------------------------------------------------
 
-const SPECIES = [
-  { id: "rat",           name: "Rato" },
-  { id: "slime",         name: "Slime" },
-  { id: "skeleton_mage", name: "Mago Esqueleto" },
-  { id: "dragon",        name: "Dragão Vermelho" },
-];
-
-// Defaults mínimos por espécie (worldEngine não tem acesso a monsterData)
-const SPECIES_DEFAULTS = {
-  rat:           { hp: 250, maxHp: 250, atk: 5,  def: 0,  agi: 10, level: 1,  speed: 130, outfitId: "rat",           outfitPack: "monstros_01" },
-  slime:         { hp: 40,  maxHp: 40,  atk: 3,  def: 5,  agi: 8,  level: 3,  speed: 60,  outfitId: "slime",         outfitPack: "monstros_01" },
-  skeleton_mage: { hp: 60,  maxHp: 60,  atk: 15, def: 2,  agi: 12, level: 6,  speed: 90,  outfitId: "skeleton_mage", outfitPack: "monstros_01" },
-  dragon:        { hp: 5000,maxHp: 5000,atk: 50, def: 20, agi: 15, level: 25, speed: 100, outfitId: "dragon",        outfitPack: "monstros_01" },
-};
+const SPECIES = Object.entries(MONSTER_TEMPLATES).map(([id, template]) => ({
+  id,
+  name: template.name,
+}));
 
 // ---------------------------------------------------------------------------
 // ESTADO INTERNO
 // ---------------------------------------------------------------------------
 
-let _camera    = null;  // { x, y } em tiles
-let _adminId   = "worldengine";
+let _camera = null; // { x, y } em tiles
+let _adminId = "worldengine";
 let _adminName = "WorldEngine";
 let _getGameTime = () => Date.now();
 let _monsterCount = 0;
@@ -73,17 +66,20 @@ let _unsubscribers = [];
 export function initAdminPanel({
   camera,
   getGameTime,
-  adminId   = "worldengine",
+  adminId = "worldengine",
   adminName = "WorldEngine",
   containerId = "sidebar",
 } = {}) {
-  _camera      = camera;
-  _adminId     = adminId;
-  _adminName   = adminName;
+  _camera = camera;
+  _adminId = adminId;
+  _adminName = adminName;
   if (typeof getGameTime === "function") _getGameTime = getGameTime;
 
   const container = document.getElementById(containerId);
-  if (!container) { console.error("[adminPanel] container não encontrado:", containerId); return; }
+  if (!container) {
+    console.error("[adminPanel] container não encontrado:", containerId);
+    return;
+  }
 
   _buildUI(container);
   _bindFirebase();
@@ -170,6 +166,7 @@ function _buildUI(container) {
 
       <!-- REMOVE MONSTERS -->
       <h3>❌ Monstros</h3>
+      <button id="btn-migrate-monsters">♻ Migrar Monstros Existentes</button>
       <button id="btn-remove-all" class="danger">🗑 Remover Todos os Monstros</button>
       <div id="monster-list" style="max-height:100px;overflow-y:auto;font-size:11px;color:#aaa;"></div>
 
@@ -200,10 +197,21 @@ function _buildUI(container) {
 // ---------------------------------------------------------------------------
 
 function _bindButtons() {
-  document.getElementById("btn-spawn").addEventListener("click", _spawnAtCoords);
-  document.getElementById("btn-spawn-camera").addEventListener("click", _spawnAtCamera);
-  document.getElementById("btn-remove-all").addEventListener("click", _removeAllMonsters);
-  document.getElementById("btn-goto-player").addEventListener("click", _gotoPlayer);
+  document
+    .getElementById("btn-spawn")
+    .addEventListener("click", _spawnAtCoords);
+  document
+    .getElementById("btn-spawn-camera")
+    .addEventListener("click", _spawnAtCamera);
+  document
+    .getElementById("btn-migrate-monsters")
+    .addEventListener("click", _migrateMonsters);
+  document
+    .getElementById("btn-remove-all")
+    .addEventListener("click", _removeAllMonsters);
+  document
+    .getElementById("btn-goto-player")
+    .addEventListener("click", _gotoPlayer);
 
   const chatInput = document.getElementById("chat-input");
   document.getElementById("chat-send").addEventListener("click", _sendChat);
@@ -217,14 +225,16 @@ function _bindButtons() {
 // ---------------------------------------------------------------------------
 
 function _makeMonsterData(species, x, y, z) {
-  const d = SPECIES_DEFAULTS[species] ?? SPECIES_DEFAULTS.rat;
+  const template = MONSTER_TEMPLATES[species] ?? MONSTER_TEMPLATES.rat;
   const id = `mob_${species}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
-  return {
+  return makeMonster({
     id,
     species,
-    name: SPECIES.find((s) => s.id === species)?.name ?? species,
+    name: template.name ?? species,
     type: "monster",
     schemaVersion: 2,
+    recommendedPlayerLevel: template.recommendedPlayerLevel,
+    threatTier: template.threatTier,
     x: Number(x),
     y: Number(y),
     z: Number(z),
@@ -232,48 +242,53 @@ function _makeMonsterData(species, x, y, z) {
     spawnX: Number(x),
     spawnY: Number(y),
     spawnZ: Number(z),
-    speed: d.speed,
+    speed: template.appearance?.speed,
     appearance: {
-      outfitId:   d.outfitId,
-      outfitPack: d.outfitPack,
+      ...template.appearance,
       isAdmin: false,
       class: null,
     },
-    stats: {
-      hp:    d.hp,
-      maxHp: d.maxHp,
-      mp:    0,
-      maxMp: 0,
-      atk:   d.atk,
-      def:   d.def,
-      agi:   d.agi,
-      level: d.level,
-    },
-    lastAiTick:   0,
+    stats: { ...template.stats, mp: 0, maxMp: 0 },
+    lastAiTick: 0,
     lastMoveTime: 0,
-    lastAttack:   0,
+    lastAttack: 0,
     dead: false,
-  };
+  });
 }
 
 function _spawnAtCoords() {
   const species = document.getElementById("spawn-species").value;
-  const x       = Number(document.getElementById("spawn-x").value);
-  const y       = Number(document.getElementById("spawn-y").value);
-  const z       = Number(document.getElementById("spawn-z").value);
-  const qty     = Math.min(20, Math.max(1, Number(document.getElementById("spawn-qty").value)));
-  const spread  = Math.max(0, Number(document.getElementById("spawn-spread").value));
+  const x = Number(document.getElementById("spawn-x").value);
+  const y = Number(document.getElementById("spawn-y").value);
+  const z = Number(document.getElementById("spawn-z").value);
+  const qty = Math.min(
+    20,
+    Math.max(1, Number(document.getElementById("spawn-qty").value)),
+  );
+  const spread = Math.max(
+    0,
+    Number(document.getElementById("spawn-spread").value),
+  );
   _doSpawn(species, x, y, z, qty, spread);
 }
 
 function _spawnAtCamera() {
-  if (!_camera) { _logSystem("Câmera não disponível."); return; }
+  if (!_camera) {
+    _logSystem("Câmera não disponível.");
+    return;
+  }
   const species = document.getElementById("spawn-species").value;
   const cx = Math.round(_camera.x);
   const cy = Math.round(_camera.y);
-  const z  = Number(document.getElementById("spawn-z").value);
-  const qty    = Math.min(20, Math.max(1, Number(document.getElementById("spawn-qty").value)));
-  const spread = Math.max(0, Number(document.getElementById("spawn-spread").value));
+  const z = Number(document.getElementById("spawn-z").value);
+  const qty = Math.min(
+    20,
+    Math.max(1, Number(document.getElementById("spawn-qty").value)),
+  );
+  const spread = Math.max(
+    0,
+    Number(document.getElementById("spawn-spread").value),
+  );
   _doSpawn(species, cx, cy, z, qty, spread);
 }
 
@@ -297,6 +312,15 @@ async function _removeAllMonsters() {
   _logSystem("🗑 Todos os monstros removidos.");
 }
 
+async function _migrateMonsters() {
+  const result = await migrateMonstersToCurrentTemplates({
+    preserveHpPercent: true,
+  });
+  _logSystem(
+    `♻ Migração concluída: ${result.migrated} migrado(s), ${result.skipped} ignorado(s).`,
+  );
+}
+
 // ---------------------------------------------------------------------------
 // GO TO PLAYER
 // ---------------------------------------------------------------------------
@@ -304,7 +328,10 @@ async function _removeAllMonsters() {
 function _gotoPlayer() {
   const sel = document.getElementById("player-select");
   const val = sel.value;
-  if (!val) { _logSystem("Nenhum jogador selecionado."); return; }
+  if (!val) {
+    _logSystem("Nenhum jogador selecionado.");
+    return;
+  }
 
   try {
     const [px, py] = val.split(",").map(Number);
@@ -332,7 +359,7 @@ async function _sendChat() {
   await syncChat(id, {
     id,
     playerId: _adminId,
-    name:     _adminName,
+    name: _adminName,
     msg,
     x: _camera?.x ?? 0,
     y: _camera?.y ?? 0,
@@ -357,18 +384,24 @@ function _bindFirebase() {
     const sel = document.getElementById("player-select");
     if (!sel) return;
     const prev = sel.value;
-    sel.innerHTML = count === 0
-      ? '<option value="">— nenhum jogador online —</option>'
-      : Object.entries(players).map(([id, p]) => {
-          const name = p.name ?? id;
-          const x = Math.round(p.x ?? 0);
-          const y = Math.round(p.y ?? 0);
-          return `<option value="${x},${y}">${name} (${x},${y})</option>`;
-        }).join("");
+    sel.innerHTML =
+      count === 0
+        ? '<option value="">— nenhum jogador online —</option>'
+        : Object.entries(players)
+            .map(([id, p]) => {
+              const name = p.name ?? id;
+              const x = Math.round(p.x ?? 0);
+              const y = Math.round(p.y ?? 0);
+              return `<option value="${x},${y}">${name} (${x},${y})</option>`;
+            })
+            .join("");
     if (prev) {
       // Tenta manter a seleção anterior
       for (const opt of sel.options) {
-        if (opt.value === prev) { sel.value = prev; break; }
+        if (opt.value === prev) {
+          sel.value = prev;
+          break;
+        }
       }
     }
   });
@@ -383,26 +416,37 @@ function _bindFirebase() {
     const listEl = document.getElementById("monster-list");
     if (listEl) {
       const entries = Object.values(monsters).slice(0, 20);
-      listEl.innerHTML = entries.map((m) =>
-        `<div style="display:flex;justify-content:space-between;padding:1px 0;">
+      listEl.innerHTML =
+        entries
+          .map(
+            (m) =>
+              `<div style="display:flex;justify-content:space-between;padding:1px 0;">
            <span>${m.name ?? m.species ?? "?"} (${Math.round(m.x)},${Math.round(m.y)})</span>
            <span style="color:#888">${m.stats?.hp ?? "?"}hp</span>
-         </div>`
-      ).join("") + (_monsterCount > 20 ? `<div style="color:#666">...e mais ${_monsterCount - 20}</div>` : "");
+         </div>`,
+          )
+          .join("") +
+        (_monsterCount > 20
+          ? `<div style="color:#666">...e mais ${_monsterCount - 20}</div>`
+          : "");
     }
   });
 
   // Watcher de chat
   const unsubChat = watchChat((msgs) => {
     if (!msgs) return;
-    const sorted = Object.values(msgs).sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+    const sorted = Object.values(msgs).sort(
+      (a, b) => (a.ts ?? 0) - (b.ts ?? 0),
+    );
     const log = document.getElementById("chat-log");
     if (!log) return;
-    log.innerHTML = sorted.map((m) => {
-      const cls = m.isGM ? "gm" : "player";
-      const name = m.isGM ? `[GM] ${m.name}` : m.name;
-      return `<div class="msg ${cls}"><b>${name}:</b> ${_escapeHtml(m.msg ?? "")}</div>`;
-    }).join("");
+    log.innerHTML = sorted
+      .map((m) => {
+        const cls = m.isGM ? "gm" : "player";
+        const name = m.isGM ? `[GM] ${m.name}` : m.name;
+        return `<div class="msg ${cls}"><b>${name}:</b> ${_escapeHtml(m.msg ?? "")}</div>`;
+      })
+      .join("");
     log.scrollTop = log.scrollHeight;
   });
 

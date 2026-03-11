@@ -9,7 +9,19 @@ export const ENTITY_SCHEMAS = Object.freeze({
     description: "Schema de player para UI/consulta e validação de setup.",
     stats: {
       required: ["hp", "maxHp", "mp", "maxMp", "atk", "def", "agi", "level"],
-      optional: ["ml", "magic", "resistances"],
+      optional: [
+        "FOR",
+        "INT",
+        "AGI",
+        "VIT",
+        "ml",
+        "magic",
+        "resistances",
+        "xp",
+        "totalXp",
+        "availableStatPoints",
+        "allocatedStats",
+      ],
     },
     abilities: {
       source: "spellBook",
@@ -25,6 +37,24 @@ export const ENTITY_SCHEMAS = Object.freeze({
   monster: {
     version: 1,
     description: "Schema de monstro para IA, ataque e consulta de templates.",
+    stats: {
+      required: ["hp", "maxHp", "level"],
+      optional: [
+        "FOR",
+        "INT",
+        "AGI",
+        "VIT",
+        "combatProfile",
+        "atk",
+        "def",
+        "agi",
+        "xpValue",
+        "elite",
+      ],
+    },
+    metadata: {
+      optional: ["recommendedPlayerLevel", "threatTier"],
+    },
     behavior: {
       required: ["range", "loseAggro", "maxDistance"],
       optional: ["patrol", "fleeHpPct"],
