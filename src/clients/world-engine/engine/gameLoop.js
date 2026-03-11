@@ -158,7 +158,7 @@ function _handleEngineEvent(event) {
 }
 
 function _handleEngineError(error) {
-  console.error("[GameLoop] Engine error:", error);
+  console.warn("[GameLoop] Engine error:", error);
   worldEvents.emit(EVENT_TYPES.SYSTEM_LOG, {
     message: "Engine error",
     error: error.message || error,

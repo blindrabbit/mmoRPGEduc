@@ -48,8 +48,8 @@ export class WorldEngineCore {
     this._actionQueue = [];
 
     // Callbacks para eventos (injetados pelo ambiente)
-    this._onEvent = null;
-    this._onUpdate = null;
+    this._onEvent = config.onEvent || null;
+    this._onUpdate = config.onUpdate || null;
 
     // Flags de controle
     this._running = false;

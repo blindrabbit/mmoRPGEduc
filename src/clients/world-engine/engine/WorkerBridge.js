@@ -8,22 +8,25 @@
 
 import {
   MESSAGE_TYPE,
-  serializeMessage,
   deserializeMessage,
   MessageBuilder,
   MessageValidator,
   logMessage,
 } from "../../../core/network/EngineProtocol.js";
 
+// Resolve o path do worker relativo a este arquivo (funciona independente do HTML)
+const _DEFAULT_WORKER_URL = new URL(
+  "./worldTick.worker.js",
+  import.meta.url,
+).href;
+
 export class WorkerBridge {
   constructor(options = {}) {
     this.options = {
-      workerPath:
-        options.workerPath ||
-        "/src/clients/world-engine/engine/worldTick.worker.js",
+      ...options,
+      workerPath: options.workerPath || _DEFAULT_WORKER_URL,
       enableWorker: options.enableWorker ?? true,
       fallbackToMain: options.fallbackToMain ?? true,
-      ...options,
     };
 
     this._worker = null;
@@ -76,12 +79,15 @@ export class WorkerBridge {
 
   async _initMainFallback(config, initialState) {
     // Import dinâmico para evitar circular deps
-    const { createWorldEngine } =
-      await import("../../../core/engine/WorldEngineCore.js");
+    const { createWorldEngine } = await import(
+      "../../../core/engine/WorldEngineCore.js"
+    );
 
-    this._core = createWorldEngine(config);
-    this._core.onEvent((event) => this._handleEvent(event));
-    this._core.onUpdate((updates) => this._handleUpdate(updates));
+    this._core = createWorldEngine({
+      ...config,
+      onEvent: (event) => this._handleEvent(event),
+      onUpdate: (updates) => this._handleUpdate(updates),
+    });
     this._core.init(initialState);
 
     if (this._onReady) this._onReady({ mode: "main-thread" });
@@ -91,13 +97,22 @@ export class WorkerBridge {
   _setupWorkerListeners() {
     this._worker.onmessage = (e) => this._handleWorkerMessage(e.data);
     this._worker.onerror = (error) => {
-      console.error("[WorkerBridge] Worker error:", error);
-      if (this._onError) this._onError({ type: "worker_error", error });
+      const msg = error?.message || "(sem mensagem)";
+      const file = error?.filename || this.options.workerPath;
+      const line = error?.lineno ? `:${error.lineno}` : "";
+      console.warn(
+        `[WorkerBridge] Worker falhou ao carregar — usando fallback main thread.\n` +
+          `  Path: ${file}${line}\n` +
+          `  Erro: ${msg}`,
+      );
+
+      if (this._onError)
+        this._onError({ type: "worker_error", message: msg, filename: file });
 
       // Rejeitar _waitForResponse pendente imediatamente (evita esperar o timeout)
       const pending = this._pendingRequests.get(MESSAGE_TYPE.INIT_RESPONSE);
       if (pending) {
-        pending.reject(new Error(`Worker failed to load: ${error?.message ?? error}`));
+        pending.reject(new Error(`Worker failed: ${msg} (${file}${line})`));
         this._pendingRequests.delete(MESSAGE_TYPE.INIT_RESPONSE);
       }
 
@@ -192,9 +207,6 @@ export class WorkerBridge {
   // API PÚBLICA (mesma interface independente do modo)
   // =============================================================================
 
-  /**
-   * Inicia o loop de ticks do engine
-   */
   start() {
     if (this._useWorker) {
       this._postMessage(MessageBuilder.start());
@@ -203,9 +215,6 @@ export class WorkerBridge {
     }
   }
 
-  /**
-   * Para o loop de ticks
-   */
   stop() {
     if (this._useWorker) {
       this._postMessage(MessageBuilder.stop());
@@ -214,11 +223,6 @@ export class WorkerBridge {
     }
   }
 
-  /**
-   * Envia uma ação para processamento
-   * @param {Object} action
-   * @returns {Promise} Resultado do processamento
-   */
   async sendAction(action) {
     if (!MessageValidator.isValidAction(action)) {
       return { success: false, error: "Invalid action" };
@@ -230,7 +234,6 @@ export class WorkerBridge {
       this._postMessage(MessageBuilder.action({ ...action, id: actionId }));
       return this._waitForResponse(`action:${actionId}`, 3000);
     } else if (this._core) {
-      // Processar na main thread
       this._core.queueAction({ ...action, id: actionId });
       return { success: true, actionId };
     }
@@ -238,10 +241,6 @@ export class WorkerBridge {
     return { success: false, error: "Engine not initialized" };
   }
 
-  /**
-   * Sincroniza entidades com o engine
-   * @param {Object} entities - { players?, monsters?, fields? }
-   */
   syncEntities(entities) {
     if (this._useWorker) {
       this._postMessage(MessageBuilder.syncEntities(entities));
@@ -250,24 +249,15 @@ export class WorkerBridge {
     }
   }
 
-  /**
-   * Obtém snapshot do estado atual
-   * @returns {Promise<Object>}
-   */
   async getSnapshot() {
     if (this._useWorker) {
       this._postMessage(MessageBuilder.stateSnapshot());
-      // Worker deveria responder com STATE_SNAPSHOT
-      // Implementar request/response se necessário
     } else if (this._core) {
       return this._core.getSnapshot();
     }
     return {};
   }
 
-  /**
-   * Atualiza configuração em runtime
-   */
   setConfig(config) {
     if (this._useWorker) {
       this._postMessage(MessageBuilder.setConfig(config));
@@ -286,7 +276,6 @@ export class WorkerBridge {
 
   onEvent(callback) {
     this._onEvent = callback;
-    if (this._core) this._core.onEvent(callback);
   }
 
   onError(callback) {
@@ -350,7 +339,7 @@ export class WorkerBridge {
     return {
       mode: this._useWorker ? "worker" : this._core ? "main" : "uninitialized",
       running: this._core?.["_running"] ?? false,
-      worker: this._worker ? { state: this._worker.readyState } : null,
+      worker: this._worker ? { state: "active" } : null,
     };
   }
 }

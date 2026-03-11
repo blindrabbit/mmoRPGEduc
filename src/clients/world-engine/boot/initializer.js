@@ -22,6 +22,10 @@ import {
 } from "../engine/gameLoop.js";
 import { createProgressionUI } from "../../shared/ui/ProgressionUI.js";
 import { watchMonsters, watchPlayers, watchFields } from "../../../core/db.js";
+import { renderWorld } from "../../../render/worldRenderer.js";
+import { getMonsters, getPlayers } from "../../../core/worldStore.js";
+import { applyCameraMovement } from "../../../gameplay/inputController.js";
+import { TILE_SIZE } from "../../../core/config.js";
 
 export class Initializer {
   constructor({ logger, canvas, canvasSetup, worldState, config }) {
@@ -219,8 +223,45 @@ export class Initializer {
    * A lógica de jogo roda no WorldTick (main thread) e no worker.
    */
   initGameLoop() {
-    const tick = () => {
+    const canvas = this.canvas;
+    const ctx = canvas.getContext("2d");
+    const ws = this.worldState;
+    const cs = this.canvasSetup;
+
+    const tick = (ts) => {
       this.hudRenderer.update();
+
+      if (ws.isReady()) {
+        applyCameraMovement(ws.camera, 1.0);
+        renderWorld({
+          ctx,
+          camX: ws.camera.x * TILE_SIZE,
+          camY: ws.camera.y * TILE_SIZE,
+          activeZ: ws.activeZ,
+          animClock: ts,
+          ts,
+          canvasW: cs.canvasW,
+          canvasH: cs.canvasH,
+          cols: cs.cols,
+          rows: cs.rows,
+          map: ws.map,
+          assets: ws.assetsMgr,
+          anim: ws.anim,
+          floorIndex: ws.floorIndex,
+          extraEntities: { ...getMonsters(), ...getPlayers() },
+          renderOptions: {
+            showHP: true,
+            showName: true,
+            renderMode: "high",
+            viewMode: "gm",
+            entitiesOnTop: true,
+            mapTallBeforeEntities: false,
+            upperFloorsBeforeEntities: true,
+            topDecorBeforeEntities: false,
+          },
+        });
+      }
+
       this._rafId = requestAnimationFrame(tick);
     };
     this._rafId = requestAnimationFrame(tick);
@@ -237,7 +278,6 @@ export class Initializer {
 
     const ok = await initWorkerLoop({
       tickInterval: WORLDENGINE.worldTickMs ?? 100,
-      // onTick vazio: WorldTick na main thread já cuida da lógica como fallback
       onTick: () => {},
     });
 
