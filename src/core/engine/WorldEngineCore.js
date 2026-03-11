@@ -368,24 +368,26 @@ export class WorldEngineCore {
     for (const [id, player] of this.state.players.entries()) {
       if (!player.stats) continue;
 
+      const statsUpdate = {};
+
       // Regenerar HP
       if (player.stats.hp < player.stats.maxHp) {
         const regen = player.stats.regenHp ?? 1;
         player.stats.hp = Math.min(player.stats.maxHp, player.stats.hp + regen);
-        updates.players[id] = {
-          "stats.hp": player.stats.hp,
-          "stats.lastRegen": now,
-        };
+        statsUpdate.hp = player.stats.hp;
+        statsUpdate.lastRegen = now;
       }
 
       // Regenerar MP
       if (player.stats.mp < player.stats.maxMp) {
         const regen = player.stats.regenMp ?? 1;
         player.stats.mp = Math.min(player.stats.maxMp, player.stats.mp + regen);
-        updates.players[id] = {
-          ...updates.players[id],
-          "stats.mp": player.stats.mp,
-        };
+        statsUpdate.mp = player.stats.mp;
+      }
+
+      // Emitir só se algo mudou — applyPlayersLocal espera { stats: { hp, mp } }
+      if (Object.keys(statsUpdate).length > 0) {
+        updates.players[id] = { stats: statsUpdate };
       }
     }
 
@@ -567,10 +569,5 @@ export function createWorldEngine(config = {}) {
   return new WorldEngineCore(config);
 }
 
-// =============================================================================
-// EXPORTS PARA COMPATIBILIDADE COM CÓDIGO LEGADO
-// =============================================================================
-
-// Re-exportar funções que ainda são chamadas diretamente
-export { processAction as legacy_processAction };
-export { processMonsterAI as legacy_processMonsterAI };
+// Funções legadas (actionProcessor, monsterAI) dependem de Firebase/DOM.
+// A integração com o core ocorrerá na migração para Solution 3 (server-side).

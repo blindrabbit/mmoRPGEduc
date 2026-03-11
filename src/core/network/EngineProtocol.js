@@ -110,8 +110,10 @@ export const MessageBuilder = {
   stateSnapshot: (snapshot) =>
     serializeMessage(MESSAGE_TYPE.STATE_SNAPSHOT, { snapshot }),
 
+  // Passa updates diretamente como payload — sem wrapper extra { updates: ... }
+  // para que gameLoop._applyEngineUpdates() receba updates.monsters/players/events
   stateUpdate: (updates) =>
-    serializeMessage(MESSAGE_TYPE.STATE_UPDATE, { updates }),
+    serializeMessage(MESSAGE_TYPE.STATE_UPDATE, updates),
 
   action: (action) => serializeMessage(MESSAGE_TYPE.ACTION, { action }),
 

@@ -22,7 +22,8 @@
       "Bash(python3 -c \"from PIL import Image; print\\(''Pillow OK''\\)\")",
       "Bash(python -c \"from PIL import Image; print\\(''Pillow OK''\\)\")",
       "Bash(python fix_atlas_pack.py)",
-      "Bash(python -c \":*)"
+      "Bash(python -c \":*)",
+      "Bash(/tmp/trace_analysis.txt:*)"
     ]
   }
 }
