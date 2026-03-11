@@ -859,3 +859,31 @@ export async function tickFields() {
 
   if (Object.keys(updates).length > 0) await batchWrite(updates);
 }
+
+// =============================================================================
+// ADICIONAR NO FINAL DO ARQUIVO
+// =============================================================================
+
+import { distributeXpOnDeath } from "./progression/xpManager.js";
+
+// =============================================================================
+// ATUALIZAR handleMonsterDeathLocal PARA DISTRIBUIR XP
+// =============================================================================
+
+// Na função handleMonsterDeathLocal, após atualizar HP para 0:
+export async function handleMonsterDeathLocal(
+  monsterId,
+  monster,
+  updates,
+  now,
+) {
+  // ... código existente de morte ...
+
+  // ✅ ADICIONAR: Distribuir XP para jogadores
+  const killerId = monster.lastHitBy || null;
+  if (killerId) {
+    await distributeXpOnDeath(monsterId, monster, killerId);
+  }
+
+  // ... restante do código ...
+}

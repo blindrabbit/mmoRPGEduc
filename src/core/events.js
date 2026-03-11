@@ -47,6 +47,10 @@ export const EVENT_TYPES = {
   WORLD_STATE_CHANGE: "world:stateChange",
   CHAT_MESSAGE: "chat:message",
   SYSTEM_LOG: "system:log",
+
+  PROGRESSION_XP_GAIN: "progression:xpGain",
+  PROGRESSION_LEVEL_UP: "progression:levelUp",
+  PROGRESSION_STAT_ALLOCATED: "progression:statAllocated",
 };
 
 /**

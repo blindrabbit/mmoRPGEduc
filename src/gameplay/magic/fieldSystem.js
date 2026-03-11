@@ -1,6 +1,6 @@
 // =============================================================================
 // fieldSystem.js — mmoRPGEduc
-// Gerencia ciclo de vida de campos persistentes (magias FIELD)
+// Gerencia ciclo de vida de campos persistentes (magias do tipo FIELD)
 //
 // Responsabilidades:
 // • Criar campos no Firebase + cache local
@@ -10,11 +10,10 @@
 // =============================================================================
 
 import { SPELL_TYPE } from "../spellBook.js";
-import { buildFieldPayload } from "../fieldPayload.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
 import { dbSet, dbRemove } from "../../core/db.js";
 import { getMonsters, getPlayers } from "../../core/worldStore.js";
-import { applyDirectDamage, applyHeal } from "../combat/combatService.js";
+import { emitDamage, emitHeal } from "../combat/combatService.js";
 
 // Cache em memória para performance (espelho do Firebase)
 const activeFields = new Map();
@@ -30,7 +29,7 @@ export async function createField({
   y,
   z = 7,
 }) {
-  // Validação: magia deve ser do tipo FIELD
+  // Validação: magia deve ser FIELD (suporta legado isField)
   if (
     !spellData ||
     (spellData.type !== SPELL_TYPE.FIELD && !spellData.isField)
@@ -41,60 +40,64 @@ export async function createField({
   const fieldId = `field_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
   const now = Date.now();
 
-  // Construir payload canônico usando fieldPayload.js
-  const field = buildFieldPayload({
+  const field = {
     id: fieldId,
-    x,
-    y,
-    z,
-    now,
-    damage: spellData.damage || 0,
-    fieldId: spellData.fieldId || spellData.fieldData?.fieldId,
-    effectId: spellData.effectId || spellData.fieldData?.effectId,
-    fieldDuration:
-      spellData.fieldDuration || spellData.fieldData?.duration || 5000,
-    tickRate:
-      spellData.tickRate || spellData.fieldData?.tickDamage?.interval || 1000,
-    statusType: spellData.damageType || spellData.fieldData?.damageType,
-  });
-
-  // Metadados de controle
-  field.casterId = casterId;
-  field.casterType = casterType;
-  field.spellId = spellData.id;
-  field.affectEnemies = spellData.affectEnemies ?? true;
-  field.affectAllies = spellData.affectAllies ?? false;
-  field.tickDamage =
-    spellData.fieldData?.tickDamage ||
-    (spellData.damage ? { base: spellData.damage, variance: 0.1 } : null);
-  field.tickHeal = spellData.fieldData?.tickHeal || null;
+    spellId: spellData.id,
+    casterId,
+    casterType,
+    x: Math.round(x),
+    y: Math.round(y),
+    z: Math.round(z),
+    createdAt: now,
+    expiry:
+      now + (spellData.fieldData?.duration || spellData.fieldDuration || 4000),
+    lastTick: now,
+    // Dados visuais
+    fieldSpriteId: spellData.fieldData?.fieldId || spellData.fieldId,
+    effectSpriteId: spellData.fieldData?.effectId || spellData.effectId,
+    // Config de dano/cura por tick
+    tickDamage:
+      spellData.fieldData?.tickDamage ||
+      (spellData.damage
+        ? {
+            base: spellData.damage.base,
+            variance: spellData.damage.variance,
+            interval: 1000,
+          }
+        : null),
+    tickHeal: spellData.fieldData?.tickHeal || null,
+    damageType: spellData.fieldData?.damageType || "magical",
+    // Quem é afetado
+    affectEnemies: spellData.fieldData?.affectEnemies ?? true,
+    affectAllies: spellData.fieldData?.affectAllies ?? false,
+  };
 
   // Salvar no Firebase (fonte da verdade)
   await dbSet(`world_fields/${fieldId}`, field);
   activeFields.set(fieldId, field);
 
-  // Emitir evento: cliente renderiza o campo visualmente
+  // Emitir evento: cliente renderiza o campo
   worldEvents.emit(EVENT_TYPES.FIELD_CREATED, {
     fieldId,
     spellId: spellData.id,
     x: field.x,
     y: field.y,
     z: field.z,
-    fieldSpriteId: field.fieldId,
-    effectSpriteId: field.effectId,
-    duration: field.fieldDuration,
+    fieldSpriteId: field.fieldSpriteId,
+    effectSpriteId: field.effectSpriteId,
+    duration: field.expiry - now,
     casterId,
     timestamp: now,
   });
 
-  // Agendar ticks de dano/cura
+  // Agendar ticks
   _scheduleFieldTicks(fieldId, field);
-
   return { success: true, fieldId };
 }
 
 function _scheduleFieldTicks(fieldId, field) {
-  const tickInterval = field.tickRate || 1000;
+  const tickInterval =
+    field.tickDamage?.interval || field.tickHeal?.interval || 1000;
 
   const tickFn = async () => {
     const cached = activeFields.get(fieldId);
@@ -112,7 +115,7 @@ function _scheduleFieldTicks(fieldId, field) {
 
     worldEvents.emit(EVENT_TYPES.FIELD_TICK, {
       fieldId,
-      tickCount: Math.floor((now - cached.startTime) / tickInterval),
+      tickCount: Math.floor((now - cached.createdAt) / tickInterval),
       timestamp: now,
     });
 
@@ -120,9 +123,12 @@ function _scheduleFieldTicks(fieldId, field) {
   };
 
   setTimeout(tickFn, tickInterval);
-  setTimeout(async () => {
-    if (activeFields.has(fieldId)) await removeField(fieldId);
-  }, field.fieldDuration + 100);
+  setTimeout(
+    async () => {
+      if (activeFields.has(fieldId)) await removeField(fieldId);
+    },
+    field.expiry - field.createdAt + 100,
+  );
 }
 
 async function _applyFieldEffect(field) {
@@ -131,7 +137,7 @@ async function _applyFieldEffect(field) {
   // Monstros
   const monsters = getMonsters();
   for (const [id, monster] of Object.entries(monsters)) {
-    if (monster.dead || monster.z !== z) continue;
+    if (monster.dead || (monster.z ?? 7) !== z) continue;
     if (Math.abs(monster.x - x) > 0.5 || Math.abs(monster.y - y) > 0.5)
       continue;
 
@@ -147,7 +153,7 @@ async function _applyFieldEffect(field) {
   // Jogadores
   const players = getPlayers();
   for (const [id, player] of Object.entries(players)) {
-    if (player.z !== z) continue;
+    if ((player.z ?? 7) !== z) continue;
     if (Math.abs(player.x - x) > 0.5 || Math.abs(player.y - y) > 0.5) continue;
 
     const isAlly =
@@ -166,25 +172,17 @@ async function _applyTickDamage({ field, targetId, targetType }) {
   const roll = 1 - variance + Math.random() * variance * 2;
   const damage = Math.max(1, Math.round(base * roll));
 
-  const result = await applyDirectDamage({
+  emitDamage(
     targetId,
     targetType,
     damage,
-    damageType: field.statusType || "magical",
-    sourceId: field.casterId,
-  });
-
-  if (result?.killed) {
-    worldEvents.emit(EVENT_TYPES.COMBAT_KILL, {
+    targetType === "monster" ? getMonsters()[targetId] : getPlayers()[targetId],
+    {
       attackerId: field.casterId,
-      defenderId: targetId,
-      defenderType: targetType,
-      killedByField: true,
-      fieldId: field.id,
-      spellId: field.spellId,
-      timestamp: Date.now(),
-    });
-  }
+      isFieldDamage: true,
+      element: field.damageType,
+    },
+  );
 }
 
 async function _applyTickHeal({ field, targetId, targetType }) {
@@ -192,7 +190,13 @@ async function _applyTickHeal({ field, targetId, targetType }) {
   const { base, variance = 0.1 } = field.tickHeal;
   const roll = 1 - variance + Math.random() * variance * 2;
   const heal = Math.max(1, Math.round(base * roll));
-  await applyHeal({ targetId, targetType, healAmount: heal });
+
+  emitHeal(
+    targetId,
+    targetType,
+    heal,
+    targetType === "monster" ? getMonsters()[targetId] : getPlayers()[targetId],
+  );
 }
 
 export async function removeField(fieldId) {
@@ -212,7 +216,7 @@ export async function removeField(fieldId) {
 export function getFieldsAtPosition(x, y, z = 7) {
   const fields = [];
   for (const field of activeFields.values()) {
-    if (field.z !== z) continue;
+    if ((field.z ?? 7) !== z) continue;
     if (Math.abs(field.x - x) <= 0.5 && Math.abs(field.y - y) <= 0.5) {
       fields.push({ ...field });
     }
@@ -227,24 +231,19 @@ export async function initFieldSystem(dbFunctions) {
   if (fields && typeof fields === "object") {
     const now = Date.now();
     for (const [id, field] of Object.entries(fields)) {
-      if (field.expiry > now || field.expiresAt > now) {
-        const normalized = {
-          ...field,
-          expiry: field.expiry || field.expiresAt,
-          lastTick: field.lastTick || now,
-        };
-        activeFields.set(id, normalized);
-        _scheduleFieldTicks(id, normalized);
+      if (field.expiry > now) {
+        activeFields.set(id, field);
+        _scheduleFieldTicks(id, field);
         worldEvents.emit(EVENT_TYPES.FIELD_CREATED, {
           fieldId: id,
-          spellId: normalized.spellId,
-          x: normalized.x,
-          y: normalized.y,
-          z: normalized.z,
-          fieldSpriteId: normalized.fieldId,
-          effectSpriteId: normalized.effectId,
-          duration: normalized.fieldDuration,
-          casterId: normalized.casterId,
+          spellId: field.spellId,
+          x: field.x,
+          y: field.y,
+          z: field.z,
+          fieldSpriteId: field.fieldSpriteId,
+          effectSpriteId: field.effectSpriteId,
+          duration: field.expiry - now,
+          casterId: field.casterId,
           timestamp: now,
           restored: true,
         });
@@ -252,13 +251,6 @@ export async function initFieldSystem(dbFunctions) {
         await dbFunctions.dbRemove(`world_fields/${id}`);
       }
     }
-  }
-}
-
-export function cleanupExpiredFields() {
-  const now = Date.now();
-  for (const [id, field] of activeFields.entries()) {
-    if (now >= (field.expiry || field.expiresAt)) activeFields.delete(id);
   }
 }
 

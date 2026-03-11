@@ -1,298 +1,370 @@
 // =============================================================================
-// combatService.js — mmoRPGEduc (FASE 2)
+// combatService.js — mmoRPGEduc
+// Camada autoritativa de combate - emite eventos, não manipula UI
 //
-// RESPONSABILIDADE: Camada de serviço de combate.
-//   • Centraliza lógica de hit/miss, dano, cura e dano de campo
-//   • Emite eventos padronizados (worldEvents) — nunca toca em UI
-//   • Retorna payload de updates Firebase para o chamador fazer batchWrite
-//   • Elimina duplicação entre actionProcessor.js e monsterManager.js
-//
-// Regras:
-//   ✅ Pode importar: core/db.js, core/events.js, gameplay/combatLogic.js
-//   ❌ Nunca importa: render/, clients/, floatingTexts, canvas
-//
-// Dependências:
-//   core/events.js, core/db.js, gameplay/combatLogic.js
+// Responsabilidades:
+// • Validar ações de ataque (autoritativo)
+// • Calcular dano usando combatLogic (puro)
+// • Aplicar mudanças no worldStore/db
+// • Emitir eventos para clientes via worldEvents
+// • Registrar dano para sistema de XP
 // =============================================================================
 
-import { applyHpToPlayer } from "../../core/db.js";
-import { worldEvents, EVENT_TYPES } from "../../core/events.js";
 import {
   calculateCombatResult,
   calculateNewHp,
   calculateFinalDamage,
-} from "../combatLogic.js";
+  COMBAT,
+} from "./combatLogic.js";
+import { worldEvents, EVENT_TYPES } from "../../core/events.js";
+import { applyHpToPlayer, applyHpToMonster } from "../../core/db.js";
+import {
+  getMonsters,
+  getPlayers,
+  applyMonstersLocal,
+  applyPlayersLocal,
+} from "../../core/worldStore.js";
+import { registerDamage, registerLastHit } from "../progression/xpManager.js";
+import {
+  getAttackPower,
+  getCritChance,
+  getDefense,
+} from "../progression/progressionSystem.js";
 
 // =============================================================================
-// PRESETS DE EFEITOS VISUAIS (dados puros — sem UI)
-// Movidos de combatEngine.js para cá, onde pertencem logicamente.
+// FUNÇÕES PRINCIPAIS
 // =============================================================================
 
-export const COMBAT_EFFECT_PRESETS = {
-  attackHit: { effectId: 1, spriteId: 187376, duration: 700 },
-  attackMiss: { effectId: 3, spriteId: 187394, duration: 700 },
-  burning: { effectId: null, spriteId: null, duration: 900 },
-  electrified: { effectId: null, spriteId: null, duration: 900 },
-  poisoned: { effectId: null, spriteId: null, duration: 900 },
-};
-
 /**
- * Obtém preset de efeito de combate pelo nome.
- * @param {string} key
- * @returns {Object|null}
+ * Processa um ataque autoritativo no servidor
  */
-export function getCombatEffectPreset(key) {
-  return COMBAT_EFFECT_PRESETS[key] ?? null;
-}
+export async function processAttack({
+  attackerId,
+  defenderId,
+  attackerType,
+  defenderType,
+  options = {},
+}) {
+  // Obter dados das entidades
+  const attacker =
+    attackerType === "player"
+      ? getPlayers()[attackerId]
+      : getMonsters()[attackerId];
+  const defender =
+    defenderType === "player"
+      ? getPlayers()[defenderId]
+      : getMonsters()[defenderId];
 
-/**
- * Constrói payload de efeito visual para Firebase (world_effects).
- * @param {string} key - Chave do preset (ex: 'attackHit')
- * @param {{ id, x, y, z?, now?, duration? }} opts
- * @returns {Object|null}
- */
-export function buildCombatEffectPayload(key, { id, x, y, z = 7, now = Date.now(), duration }) {
-  const preset = getCombatEffectPreset(key);
-  if (!preset || preset.effectId == null) return null;
+  if (!attacker || !defender) {
+    return { success: false, error: "Entity not found" };
+  }
 
-  const d = Number(duration ?? preset.duration ?? 700);
-  return {
-    id: String(id),
-    type: "effect",
-    effectType: key,
-    effectId: Number(preset.effectId),
-    sourceSpriteId: Number(preset.spriteId),
-    x: Number(x),
-    y: Number(y),
-    z: Number(z),
-    startTime: Number(now),
-    effectDuration: d,
-    expiry: Number(now + d),
-    isField: false,
+  // Calcular stats de ataque/defesa com atributos
+  const atkStats = {
+    atk: attacker.stats?.atk ?? 10,
+    agi: attacker.stats?.agi ?? 5,
+    level: attacker.stats?.level ?? 1,
+    // Para jogadores, usar atributos
+    ...(attackerType === "player"
+      ? {
+          attackPower: getAttackPower(attacker),
+          critChance: getCritChance(attacker),
+        }
+      : {}),
   };
-}
 
-// =============================================================================
-// RESOLUÇÃO DE ATAQUE FÍSICO
-// =============================================================================
+  const defStats = {
+    def: defender.stats?.def ?? 5,
+    agi: defender.stats?.agi ?? 5,
+    level: defender.stats?.level ?? 1,
+    // Para jogadores, usar atributos
+    ...(defenderType === "player"
+      ? {
+          defense: getDefense(defender, defender.stats?.def),
+        }
+      : {}),
+  };
 
-/**
- * Processa o resultado de um ataque físico entre dois combatentes.
- *
- * Calcula hit/miss, dano, emite eventos e retorna os dados necessários
- * para o chamador persistir no Firebase (via batchWrite).
- *
- * Não faz I/O de rede — é responsabilidade do chamador.
- *
- * @param {string} attackerId
- * @param {Object} attacker - Snapshot do atacante { stats, x, y, z }
- * @param {string} defenderId
- * @param {Object} defender - Snapshot do defensor { stats, x, y, z }
- * @param {Object} [options]
- * @param {'players'|'monsters'} [options.defenderType='monsters']
- * @param {number} [options.now]
- * @param {string} [options.spellId] - Se vier de magia, passa para o evento
- * @returns {{
- *   hit: boolean,
- *   damage: number,
- *   newHp: number,
- *   fxId: string,
- *   fxPayload: Object|null
- * }}
- */
-export function resolveAttack(attackerId, attacker, defenderId, defender, options = {}) {
-  const defenderType = options.defenderType ?? "monsters";
-  const now = options.now ?? Date.now();
+  // Calcular resultado do combate (função pura)
+  const combatResult = calculateCombatResult(atkStats, defStats);
 
-  const result = calculateCombatResult(attacker.stats, defender.stats);
+  if (!combatResult.hit) {
+    // Emitir evento de MISS
+    worldEvents.emit(EVENT_TYPES.COMBAT_MISS, {
+      attackerId,
+      defenderId,
+      attackerType,
+      defenderType,
+      hitChance: combatResult.hitChance,
+      timestamp: Date.now(),
+    });
+    return { success: true, damage: 0, killed: false, missed: true };
+  }
 
-  if (result.hit) {
-    const dmg = calculateFinalDamage
-      ? calculateFinalDamage(result.damage ?? 0, result)
-      : (result.damage ?? 0);
-    const newHp = calculateNewHp(defender.stats.hp, -dmg, defender.stats.maxHp);
+  // Calcular dano final
+  let damage = combatResult.damage;
 
-    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+  // Aplicar atributos do atacante
+  if (attackerType === "player") {
+    const attackPower = getAttackPower(attacker);
+    damage = Math.floor(damage * (1 + attackPower / 100));
+
+    // Verificar crítico
+    const critChance = getCritChance(attacker);
+    if (Math.random() < critChance) {
+      damage = Math.floor(damage * 1.5);
+      options.isCritical = true;
+    }
+  }
+
+  if (options.bonusDamage) damage += options.bonusDamage;
+  if (options.isCritical) damage = Math.floor(damage * 1.5);
+
+  // Aplicar dano ao defensor
+  const currentHp = defender.stats?.hp ?? 100;
+  const maxHp = defender.stats?.maxHp ?? 100;
+  const newHp = calculateNewHp(currentHp, -damage, maxHp);
+  const killed = newHp <= 0;
+
+  // Atualizar no Firebase e no worldStore local
+  if (defenderType === "player") {
+    await applyHpToPlayer(defenderId, newHp);
+    applyPlayersLocal(defenderId, { stats: { ...defender.stats, hp: newHp } });
+  } else {
+    await applyHpToMonster(defenderId, newHp);
+    applyMonstersLocal(defenderId, { stats: { ...defender.stats, hp: newHp } });
+
+    // Registrar dano para XP (apenas em monstros)
+    if (attackerType === "player" && damage > 0) {
+      registerDamage(defenderId, attackerId, damage);
+      if (killed) {
+        registerLastHit(defenderId, attackerId);
+      }
+    }
+  }
+
+  // Emitir evento de dano (cliente decide como mostrar)
+  worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+    attackerId,
+    defenderId,
+    attackerType,
+    defenderType,
+    damage,
+    isCritical: !!options.isCritical,
+    defenderX: defender.x,
+    defenderY: defender.y,
+    defenderZ: defender.z,
+    newHp,
+    killed,
+    timestamp: Date.now(),
+  });
+
+  // Se matou, emitir evento de kill
+  if (killed) {
+    worldEvents.emit(EVENT_TYPES.COMBAT_KILL, {
       attackerId,
       defenderId,
       defenderType,
-      damage: dmg,
-      isCritical: result.critical ?? false,
-      spellId: options.spellId ?? null,
-      defenderX: defender.x,
-      defenderY: defender.y,
-      defenderZ: defender.z ?? 7,
+      xpGranted: defender.stats?.xpValue ?? 10,
+      timestamp: Date.now(),
     });
+  }
 
-    if (newHp <= 0) {
-      worldEvents.emit(EVENT_TYPES.COMBAT_KILL, {
-        attackerId,
-        victimId: defenderId,
-        victimType: defenderType,
-        victimX: defender.x,
-        victimY: defender.y,
-        victimZ: defender.z ?? 7,
-      });
+  return { success: true, damage, killed, combatResult };
+}
+
+/**
+ * Aplica dano direto (para magias, campos, etc.)
+ */
+export async function applyDirectDamage({
+  targetId,
+  targetType,
+  damage,
+  damageType = "physical",
+  sourceId = null,
+}) {
+  const target =
+    targetType === "player" ? getPlayers()[targetId] : getMonsters()[targetId];
+
+  if (!target) return { success: false, error: "Target not found" };
+
+  // Aplicar atributos do source se for jogador
+  if (sourceId && targetType === "monster") {
+    const source = getPlayers()[sourceId];
+    if (source) {
+      const spellPower = source.stats?.spellPower ?? 0;
+      if (spellPower > 0) {
+        damage = Math.floor(damage * (1 + spellPower / 100));
+      }
     }
+  }
 
-    const fxId = `hit_${attackerId}_${defenderId}_${now}`;
-    const fxPayload = buildCombatEffectPayload("attackHit", {
-      id: fxId, x: defender.x, y: defender.y, z: defender.z ?? 7, now,
-    });
+  const currentHp = target.stats?.hp ?? 100;
+  const maxHp = target.stats?.maxHp ?? 100;
+  const newHp = calculateNewHp(currentHp, -damage, maxHp);
+  const killed = newHp <= 0;
 
-    return { hit: true, damage: dmg, newHp, fxId, fxPayload };
+  if (targetType === "player") {
+    await applyHpToPlayer(targetId, newHp);
+    applyPlayersLocal(targetId, { stats: { ...target.stats, hp: newHp } });
   } else {
-    worldEvents.emit(EVENT_TYPES.COMBAT_MISS, {
-      attackerId,
-      defenderX: defender.x,
-      defenderY: defender.y,
-      defenderZ: defender.z ?? 7,
-    });
+    await applyHpToMonster(targetId, newHp);
+    applyMonstersLocal(targetId, { stats: { ...target.stats, hp: newHp } });
 
-    const fxId = `miss_${attackerId}_${defenderId}_${now}`;
-    const fxPayload = buildCombatEffectPayload("attackMiss", {
-      id: fxId, x: defender.x, y: defender.y, z: defender.z ?? 7, now,
-    });
-
-    return { hit: false, damage: 0, newHp: defender.stats.hp, fxId, fxPayload };
+    // Registrar dano para XP
+    if (sourceId && damage > 0) {
+      registerDamage(targetId, sourceId, damage);
+      if (killed) {
+        registerLastHit(targetId, sourceId);
+      }
+    }
   }
-}
-
-// =============================================================================
-// DANO DIRETO (spells, campos, etc.)
-// =============================================================================
-
-/**
- * Emite evento de dano para uma entidade.
- * NÃO persiste no Firebase — o chamador faz batchWrite.
- *
- * @param {string} entityId
- * @param {'players'|'monsters'} entityType
- * @param {number} damage - Valor positivo de dano
- * @param {Object} entity - Snapshot { stats, x, y, z }
- * @param {Object} [options]
- * @param {string} [options.attackerId]
- * @param {boolean} [options.isCritical]
- * @param {boolean} [options.isFieldDamage]
- * @param {string} [options.element]
- * @param {string} [options.spellId]
- * @returns {number} novo HP calculado
- */
-export function emitDamage(entityId, entityType, damage, entity, options = {}) {
-  const newHp = Math.max(0, (entity.stats?.hp ?? 0) - damage);
 
   worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
-    attackerId: options.attackerId ?? null,
-    defenderId: entityId,
-    defenderType: entityType,
+    attackerId: sourceId,
+    defenderId: targetId,
+    defenderType: targetType,
     damage,
-    isCritical: options.isCritical ?? false,
-    isFieldDamage: options.isFieldDamage ?? false,
-    element: options.element ?? null,
-    spellId: options.spellId ?? null,
-    defenderX: entity.x,
-    defenderY: entity.y,
-    defenderZ: entity.z ?? 7,
+    damageType,
+    defenderX: target.x,
+    defenderY: target.y,
+    defenderZ: target.z,
+    newHp,
+    killed,
+    isDirectDamage: true,
+    timestamp: Date.now(),
   });
 
-  if (newHp <= 0) {
-    worldEvents.emit(EVENT_TYPES.COMBAT_KILL, {
-      attackerId: options.attackerId ?? null,
-      victimId: entityId,
-      victimType: entityType,
-      victimX: entity.x,
-      victimY: entity.y,
-      victimZ: entity.z ?? 7,
-    });
+  return { success: true, newHp, killed };
+}
+
+/**
+ * Cura uma entidade
+ */
+export async function applyHeal({ targetId, targetType, healAmount }) {
+  const target =
+    targetType === "player" ? getPlayers()[targetId] : getMonsters()[targetId];
+
+  if (!target) return { success: false, error: "Target not found" };
+
+  // Aplicar poder de cura se for jogador
+  if (targetType === "player") {
+    const healPower = target.stats?.healPower ?? 0;
+    if (healPower > 0) {
+      healAmount = Math.floor(healAmount * (1 + healPower / 100));
+    }
   }
 
-  return newHp;
-}
+  const currentHp = target.stats?.hp ?? 100;
+  const maxHp = target.stats?.maxHp ?? 100;
+  const newHp = calculateNewHp(currentHp, healAmount, maxHp);
 
-/**
- * Emite evento de cura para uma entidade.
- * NÃO persiste no Firebase — o chamador faz applyHpToPlayer / batchWrite.
- *
- * @param {string} entityId
- * @param {'players'|'monsters'} entityType
- * @param {number} healAmount - Valor positivo de cura
- * @param {Object} entity - Snapshot { stats, x, y, z }
- * @returns {number} novo HP calculado
- */
-export function emitHeal(entityId, entityType, healAmount, entity) {
-  const newHp = Math.min(entity.stats?.maxHp ?? 100, (entity.stats?.hp ?? 0) + healAmount);
+  if (targetType === "player") {
+    await applyHpToPlayer(targetId, newHp);
+    applyPlayersLocal(targetId, { stats: { ...target.stats, hp: newHp } });
+  } else {
+    await applyHpToMonster(targetId, newHp);
+    applyMonstersLocal(targetId, { stats: { ...target.stats, hp: newHp } });
+  }
 
   worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
-    defenderId: entityId,
-    defenderType: entityType,
-    damage: -healAmount,
+    defenderId: targetId,
+    defenderType: targetType,
+    damage: -healAmount, // negativo = cura
+    defenderX: target.x,
+    defenderY: target.y,
+    defenderZ: target.z,
+    newHp,
     isHeal: true,
-    defenderX: entity.x,
-    defenderY: entity.y,
-    defenderZ: entity.z ?? 7,
+    timestamp: Date.now(),
   });
 
-  return newHp;
+  return { success: true, newHp };
 }
 
-// =============================================================================
-// DANO DE CAMPO (Field damage tick)
-// =============================================================================
-
 /**
- * Processa um tick de dano de campo em uma entidade.
- * Aplica resistência elemental e emite evento.
- * NÃO persiste no Firebase.
- *
- * @param {Object} field - { damage, element, x, y, z, ownerId }
- * @param {string} entityId
- * @param {'players'|'monsters'} entityType
- * @param {Object} entity - Snapshot { stats, x, y, z }
- * @returns {number} novo HP calculado
+ * Helper para emitir evento de dano (usado por fieldSystem)
  */
-export function processFieldTick(field, entityId, entityType, entity) {
-  const baseDamage = field.damage ?? 0;
-  if (baseDamage <= 0) return entity.stats?.hp ?? 0;
+export function emitDamage(targetId, targetType, damage, target, options = {}) {
+  if (!target) return;
 
-  // Resistência elemental (se a entidade tiver)
-  const resistance = entity.stats?.resistances?.[field.element] ?? 1.0;
-  const finalDamage = Math.max(1, Math.round(baseDamage * resistance));
-
-  return emitDamage(entityId, entityType, finalDamage, entity, {
-    attackerId: field.ownerId ?? null,
-    isFieldDamage: true,
-    element: field.element ?? null,
+  worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+    attackerId: options.attackerId,
+    defenderId: targetId,
+    defenderType: targetType,
+    damage,
+    damageType: options.element || "physical",
+    defenderX: target.x,
+    defenderY: target.y,
+    defenderZ: target.z ?? 7,
+    isFieldDamage: options.isFieldDamage ?? false,
+    timestamp: Date.now(),
   });
 }
 
-// =============================================================================
-// APLICAÇÃO DIRETA DE DANO A PLAYER (usa DB + emite evento)
-// Para compatibilidade com admin e fluxos onde temos a entidade disponível.
-// =============================================================================
-
 /**
- * Aplica dano a um player diretamente no Firebase e emite evento.
- * @param {string} playerId
- * @param {number} damage
- * @param {Object} player - Snapshot com stats e posição
- * @param {Object} [options]
- * @returns {Promise<number>} novo HP
+ * Helper para emitir evento de cura
  */
-export async function applyPlayerDamage(playerId, damage, player, options = {}) {
-  const newHp = emitDamage(playerId, "players", damage, player, options);
-  await applyHpToPlayer(playerId, newHp);
-  return newHp;
+export function emitHeal(targetId, targetType, healAmount, target) {
+  if (!target) return;
+
+  worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+    defenderId: targetId,
+    defenderType: targetType,
+    damage: -healAmount,
+    defenderX: target.x,
+    defenderY: target.y,
+    defenderZ: target.z ?? 7,
+    isHeal: true,
+    timestamp: Date.now(),
+  });
 }
 
 /**
- * Aplica cura a um player diretamente no Firebase e emite evento.
- * @param {string} playerId
- * @param {number} heal
- * @param {Object} player - Snapshot com stats e posição
- * @returns {Promise<number>} novo HP
+ * Resolve ataque físico (wrapper para processAttack)
  */
-export async function applyPlayerHeal(playerId, heal, player) {
-  const newHp = emitHeal(playerId, "players", heal, player);
-  await applyHpToPlayer(playerId, newHp);
-  return newHp;
+export function resolveAttack(
+  attackerId,
+  attacker,
+  targetId,
+  target,
+  options = {},
+) {
+  const attackerType = attacker.id?.includes("player") ? "player" : "monster";
+  const defenderType = target.id?.includes("player") ? "player" : "monster";
+
+  return processAttack({
+    attackerId,
+    defenderId: targetId,
+    attackerType,
+    defenderType,
+    ...options,
+  });
+}
+
+/**
+ * Build de payload de efeito de combate
+ */
+export function buildCombatEffectPayload({
+  effectId,
+  x,
+  y,
+  z,
+  duration,
+  startTime,
+}) {
+  const t = startTime ?? Date.now();
+  const d = Number(duration ?? 800);
+  return {
+    id: String(effectId),
+    type: "effect",
+    effectId: Number(effectId),
+    x: Number(x),
+    y: Number(y),
+    z: Number(z ?? 7),
+    startTime: t,
+    effectDuration: d,
+    expiry: t + d,
+    isField: false,
+  };
 }

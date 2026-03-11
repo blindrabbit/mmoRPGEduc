@@ -17,6 +17,7 @@ import {
 } from "../core/db.js";
 import { WORLDSETTINGS, PLAYERCLASSES } from "../core/config.js";
 import { makePlayer } from "../core/schema.js";
+import { initializePlayerStats } from "./progression/progressionSystem.js";
 
 // ---------------------------------------------------------------------------
 // SINCRONIZAÇÃO DE POSIÇÃO
@@ -90,39 +91,40 @@ export async function kickPlayer(playerId) {
 /**
  * Cria o registro inicial de um novo personagem.
  * @param {string} playerId
- * @param {string} name
- * @param {'cavaleiro'|'mago'|'arqueiro'|'clerigo'} playerClass
+ * @param {string|Object} nameOrData
+ * @param {'cavaleiro'|'mago'|'arqueiro'|'clerigo'|'druid'} [playerClass]
  */
-export async function createPlayer(playerId, name, playerClass) {
-  const cls = PLAYERCLASSES?.[playerClass] ?? PLAYERCLASSES?.cavaleiro ?? {};
+export async function createPlayer(playerId, nameOrData, playerClass) {
+  const payload =
+    nameOrData && typeof nameOrData === "object"
+      ? nameOrData
+      : { name: nameOrData, class: playerClass };
+
+  const resolvedClass = payload.class || "cavaleiro";
+  const cls = PLAYERCLASSES?.[resolvedClass] ?? PLAYERCLASSES?.cavaleiro ?? {};
   const spawn = WORLDSETTINGS.spawn;
-  const playerData = makePlayer({
+  const initialStats = initializePlayerStats(resolvedClass);
+
+  const player = makePlayer({
     id: playerId,
-    name,
-    class: playerClass,
-    x: spawn.x,
-    y: spawn.y,
-    z: spawn.z,
+    name: payload.name,
+    class: resolvedClass,
+    x: payload.x ?? spawn.x,
+    y: payload.y ?? spawn.y,
+    z: payload.z ?? spawn.z,
     direcao: "frente",
     speed: cls.speed ?? 120,
     appearance: {
       outfitId: 10000,
       outfitPack: "outfits_01",
-      class: playerClass,
+      class: resolvedClass,
     },
-    stats: {
-      hp: cls.hp ?? 100,
-      maxHp: cls.hp ?? 100,
-      mp: cls.mp ?? 50,
-      maxMp: cls.mp ?? 50,
-      atk: cls.atk ?? 10,
-      def: cls.def ?? 5,
-      agi: cls.agi ?? 5,
-      level: 1,
-    },
+    stats: initialStats,
     spawnX: spawn.x,
     spawnY: spawn.y,
     spawnZ: spawn.z,
   });
-  await setPlayerData(playerId, playerData);
+
+  await setPlayerData(playerId, player);
+  return player;
 }

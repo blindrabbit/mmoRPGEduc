@@ -15,6 +15,7 @@ import {
   dbSet,
   dbWatch,
   dbWatchChildren,
+  dbRemove,
   dbUpdate as _dbUpdateClient,
   syncEntity as _syncEntity,
 } from "./firebaseClient.js";
@@ -28,7 +29,7 @@ import {
 } from "./schema.js";
 
 // Re-exporta as primitivas para o playerManager.html e outros módulos
-export { dbGet, dbSet, dbWatch };
+export { dbGet, dbSet, dbWatch, dbRemove };
 
 // ---------------------------------------------------------------------------
 // UTILITÁRIOS — Base64 & Formatação
