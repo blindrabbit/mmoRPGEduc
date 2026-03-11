@@ -9,6 +9,7 @@
 import { OUTFIT_MAP } from "../render/outfitData.js";
 import { TILE_SIZE, WORLD_SETTINGS, EFFECTS_RENDER } from "../core/config.js";
 import { initCombatEngine } from "./combatEngine.js";
+import { initCombatTextUI } from "../clients/shared/ui/combatText.js";
 import { getEffects, getFields } from "../core/worldStore.js";
 
 const GROUNDZ = WORLD_SETTINGS.spawn.z;
@@ -40,8 +41,11 @@ export { loadAllSprites } from "../render/assetLoader.js";
 // ---------------------------------------------------------------------------
 export let floatingTexts = [];
 
-// Injeta referência do floatingTexts no combatEngine
+// initCombatEngine mantido por compatibilidade (agora no-op)
 initCombatEngine(floatingTexts);
+
+// Conecta eventos de combate ao array de textos flutuantes (FASE 1)
+initCombatTextUI(floatingTexts);
 
 // ---------------------------------------------------------------------------
 // monitorEffects — mantida para compatibilidade (rpg.html / admin.html)
@@ -238,7 +242,8 @@ export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
     }
 
     if (effectType === "wave" || effectId.includes("wave")) return "wave";
-    if (entry?.type === "corpse" || effectId.startsWith("corpse")) return "corpse";
+    if (entry?.type === "corpse" || effectId.startsWith("corpse"))
+      return "corpse";
 
     return "generic";
   };
@@ -265,33 +270,59 @@ export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
   };
 
   if (layer === "ground") {
-    const activeFields = getFields();
+    const activeFields = { ...(getFields() ?? {}) };
+    const activeEffects = getEffects() ?? {};
+
+    // Compat: alguns fluxos antigos/publicadores ainda gravam fields em
+    // world_effects com isField=true em vez de world_fields.
+    for (const effectId in activeEffects) {
+      const effect = activeEffects[effectId];
+      if (!effect?.isField) continue;
+      if (!activeFields[effectId]) activeFields[effectId] = effect;
+    }
+
     for (const id in activeFields) {
       const field = activeFields[id];
       if (!field) continue;
       if (field.expiry && now > field.expiry) continue;
-      if (typeof assets?.getFieldSprites !== "function") continue;
 
-      const fieldVisualIdRaw = field.fieldId ?? field.fieldTypeId ?? field.effectId;
+      const fieldVisualIdRaw =
+        field.fieldId ?? field.fieldTypeId ?? field.effectId;
       const fieldVisualId = Number(fieldVisualIdRaw);
 
-      const startTime = field.startTime ?? field.expiry - (field.fieldDuration ?? 5000);
+      const startTime =
+        field.startTime ?? field.expiry - (field.fieldDuration ?? 5000);
       const safeElapsed = Math.max(0, now - (startTime || now));
       let sprites = [];
 
-      if (Number.isFinite(fieldVisualId)) {
+      if (
+        Number.isFinite(fieldVisualId) &&
+        typeof assets?.getFieldSprites === "function"
+      ) {
         sprites = assets.getFieldSprites(fieldVisualId, safeElapsed, {
+          id: field.id ?? id,
           x: field.x,
           y: field.y,
           z: field.z,
-          seed: String(field.id ?? id).length,
+          startTime,
+          expiry: field.expiry ?? null,
+          fieldDuration:
+            Number(field.fieldDuration ?? 0) ||
+            Math.max(0, Number(field.expiry ?? now) - Number(startTime ?? now)),
+          variantSeed: `${field.id ?? id}:${field.x ?? 0}:${field.y ?? 0}:${field.z ?? 7}`,
         });
       }
 
-      if ((!Array.isArray(sprites) || !sprites.length) && typeof assets?.getEffectSprite === "function") {
+      if (
+        (!Array.isArray(sprites) || !sprites.length) &&
+        typeof assets?.getEffectSprite === "function"
+      ) {
         const fallbackEffectId = Number(field.effectId ?? 0);
         if (Number.isFinite(fallbackEffectId) && fallbackEffectId > 0) {
-          const fallback = assets.getEffectSprite(fallbackEffectId, safeElapsed);
+          const fallback = assets.getEffectSprite(
+            fallbackEffectId,
+            safeElapsed,
+          );
           if (fallback?.info) sprites = [fallback];
         }
       }
@@ -317,10 +348,7 @@ export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
             offX,
         );
         const posY = Math.round(
-          baseY * TILE_SIZE -
-            camY +
-            (TILE_SIZE - sprite.info.h) +
-            offY,
+          baseY * TILE_SIZE - camY + (TILE_SIZE - sprite.info.h) + offY,
         );
 
         ctx.drawImage(
@@ -385,10 +413,7 @@ export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
           offX,
       );
       const posY = Math.round(
-        baseY * TILE_SIZE -
-          camY +
-          (TILE_SIZE - fxSprite.info.h) +
-          offY,
+        baseY * TILE_SIZE - camY + (TILE_SIZE - fxSprite.info.h) + offY,
       );
 
       ctx.drawImage(
@@ -402,6 +427,24 @@ export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
         fxSprite.info.w,
         fxSprite.info.h,
       );
+    }
+
+    // Status sincronizado via world_effects (ex: burning/poison/frozen)
+    // precisa ser desenhado também no cliente RPG, além dos eventos locais.
+    if (effect.statusType) {
+      const statusText = String(effect.statusType).toUpperCase();
+      const centerX = Math.round(
+        (Number(effect.x ?? 0) + 0.5) * TILE_SIZE - camX,
+      );
+      const baseY = Math.round(Number(effect.y ?? 0) * TILE_SIZE - camY - 6);
+      ctx.font = "bold 11px Tahoma";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "alphabetic";
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgba(0,0,0,0.9)";
+      ctx.strokeText(statusText, centerX, baseY);
+      ctx.fillStyle = "#f1c40f";
+      ctx.fillText(statusText, centerX, baseY);
     }
     ctx.restore();
   }
@@ -440,7 +483,8 @@ export function drawCorpses(ctx, assets, camX, camY, now) {
           : [];
     if (!stages.length) continue;
 
-    const pickedStage = stages[Math.floor(progress * stages.length)] ?? stages[0];
+    const pickedStage =
+      stages[Math.floor(progress * stages.length)] ?? stages[0];
     const numericStage = Number(pickedStage);
 
     let sprite = null;
@@ -464,10 +508,7 @@ export function drawCorpses(ctx, assets, camX, camY, now) {
         offX,
     );
     const posY = Math.round(
-      baseY * TILE_SIZE -
-        camY +
-        (TILE_SIZE - sprite.info.h) +
-        offY,
+      baseY * TILE_SIZE - camY + (TILE_SIZE - sprite.info.h) + offY,
     );
 
     ctx.save();

@@ -3,6 +3,8 @@
 // Reutilizável por monstros e players.
 // =============================================================================
 
+import { resolveFieldVisualIds } from "./abilityCore.js";
+
 export function buildFieldPayload({
   id,
   x,
@@ -16,14 +18,15 @@ export function buildFieldPayload({
   tickRate = 1000,
   statusType = null,
 } = {}) {
+  const visuals = resolveFieldVisualIds({ fieldId, effectId, statusType });
   return {
     id: String(id ?? ""),
     x: Number(x ?? 0),
     y: Number(y ?? 0),
     z: Number(z ?? 7),
     damage: Number(damage ?? 0),
-    fieldId: Number(fieldId ?? 0) || null,
-    effectId: Number(effectId ?? 0) || null,
+    fieldId: visuals.fieldId,
+    effectId: visuals.effectId,
     fieldDuration: Number(fieldDuration ?? 5000),
     startTime: Number(now),
     expiry: Number(now + Number(fieldDuration ?? 5000)),
@@ -44,6 +47,7 @@ export function buildFieldEffectFallbackPayload({
   effectDuration = 1200,
   effectId = 2,
 } = {}) {
+  const visuals = resolveFieldVisualIds({ effectId });
   const duration = Number(isPersistent ? fieldDuration : effectDuration);
   return {
     x: Number(x ?? 0),
@@ -53,6 +57,6 @@ export function buildFieldEffectFallbackPayload({
     expiry: Number(now + duration),
     isField: Boolean(isField),
     fieldDuration: Number(fieldDuration ?? 5000),
-    effectId: Number(effectId ?? 2),
+    effectId: visuals.effectId,
   };
 }

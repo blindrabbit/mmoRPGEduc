@@ -1,3 +1,8 @@
+import {
+  getMonsterAttackCooldownKey,
+  normalizeCombatCooldownMs,
+} from "./combatScheduler.js";
+
 // =============================================================================
 // monsterAI.js — mmoRPGGame
 // Camada 3: Inteligência artificial dos monstros — lógica pura.
@@ -7,13 +12,17 @@
 // Dependências: combatLogic.js (getDirectionFromDelta)
 // =============================================================================
 
-import { getDirectionFromDelta } from './combatLogic.js';
-import { isPassableForMob, tileBlocksMissiles, tileBlocksSight } from '../core/collision.js';
+import { getDirectionFromDelta } from "./combatLogic.js";
+import {
+  isPassableForMob,
+  tileBlocksMissiles,
+  tileBlocksSight,
+} from "../core/collision.js";
 
 // ---------------------------------------------------------------------------
 // ADMIN_ID — ID reservado do GM, nunca alvo de monstros
 // ---------------------------------------------------------------------------
-const ADMIN_ID = 'GMADMIN';
+const ADMIN_ID = "GMADMIN";
 
 // ---------------------------------------------------------------------------
 // findTarget
@@ -26,18 +35,18 @@ const ADMIN_ID = 'GMADMIN';
 // @returns {object|null}  - { ...playerData, id } ou null
 // ---------------------------------------------------------------------------
 export function findTarget(mob, players, range = 7) {
-  let closest  = null;
-  let minDist  = range;
+  let closest = null;
+  let minDist = range;
 
   for (const pid in players) {
     const p = players[pid];
-    if (!p || pid === ADMIN_ID)          continue;
-    if ((p.z ?? 7) !== (mob.z ?? 7))    continue; // andar diferente
+    if (!p || pid === ADMIN_ID) continue;
+    if ((p.z ?? 7) !== (mob.z ?? 7)) continue; // andar diferente
 
     const dist = Math.hypot(p.x - mob.x, p.y - mob.y);
     if (dist < minDist) {
-      minDist  = dist;
-      closest  = { ...p, id: pid };
+      minDist = dist;
+      closest = { ...p, id: pid };
     }
   }
   return closest;
@@ -54,9 +63,9 @@ export function findTarget(mob, players, range = 7) {
 // @returns {{ nx, ny, direcao }} nova posição e direção
 // ---------------------------------------------------------------------------
 export function decideMoveTo(mob, tx, ty) {
-  let nx  = Math.round(mob.x);
-  let ny  = Math.round(mob.y);
-  let dir = mob.direcao ?? 'frente';
+  let nx = Math.round(mob.x);
+  let ny = Math.round(mob.y);
+  let dir = mob.direcao ?? "frente";
 
   const dx = tx - nx;
   const dy = ty - ny;
@@ -89,12 +98,12 @@ export function decideWander(mob) {
   if (Math.random() > 0.05) return null; // 95% de chance de não mover
 
   const DIRS = [
-    { dx:  1, dy:  0 },
-    { dx: -1, dy:  0 },
-    { dx:  0, dy:  1 },
-    { dx:  0, dy: -1 },
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
   ];
-  const m  = DIRS[Math.floor(Math.random() * DIRS.length)];
+  const m = DIRS[Math.floor(Math.random() * DIRS.length)];
   const nx = Math.round(mob.x) + m.dx;
   const ny = Math.round(mob.y) + m.dy;
 
@@ -109,16 +118,22 @@ export function decideWander(mob) {
 function _bresenham(x0, y0, x1, y1, checker) {
   let ddx = Math.abs(x1 - x0);
   let ddy = Math.abs(y1 - y0);
-  let sx  = x0 < x1 ? 1 : -1;
-  let sy  = y0 < y1 ? 1 : -1;
+  let sx = x0 < x1 ? 1 : -1;
+  let sy = y0 < y1 ? 1 : -1;
   let err = ddx - ddy;
-  let cx  = x0;
-  let cy  = y0;
+  let cx = x0;
+  let cy = y0;
 
   while (cx !== x1 || cy !== y1) {
     const e2 = 2 * err;
-    if (e2 > -ddy) { err -= ddy; cx += sx; }
-    if (e2 <  ddx) { err += ddx; cy += sy; }
+    if (e2 > -ddy) {
+      err -= ddy;
+      cx += sx;
+    }
+    if (e2 < ddx) {
+      err += ddx;
+      cy += sy;
+    }
     if (cx === x1 && cy === y1) break; // não verifica o tile destino
     if (checker(cx, cy)) return false;
   }
@@ -131,8 +146,9 @@ function _bresenham(x0, y0, x1, y1, checker) {
 // Obstáculos (árvores, pedras) não bloqueiam visão — apenas paredes sólidas.
 // ---------------------------------------------------------------------------
 export function hasLineOfSight(x0, y0, x1, y1, z, worldTiles, nexoData) {
-  return _bresenham(x0, y0, x1, y1,
-    (cx, cy) => tileBlocksSight(cx, cy, z, worldTiles, nexoData));
+  return _bresenham(x0, y0, x1, y1, (cx, cy) =>
+    tileBlocksSight(cx, cy, z, worldTiles, nexoData),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -142,8 +158,9 @@ export function hasLineOfSight(x0, y0, x1, y1, z, worldTiles, nexoData) {
 // Apenas paredes (category_type="wall", blocks_missiles=true) bloqueiam.
 // ---------------------------------------------------------------------------
 export function hasSpellLOS(x0, y0, x1, y1, z, worldTiles, nexoData) {
-  return _bresenham(x0, y0, x1, y1,
-    (cx, cy) => tileBlocksMissiles(cx, cy, z, worldTiles, nexoData));
+  return _bresenham(x0, y0, x1, y1, (cx, cy) =>
+    tileBlocksMissiles(cx, cy, z, worldTiles, nexoData),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +176,18 @@ export function hasSpellLOS(x0, y0, x1, y1, z, worldTiles, nexoData) {
 // @param {object} nexoData
 // @returns {{ nx, ny, direcao }|null}
 // ---------------------------------------------------------------------------
-export function decideMoveBFS(mob, tx, ty, z, map, nexoData) {
+export function decideMoveBFS(
+  mob,
+  tx,
+  ty,
+  z,
+  map,
+  nexoData,
+  monsters = {},
+  players = {},
+  fields = {},
+  immunities = [],
+) {
   const sx = Math.round(mob.x);
   const sy = Math.round(mob.y);
   const gx = Math.round(tx);
@@ -169,24 +197,56 @@ export function decideMoveBFS(mob, tx, ty, z, map, nexoData) {
 
   const MAX_NODES = 250;
   const DIRS = [
-    { dx:  1, dy:  0 },
-    { dx: -1, dy:  0 },
-    { dx:  0, dy:  1 },
-    { dx:  0, dy: -1 },
+    { dx: 1, dy: 0 },
+    { dx: -1, dy: 0 },
+    { dx: 0, dy: 1 },
+    { dx: 0, dy: -1 },
   ];
 
+  // Pré-computa tiles bloqueados por entidades dinâmicas (exclui o próprio mob e o tile destino)
+  const selfId = mob.id ?? null;
+  const dynamicBlocked = new Set();
+  for (const mid in monsters) {
+    if (mid === selfId) continue;
+    const m = monsters[mid];
+    if (!m || m.dead) continue;
+    const mk = `${Math.round(m.x)},${Math.round(m.y)}`;
+    if (Math.round(m.x) !== gx || Math.round(m.y) !== gy)
+      dynamicBlocked.add(mk);
+  }
+  for (const pid in players) {
+    const p = players[pid];
+    if (!p) continue;
+    const pk = `${Math.round(p.x)},${Math.round(p.y)}`;
+    if (Math.round(p.x) !== gx || Math.round(p.y) !== gy)
+      dynamicBlocked.add(pk);
+  }
+
+  // Pré-computa tiles com campo perigoso (exclui tile destino para que o mob
+  // ainda consiga alcançar o alvo se ele estiver sobre um campo)
+  const now = Date.now();
+  const fieldBlocked = new Set();
+  for (const fid in fields) {
+    const f = fields[fid];
+    if (!f || (f.expiry && now > f.expiry) || (f.damage ?? 0) <= 0) continue;
+    const element = f.statusType ?? f.element ?? null;
+    if (element && immunities.includes(element)) continue;
+    const fk = `${Math.round(f.x)},${Math.round(f.y)}`;
+    if (Math.round(f.x) !== gx || Math.round(f.y) !== gy) fieldBlocked.add(fk);
+  }
+
   // { x, y, firstStep } — firstStep = {nx,ny,dx,dy} do 1º passo a partir da origem
-  const queue    = [{ x: sx, y: sy, firstStep: null }];
-  const visited  = new Set([`${sx},${sy}`]);
-  let   expanded = 0;
+  const queue = [{ x: sx, y: sy, firstStep: null }];
+  const visited = new Set([`${sx},${sy}`]);
+  let expanded = 0;
 
   while (queue.length > 0 && expanded < MAX_NODES) {
     const { x, y, firstStep } = queue.shift();
     expanded++;
 
     for (const { dx, dy } of DIRS) {
-      const nx  = x + dx;
-      const ny  = y + dy;
+      const nx = x + dx;
+      const ny = y + dy;
       const key = `${nx},${ny}`;
 
       if (visited.has(key)) continue;
@@ -195,10 +255,18 @@ export function decideMoveBFS(mob, tx, ty, z, map, nexoData) {
       // Parede ou terreno impassável (água/lava/custo>=500) → ignora este ramo
       if (!isPassableForMob(nx, ny, z, map, nexoData)) continue;
 
+      // Evita tiles com entidades dinâmicas ou campos perigosos (exceto o destino)
+      if (dynamicBlocked.has(key)) continue;
+      if (fieldBlocked.has(key)) continue;
+
       const step = firstStep ?? { nx, ny, dx, dy };
 
       if (nx === gx && ny === gy) {
-        return { nx: step.nx, ny: step.ny, direcao: getDirectionFromDelta(step.dx, step.dy) };
+        return {
+          nx: step.nx,
+          ny: step.ny,
+          direcao: getDirectionFromDelta(step.dx, step.dy),
+        };
       }
 
       queue.push({ x: nx, y: ny, firstStep: step });
@@ -223,7 +291,16 @@ export function decideMoveBFS(mob, tx, ty, z, map, nexoData) {
 // @param {object} nexoData - metadados dos sprites para checar waypoints (opcional)
 // @returns {boolean} true se bloqueado
 // ---------------------------------------------------------------------------
-export function isTileBlocked(x, y, z, map, monsters, players, selfId, nexoData) {
+export function isTileBlocked(
+  x,
+  y,
+  z,
+  map,
+  monsters,
+  players,
+  selfId,
+  nexoData,
+) {
   // Tile não existe, não caminhável ou terreno impassável (água/lava) = bloqueado
   if (!isPassableForMob(x, y, z, map, nexoData)) return true;
 
@@ -276,28 +353,37 @@ export function getLookAtDirection(mob, target) {
 // ---------------------------------------------------------------------------
 export function parseShape(shape, direcao) {
   let monsterPos = { r: 0, c: 0 };
-  const coords   = [];
+  const coords = [];
 
   // Localiza o 'M' (posição do monstro) na shape
   shape.forEach((row, r) => {
-    const c = row.indexOf('M');
+    const c = row.indexOf("M");
     if (c !== -1) monsterPos = { r, c };
   });
 
   // Coleta posições 'X' e calcula relativas
   shape.forEach((row, r) => {
     for (let c = 0; c < row.length; c++) {
-      if (row[c] !== 'X') continue;
+      if (row[c] !== "X") continue;
       const relR = r - monsterPos.r;
       const relC = c - monsterPos.c;
 
       // Rotaciona conforme a direção do monstro
       switch (direcao) {
-        case 'frente':       coords.push([ relC,  -relR]); break;
-        case 'costas':       coords.push([-relC,   relR]); break;
-        case 'lado':         coords.push([-relR,   relC]); break; // direita
-        case 'lado-esquerdo':coords.push([ relR,  -relC]); break;
-        default:             coords.push([ relC,  -relR]);
+        case "frente":
+          coords.push([relC, -relR]);
+          break;
+        case "costas":
+          coords.push([-relC, relR]);
+          break;
+        case "lado":
+          coords.push([-relR, relC]);
+          break; // direita
+        case "lado-esquerdo":
+          coords.push([relR, -relC]);
+          break;
+        default:
+          coords.push([relC, -relR]);
       }
     }
   });
@@ -318,13 +404,14 @@ export function parseShape(shape, direcao) {
 // @returns {object|null}     - ataque escolhido ou null
 // ---------------------------------------------------------------------------
 export function selectAttack(mob, attacks, dist, now) {
-  const available = attacks.filter(atk => dist <= (atk.range ?? 1) + 0.5);
+  const available = attacks.filter((atk) => dist <= (atk.range ?? 1) + 0.5);
   if (available.length === 0) return null;
 
   // Filtra pelo cooldown — chave dinâmica: cd + nome normalizado
-  const ready = available.filter(atk => {
-    const cdKey = 'cd' + atk.name.replace(/[^a-zA-Z0-9]/g, '');
-    return (now - (mob[cdKey] ?? 0)) >= (atk.cooldown ?? 1500);
+  const ready = available.filter((atk) => {
+    const cdKey = getMonsterAttackCooldownKey(atk.name);
+    const cooldownMs = normalizeCombatCooldownMs(atk.cooldown ?? 0);
+    return now - (mob[cdKey] ?? 0) >= cooldownMs;
   });
 
   if (ready.length === 0) return null;
@@ -351,4 +438,31 @@ export function selectAttack(mob, attacks, dist, now) {
   }
 
   return procReady[procReady.length - 1] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// hasDangerousField
+// Verifica se existe um campo ativo e prejudicial no tile (nx, ny, z).
+// Retorna true quando há campo com damage > 0 E o monstro não é imune.
+//
+// @param {number}   nx, ny, z   - tile destino
+// @param {object}   fields      - snapshot de getFields()
+// @param {string[]} immunities  - statusTypes/elementos que o mob ignora
+// @returns {boolean}
+// ---------------------------------------------------------------------------
+export function hasDangerousField(nx, ny, z, fields, immunities = []) {
+  const now = Date.now();
+  for (const fid in fields) {
+    const f = fields[fid];
+    if (!f) continue;
+    if (f.expiry && now > f.expiry) continue;
+    if ((f.damage ?? 0) <= 0) continue;
+    if (Math.round(f.x) !== nx || Math.round(f.y) !== ny || (f.z ?? 7) !== z)
+      continue;
+    // Verifica imunidade pelo statusType ou elemento do campo
+    const element = f.statusType ?? f.element ?? null;
+    if (element && immunities.includes(element)) continue;
+    return true; // campo perigoso encontrado
+  }
+  return false;
 }

@@ -5,6 +5,9 @@
 import {
   setMap,
   setMapData,
+  setMonsterTemplates,
+  setEntitySchemas,
+  setAbilitySchemas,
   clearWorldForReload,
   markWorldReloading,
   markWorldReady,
@@ -21,14 +24,60 @@ export class FirebaseSync {
   }
 
   setupButtons() {
-    const btnReload  = document.getElementById("btn-reload-world");
+    const btnReload = document.getElementById("btn-reload-world");
+    const btnSyncModels = document.getElementById("btn-sync-models");
     const btnPreview = document.getElementById("btn-schema-preview");
-    const btnRun     = document.getElementById("btn-schema-run");
-    const statusEl   = document.getElementById("upload-status");
+    const btnRun = document.getElementById("btn-schema-run");
+    const statusEl = document.getElementById("upload-status");
 
-    if (btnReload)  btnReload.addEventListener("click",  () => this._reloadWorld(statusEl));
-    if (btnPreview) btnPreview.addEventListener("click", () => this._schemaPreview(statusEl));
-    if (btnRun)     btnRun.addEventListener("click",     () => this._schemaRun(statusEl));
+    if (btnReload)
+      btnReload.addEventListener("click", () => this._reloadWorld(statusEl));
+    if (btnSyncModels)
+      btnSyncModels.addEventListener("click", () =>
+        this._syncModelsOnly(statusEl),
+      );
+    if (btnPreview)
+      btnPreview.addEventListener("click", () => this._schemaPreview(statusEl));
+    if (btnRun)
+      btnRun.addEventListener("click", () => this._schemaRun(statusEl));
+  }
+
+  async syncModelsAndSchemasFromLocal() {
+    const [{ ENTITY_SCHEMAS, ABILITY_TYPE_SCHEMAS }, { MONSTER_TEMPLATES }] =
+      await Promise.all([
+        import("../../../gameplay/entitySchemas.js"),
+        import("../../../gameplay/monsterData.js"),
+      ]);
+
+    await Promise.all([
+      setEntitySchemas(ENTITY_SCHEMAS),
+      setAbilitySchemas(ABILITY_TYPE_SCHEMAS),
+      setMonsterTemplates(MONSTER_TEMPLATES),
+    ]);
+  }
+
+  async _syncModelsOnly(statusEl) {
+    this._setStatus(statusEl, "Publicando modelos/schemas locais...");
+    this._setBusy(true);
+    try {
+      await this.syncModelsAndSchemasFromLocal();
+      this._setStatus(
+        statusEl,
+        "Modelos/schemas publicados com sucesso.",
+        "ok",
+      );
+      this.logger?.ok?.(
+        "[FirebaseSync] Modelos/schemas publicados no Firebase.",
+      );
+    } catch (e) {
+      this._setStatus(statusEl, `Erro: ${e.message}`, "error");
+      this.logger?.error?.(
+        "[FirebaseSync] Falha ao publicar modelos/schemas:",
+        e,
+      );
+    } finally {
+      this._setBusy(false);
+    }
   }
 
   // ── Recarregar Mundo ────────────────────────────────────────
@@ -36,19 +85,27 @@ export class FirebaseSync {
     const { map, mapData } = this.worldState;
 
     if (!map || !mapData) {
-      this._setStatus(statusEl, "Erro: mapa não carregado na memória.", "error");
+      this._setStatus(
+        statusEl,
+        "Erro: mapa não carregado na memória.",
+        "error",
+      );
       return;
     }
 
-    const tilesCount   = Object.keys(map).length;
+    const tilesCount = Object.keys(map).length;
     const mapDataCount = Object.keys(mapData).length;
-    const reloadId     = Date.now();
+    const reloadId = Date.now();
 
     this._setStatus(statusEl, "Iniciando recarga...");
     this._setBusy(true);
 
     try {
-      await markWorldReloading({ reloadId, reason: "manual-reload", by: "worldEngine" });
+      await markWorldReloading({
+        reloadId,
+        reason: "manual-reload",
+        by: "worldEngine",
+      });
       await clearWorldForReload();
 
       this._setStatus(statusEl, `Enviando ${tilesCount} tiles...`);
@@ -57,6 +114,9 @@ export class FirebaseSync {
       this._setStatus(statusEl, `Enviando ${mapDataCount} metadados...`);
       await setMapData(mapData);
 
+      this._setStatus(statusEl, "Sincronizando schemas/modelos...");
+      await this.syncModelsAndSchemasFromLocal();
+
       await markWorldReady({ reloadId, tilesCount, mapDataCount });
 
       this._setStatus(
@@ -64,7 +124,9 @@ export class FirebaseSync {
         `Concluído: ${tilesCount} tiles, ${mapDataCount} itens.`,
         "ok",
       );
-      this.logger?.ok?.(`[FirebaseSync] Mundo sincronizado: ${tilesCount} tiles`);
+      this.logger?.ok?.(
+        `[FirebaseSync] Mundo sincronizado: ${tilesCount} tiles`,
+      );
     } catch (e) {
       await markWorldReloadError(e.message, { reloadId }).catch(() => {});
       this._setStatus(statusEl, `Erro: ${e.message}`, "error");
@@ -121,7 +183,12 @@ export class FirebaseSync {
   }
 
   _setBusy(busy) {
-    ["btn-reload-world", "btn-schema-preview", "btn-schema-run"].forEach((id) => {
+    [
+      "btn-reload-world",
+      "btn-sync-models",
+      "btn-schema-preview",
+      "btn-schema-run",
+    ].forEach((id) => {
       const btn = document.getElementById(id);
       if (btn) btn.disabled = busy;
     });

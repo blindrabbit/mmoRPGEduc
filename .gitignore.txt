@@ -1,0 +1,9 @@
+# ignora os arquivos com extensões
+.gitignore
+# ignora quaisquer diretórios chamados "metadata"
+_Editor de Mapa/
+.claude/
+assets
+
+# Credenciais sensíveis — NÃO commitar
+src/core/firebase.config.js

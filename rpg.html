@@ -6,7 +6,11 @@
     <link rel="icon" href="data:," />
     <title>RPG — mmoRPGGame</title>
     <style>
-      * { margin: 0; padding: 0; box-sizing: border-box; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
 
       body {
         background: #0a0a0a;
@@ -19,136 +23,334 @@
 
       /* ── Boot ─────────────────────────────────────────── */
       #boot-overlay {
-        position: fixed; inset: 0;
-        background: #000; color: #2ecc71;
-        font: 13px monospace; z-index: 300;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center; gap: 6px;
+        position: fixed;
+        inset: 0;
+        background: #000;
+        color: #2ecc71;
+        font: 13px monospace;
+        z-index: 300;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
       }
-      #boot-title { font-size: 16px; font-weight: bold; letter-spacing: 3px; margin-bottom: 6px; }
+      #boot-title {
+        font-size: 16px;
+        font-weight: bold;
+        letter-spacing: 3px;
+        margin-bottom: 6px;
+      }
       #boot-log {
-        width: 520px; max-height: 340px; overflow-y: auto;
-        border: 1px solid #2ecc71; border-radius: 4px;
-        padding: 12px; background: #0a0a0a; font-size: 11px; line-height: 1.8;
+        width: 520px;
+        max-height: 340px;
+        overflow-y: auto;
+        border: 1px solid #2ecc71;
+        border-radius: 4px;
+        padding: 12px;
+        background: #0a0a0a;
+        font-size: 11px;
+        line-height: 1.8;
       }
-      .log-ok   { color: #2ecc71; }
-      .log-warn { color: #f1c40f; }
-      .log-err  { color: #e74c3c; font-weight: bold; }
-      .log-info { color: #aaa; }
+      .log-ok {
+        color: #2ecc71;
+      }
+      .log-warn {
+        color: #f1c40f;
+      }
+      .log-err {
+        color: #e74c3c;
+        font-weight: bold;
+      }
+      .log-info {
+        color: #aaa;
+      }
 
       /* ── Auth overlay ────────────────────────────────── */
       #auth-overlay {
-        position: fixed; inset: 0; background: #0a0a0a;
-        display: flex; align-items: center; justify-content: center; z-index: 200;
+        position: fixed;
+        inset: 0;
+        background: #0a0a0a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 200;
       }
       #auth-box {
-        background: #111; border: 1px solid #1a2a3a;
-        border-radius: 8px; padding: 32px; width: 320px;
-        display: flex; flex-direction: column; gap: 12px;
+        background: #111;
+        border: 1px solid #1a2a3a;
+        border-radius: 8px;
+        padding: 32px;
+        width: 320px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
       }
-      #auth-box h2 { color: #2ecc71; font: bold 14px monospace; text-align: center; letter-spacing: 1px; }
-      #auth-form { display: flex; flex-direction: column; gap: 8px; }
+      #auth-box h2 {
+        color: #2ecc71;
+        font: bold 14px monospace;
+        text-align: center;
+        letter-spacing: 1px;
+      }
+      #auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
       #auth-box input {
-        background: #1a1a2e; border: 1px solid #1a2a3a; color: #eee;
-        font: 12px monospace; padding: 8px 10px; border-radius: 4px; outline: none; width: 100%;
+        background: #1a1a2e;
+        border: 1px solid #1a2a3a;
+        color: #eee;
+        font: 12px monospace;
+        padding: 8px 10px;
+        border-radius: 4px;
+        outline: none;
+        width: 100%;
       }
-      #auth-box input:focus { border-color: #2ecc71; }
+      #auth-box input:focus {
+        border-color: #2ecc71;
+      }
       #auth-btn {
-        background: #1a3a2a; border: 1px solid #2ecc71; color: #2ecc71;
-        font: bold 12px monospace; padding: 9px; border-radius: 4px; cursor: pointer; transition: background 0.2s;
+        background: #1a3a2a;
+        border: 1px solid #2ecc71;
+        color: #2ecc71;
+        font: bold 12px monospace;
+        padding: 9px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
       }
-      #auth-btn:hover { background: #2ecc71; color: #000; }
-      #auth-error { color: #e74c3c; font: 10px monospace; text-align: center; min-height: 14px; }
+      #auth-btn:hover {
+        background: #2ecc71;
+        color: #000;
+      }
+      #auth-error {
+        color: #e74c3c;
+        font: 10px monospace;
+        text-align: center;
+        min-height: 14px;
+      }
 
       /* ── Seleção de personagem ───────────────────────── */
       #char-overlay {
-        position: fixed; inset: 0; background: #0a0a0a;
-        display: flex; align-items: center; justify-content: center; z-index: 150;
+        position: fixed;
+        inset: 0;
+        background: #0a0a0a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 150;
       }
       #char-box {
-        background: #111; border: 1px solid #1a2a3a;
-        border-radius: 10px; padding: 28px 32px; width: 420px;
-        display: flex; flex-direction: column; gap: 16px;
+        background: #111;
+        border: 1px solid #1a2a3a;
+        border-radius: 10px;
+        padding: 28px 32px;
+        width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
       }
-      #char-box h2 { color: #2ecc71; font: bold 13px monospace; letter-spacing: 1px; text-align: center; }
-      #char-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+      #char-box h2 {
+        color: #2ecc71;
+        font: bold 13px monospace;
+        letter-spacing: 1px;
+        text-align: center;
+      }
+      #char-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 320px;
+        overflow-y: auto;
+      }
       .char-card {
-        background: #1a1a2e; border: 1px solid #1a2a3a; border-radius: 6px;
-        padding: 12px 16px; cursor: pointer; display: flex; align-items: center; gap: 14px;
-        transition: border-color 0.15s, background 0.15s;
+        background: #1a1a2e;
+        border: 1px solid #1a2a3a;
+        border-radius: 6px;
+        padding: 12px 16px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        transition:
+          border-color 0.15s,
+          background 0.15s;
       }
-      .char-card:hover, .char-card.selected { border-color: #2ecc71; background: #1a2a1a; }
+      .char-card:hover,
+      .char-card.selected {
+        border-color: #2ecc71;
+        background: #1a2a1a;
+      }
       .char-avatar {
-        width: 40px; height: 40px; background: #222; border: 1px solid #333;
-        border-radius: 4px; display: flex; align-items: center; justify-content: center;
-        font-size: 20px; flex-shrink: 0;
+        width: 40px;
+        height: 40px;
+        background: #222;
+        border: 1px solid #333;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 20px;
+        flex-shrink: 0;
       }
-      .char-info { flex: 1; }
-      .char-name  { font: bold 12px monospace; color: #ddd; }
-      .char-meta  { font: 10px monospace; color: #666; margin-top: 2px; }
-      .char-stats { font: 10px monospace; color: #2ecc71; margin-top: 2px; }
+      .char-info {
+        flex: 1;
+      }
+      .char-name {
+        font: bold 12px monospace;
+        color: #ddd;
+      }
+      .char-meta {
+        font: 10px monospace;
+        color: #666;
+        margin-top: 2px;
+      }
+      .char-stats {
+        font: 10px monospace;
+        color: #2ecc71;
+        margin-top: 2px;
+      }
       #char-play-btn {
-        background: #1a3a2a; border: 1px solid #2ecc71; color: #2ecc71;
-        font: bold 12px monospace; padding: 10px; border-radius: 5px;
-        cursor: pointer; transition: background 0.2s; display: none;
+        background: #1a3a2a;
+        border: 1px solid #2ecc71;
+        color: #2ecc71;
+        font: bold 12px monospace;
+        padding: 10px;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: background 0.2s;
+        display: none;
       }
-      #char-play-btn:hover { background: #2ecc71; color: #000; }
-      #char-play-btn.visible { display: block; }
+      #char-play-btn:hover {
+        background: #2ecc71;
+        color: #000;
+      }
+      #char-play-btn.visible {
+        display: block;
+      }
 
       /* ── Layout principal ────────────────────────────── */
       #game-wrapper {
-        display: none; flex-direction: column;
-        height: 100vh; width: 100vw; overflow: hidden;
+        display: none;
+        flex-direction: column;
+        height: 100vh;
+        width: 100vw;
+        overflow: hidden;
       }
 
       #main-area {
-        display: flex; flex-direction: row; flex: 1; overflow: hidden; min-height: 0;
+        display: flex;
+        flex-direction: row;
+        flex: 1;
+        overflow: hidden;
+        min-height: 0;
       }
 
       /* ── Painel lateral ──────────────────────────────── */
       #side-panel {
-        width: 196px; flex-shrink: 0; display: flex; flex-direction: column;
-        background: rgba(10, 12, 18, 0.97); border-right: 2px solid #1a2a3a; overflow: hidden;
+        width: 196px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        background: rgba(10, 12, 18, 0.97);
+        border-right: 2px solid #1a2a3a;
+        overflow: hidden;
       }
       #main-area.dock-right #side-panel {
-        order: 2; border-right: none; border-left: 2px solid #1a2a3a;
+        order: 2;
+        border-right: none;
+        border-left: 2px solid #1a2a3a;
       }
       #side-panel-header {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: 5px 8px; background: #0d1117;
-        border-bottom: 1px solid #1a2a3a; flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 5px 8px;
+        background: #0d1117;
+        border-bottom: 1px solid #1a2a3a;
+        flex-shrink: 0;
       }
-      #side-panel-header span { color: #2ecc71; font: bold 10px monospace; letter-spacing: 1px; }
+      #side-panel-header span {
+        color: #2ecc71;
+        font: bold 10px monospace;
+        letter-spacing: 1px;
+      }
       #dock-toggle {
-        background: none; border: 1px solid #333; color: #666; font: 11px monospace;
-        width: 22px; height: 18px; cursor: pointer; border-radius: 3px;
-        padding: 0; margin: 0; line-height: 1; transition: color 0.15s, border-color 0.15s;
+        background: none;
+        border: 1px solid #333;
+        color: #666;
+        font: 11px monospace;
+        width: 22px;
+        height: 18px;
+        cursor: pointer;
+        border-radius: 3px;
+        padding: 0;
+        margin: 0;
+        line-height: 1;
+        transition:
+          color 0.15s,
+          border-color 0.15s;
       }
-      #dock-toggle:hover { color: #2ecc71; border-color: #2ecc71; }
+      #dock-toggle:hover {
+        color: #2ecc71;
+        border-color: #2ecc71;
+      }
       #side-body {
-        flex: 1; overflow-y: auto;
-        scrollbar-width: thin; scrollbar-color: #1a2a3a #0d1117;
+        flex: 1;
+        overflow-y: auto;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
       }
       .side-section-hdr {
-        padding: 5px 8px 4px; background: #0d1117;
-        color: #2ecc71; font: bold 9px monospace; letter-spacing: 1px;
-        border-top: 1px solid #1a2a3a; border-bottom: 1px solid #1a2a3a;
-        text-transform: uppercase; cursor: pointer;
-        display: flex; justify-content: space-between; align-items: center; user-select: none;
+        padding: 5px 8px 4px;
+        background: #0d1117;
+        color: #2ecc71;
+        font: bold 9px monospace;
+        letter-spacing: 1px;
+        border-top: 1px solid #1a2a3a;
+        border-bottom: 1px solid #1a2a3a;
+        text-transform: uppercase;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        user-select: none;
       }
-      .side-section-hdr:hover { background: #111827; }
-      .side-section-hdr .sec-arrow { font-size: 8px; color: #555; transition: transform 0.2s; }
-      .side-section-hdr.collapsed .sec-arrow { transform: rotate(-90deg); }
-      .side-section-body.collapsed { display: none; }
+      .side-section-hdr:hover {
+        background: #111827;
+      }
+      .side-section-hdr .sec-arrow {
+        font-size: 8px;
+        color: #555;
+        transition: transform 0.2s;
+      }
+      .side-section-hdr.collapsed .sec-arrow {
+        transform: rotate(-90deg);
+      }
+      .side-section-body.collapsed {
+        display: none;
+      }
 
       /* Stats */
-      #stats-panel { padding: 8px; font: 11px monospace; }
-      .stat-row {
-        display: flex; justify-content: space-between; padding: 3px 0;
-        border-bottom: 1px solid #0d1117; color: #ccc;
+      #stats-panel {
+        padding: 8px;
+        font: 11px monospace;
       }
-      .stat-row span:first-child { color: #7f8c8d; }
-      .stat-row span:last-child  { color: #eee; font-weight: bold; }
+      .stat-row {
+        display: flex;
+        justify-content: space-between;
+        padding: 3px 0;
+        border-bottom: 1px solid #0d1117;
+        color: #ccc;
+      }
+      .stat-row span:first-child {
+        color: #7f8c8d;
+      }
+      .stat-row span:last-child {
+        color: #eee;
+        font-weight: bold;
+      }
 
       /* Equipamentos */
       #equip-grid {
@@ -160,143 +362,348 @@
           "ring body amulet"
           "weapon legs shield"
           ". feet .";
-        gap: 4px; padding: 8px;
+        gap: 4px;
+        padding: 8px;
       }
       .equip-slot {
-        aspect-ratio: 1; background: #111827; border: 1px solid #333;
-        border-radius: 4px; display: flex; align-items: center; justify-content: center;
-        font-size: 8px; color: #444; text-align: center; line-height: 1.2;
+        aspect-ratio: 1;
+        background: #111827;
+        border: 1px solid #333;
+        border-radius: 4px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 8px;
+        color: #444;
+        text-align: center;
+        line-height: 1.2;
       }
-      .equip-slot:hover { border-color: #555; color: #888; }
-      .equip-head   { grid-area: head; }
-      .equip-body   { grid-area: body; }
-      .equip-weapon { grid-area: weapon; }
-      .equip-shield { grid-area: shield; }
-      .equip-legs   { grid-area: legs; }
-      .equip-feet   { grid-area: feet; }
-      .equip-ring   { grid-area: ring; }
-      .equip-amulet { grid-area: amulet; }
+      .equip-slot:hover {
+        border-color: #555;
+        color: #888;
+      }
+      .equip-head {
+        grid-area: head;
+      }
+      .equip-body {
+        grid-area: body;
+      }
+      .equip-weapon {
+        grid-area: weapon;
+      }
+      .equip-shield {
+        grid-area: shield;
+      }
+      .equip-legs {
+        grid-area: legs;
+      }
+      .equip-feet {
+        grid-area: feet;
+      }
+      .equip-ring {
+        grid-area: ring;
+      }
+      .equip-amulet {
+        grid-area: amulet;
+      }
 
       /* Inventário */
       #inv-grid {
-        display: grid; grid-template-columns: repeat(5, 1fr); gap: 3px; padding: 6px;
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        gap: 3px;
+        padding: 6px;
       }
       .inv-slot {
-        aspect-ratio: 1; background: #111827; border: 1px solid #1a2a3a; border-radius: 3px;
+        aspect-ratio: 1;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        border-radius: 3px;
       }
-      .inv-slot:hover { border-color: #2ecc71; cursor: pointer; }
+      .inv-slot:hover {
+        border-color: #2ecc71;
+        cursor: pointer;
+      }
 
       /* Logout */
       #btn-logout {
-        margin: 8px; background: #1a1a1a; border: 1px solid #333; color: #666;
-        font: 10px monospace; padding: 6px; border-radius: 3px; cursor: pointer;
-        transition: color 0.2s, border-color 0.2s;
+        margin: 8px;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        color: #666;
+        font: 10px monospace;
+        padding: 6px;
+        border-radius: 3px;
+        cursor: pointer;
+        transition:
+          color 0.2s,
+          border-color 0.2s;
       }
-      #btn-logout:hover { color: #e74c3c; border-color: #e74c3c; }
+      #btn-logout:hover {
+        color: #e74c3c;
+        border-color: #e74c3c;
+      }
 
       /* ── Coluna do canvas ────────────────────────────── */
       #canvas-column {
-        flex: 1; display: flex; flex-direction: column; overflow: hidden; min-width: 0;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        min-width: 0;
       }
       #canvas-wrapper {
-        flex: 1; overflow: hidden; position: relative; background: #000;
-        display: flex; align-items: center; justify-content: center;
+        flex: 1;
+        overflow: hidden;
+        position: relative;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       canvas {
-        display: block; image-rendering: pixelated; background: #000; transform-origin: center center;
+        display: block;
+        image-rendering: pixelated;
+        background: #000;
+        transform-origin: center center;
       }
 
       /* HUD overlay */
       #ui {
-        position: absolute; top: 12px; left: 12px; pointer-events: none;
-        background: rgba(0,0,0,0.82); padding: 12px; font-size: 11px;
-        border: 1px solid #333; width: 200px; border-radius: 6px;
-        box-shadow: 2px 2px 8px rgba(0,0,0,0.5); z-index: 5;
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        pointer-events: none;
+        background: rgba(0, 0, 0, 0.82);
+        padding: 12px;
+        font-size: 11px;
+        border: 1px solid #333;
+        width: 200px;
+        border-radius: 6px;
+        box-shadow: 2px 2px 8px rgba(0, 0, 0, 0.5);
+        z-index: 5;
       }
       .stat-label {
-        font-weight: bold; margin-top: 8px; font-size: 11px;
-        display: flex; justify-content: space-between; align-items: center;
+        font-weight: bold;
+        margin-top: 8px;
+        font-size: 11px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
       }
-      .bar-bg { width: 100%; height: 12px; background: #2a2a2a; margin-top: 4px; border-radius: 3px; overflow: hidden; border: 1px solid #111; }
-      .bar-fill { height: 100%; transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-      #hp-bar-fill { background: #2ecc71; width: 100%; }
-      #mp-bar-fill { background: #3498db; width: 100%; }
-      #status-container { margin-top: 10px; display: flex; gap: 5px; flex-wrap: wrap; }
+      .bar-bg {
+        width: 100%;
+        height: 12px;
+        background: #2a2a2a;
+        margin-top: 4px;
+        border-radius: 3px;
+        overflow: hidden;
+        border: 1px solid #111;
+      }
+      .bar-fill {
+        height: 100%;
+        transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      #hp-bar-fill {
+        background: #2ecc71;
+        width: 100%;
+      }
+      #mp-bar-fill {
+        background: #3498db;
+        width: 100%;
+      }
+      #status-container {
+        margin-top: 10px;
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
       .status-badge {
-        padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: bold;
-        text-transform: uppercase; border: 1px solid rgba(255,255,255,0.2);
-        display: flex; align-items: center; gap: 4px;
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: bold;
+        text-transform: uppercase;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
-      .status-burning    { background: #e67e22; color: #fff; box-shadow: 0 0 8px #e67e22; }
-      .status-poisoned   { background: #27ae60; color: #fff; box-shadow: 0 0 8px #27ae60; }
-      .status-electrified { background: #f1c40f; color: #000; box-shadow: 0 0 8px #f1c40f; }
+      .status-burning {
+        background: #e67e22;
+        color: #fff;
+        box-shadow: 0 0 8px #e67e22;
+      }
+      .status-poisoned {
+        background: #27ae60;
+        color: #fff;
+        box-shadow: 0 0 8px #27ae60;
+      }
+      .status-electrified {
+        background: #f1c40f;
+        color: #000;
+        box-shadow: 0 0 8px #f1c40f;
+      }
 
       /* Controles de zoom */
       #zoom-controls {
-        position: absolute; bottom: 6px; right: 6px;
-        display: flex; align-items: center; gap: 4px;
-        background: rgba(0,0,0,0.72); border: 1px solid #333; border-radius: 4px;
-        padding: 2px 6px; font: 10px monospace; color: #888; z-index: 10; user-select: none;
+        position: absolute;
+        bottom: 6px;
+        right: 6px;
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        background: rgba(0, 0, 0, 0.72);
+        border: 1px solid #333;
+        border-radius: 4px;
+        padding: 2px 6px;
+        font: 10px monospace;
+        color: #888;
+        z-index: 10;
+        user-select: none;
       }
       #zoom-controls button {
-        width: 18px; height: 18px; padding: 0; background: #1a2a3a; border: 1px solid #333;
-        color: #eee; cursor: pointer; border-radius: 3px; font-size: 12px;
-        margin: 0; line-height: 1; transition: background 0.15s;
+        width: 18px;
+        height: 18px;
+        padding: 0;
+        background: #1a2a3a;
+        border: 1px solid #333;
+        color: #eee;
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 12px;
+        margin: 0;
+        line-height: 1;
+        transition: background 0.15s;
       }
-      #zoom-controls button:hover { background: #2ecc71; color: #000; }
+      #zoom-controls button:hover {
+        background: #2ecc71;
+        color: #000;
+      }
 
       /* SpellHUD dock */
       #spell-dock {
-        flex-shrink: 0; background: rgba(10,12,18,0.97);
+        flex-shrink: 0;
+        background: rgba(10, 12, 18, 0.97);
         border-top: 1px solid #1a2a3a;
-        display: flex; align-items: center; justify-content: center;
-        min-height: 64px; overflow: hidden;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 64px;
+        overflow: hidden;
       }
 
       /* ── Painel inferior ─────────────────────────────── */
       #log-panel {
-        height: 200px; flex-shrink: 0; display: flex; flex-direction: column;
-        overflow: hidden; border-top: 2px solid #1a2a3a; background: rgba(10,12,18,0.97);
+        height: 200px;
+        flex-shrink: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border-top: 2px solid #1a2a3a;
+        background: rgba(10, 12, 18, 0.97);
       }
-      .tabs { display: flex; background: #0d1117; border-bottom: 1px solid #1a2a3a; }
+      .tabs {
+        display: flex;
+        background: #0d1117;
+        border-bottom: 1px solid #1a2a3a;
+      }
       .tab-btn {
-        flex: 1; padding: 6px 0; background: none; border: none;
-        color: #2ecc71; font: bold 11px monospace; cursor: pointer; transition: background 0.2s;
+        flex: 1;
+        padding: 6px 0;
+        background: none;
+        border: none;
+        color: #2ecc71;
+        font: bold 11px monospace;
+        cursor: pointer;
+        transition: background 0.2s;
       }
-      .tab-btn.active { background: #1a2a3a; color: #fff; }
+      .tab-btn.active {
+        background: #1a2a3a;
+        color: #fff;
+      }
       .tab-content {
-        flex: 1; overflow-y: auto; padding: 0; font: 11px monospace;
-        scrollbar-width: thin; scrollbar-color: #1a2a3a #0d1117;
+        flex: 1;
+        overflow-y: auto;
+        padding: 0;
+        font: 11px monospace;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
       }
-      #tab-chat { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+      #tab-chat {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+      }
       #chat-messages {
-        flex: 1; min-height: 100px; overflow-y: auto; padding: 4px 8px; font: 11px monospace;
-        scrollbar-width: thin; scrollbar-color: #1a2a3a #0d1117;
+        flex: 1;
+        min-height: 100px;
+        overflow-y: auto;
+        padding: 4px 8px;
+        font: 11px monospace;
+        scrollbar-width: thin;
+        scrollbar-color: #1a2a3a #0d1117;
       }
       #chat-input-row {
-        display: flex; gap: 4px; padding: 4px 8px; border-top: 1px solid #1a2a3a;
-        background: #0d1117; flex-shrink: 0;
+        display: flex;
+        gap: 4px;
+        padding: 4px 8px;
+        border-top: 1px solid #1a2a3a;
+        background: #0d1117;
+        flex-shrink: 0;
       }
       #chat-input {
-        flex: 1; background: #111827; border: 1px solid #1a2a3a; color: #eee;
-        font: 11px monospace; padding: 3px 6px; border-radius: 3px; outline: none;
+        flex: 1;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        color: #eee;
+        font: 11px monospace;
+        padding: 3px 6px;
+        border-radius: 3px;
+        outline: none;
       }
-      #chat-input:focus { border-color: #2ecc71; }
+      #chat-input:focus {
+        border-color: #2ecc71;
+      }
       #chat-send {
-        width: 28px; background: #1a2a3a; border: 1px solid #2ecc71; color: #2ecc71;
-        cursor: pointer; border-radius: 3px; font-size: 12px; transition: background 0.15s;
-        padding: 0; margin: 0;
+        width: 28px;
+        background: #1a2a3a;
+        border: 1px solid #2ecc71;
+        color: #2ecc71;
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 12px;
+        transition: background 0.15s;
+        padding: 0;
+        margin: 0;
       }
-      #chat-send:hover { background: #2ecc71; color: #000; }
-      .chat-line { padding: 2px 0; line-height: 1.5; border-bottom: 1px solid #0d1117; }
-      .chat-name  { color: #f1c40f; font-weight: bold; }
-      .chat-name.gm { color: #e74c3c; }
-      .chat-text  { color: #ddd; }
-      .chat-ts    { color: #4a5568; font-size: 10px; }
+      #chat-send:hover {
+        background: #2ecc71;
+        color: #000;
+      }
+      .chat-line {
+        padding: 2px 0;
+        line-height: 1.5;
+        border-bottom: 1px solid #0d1117;
+      }
+      .chat-name {
+        color: #f1c40f;
+        font-weight: bold;
+      }
+      .chat-name.gm {
+        color: #e74c3c;
+      }
+      .chat-text {
+        color: #ddd;
+      }
+      .chat-ts {
+        color: #4a5568;
+        font-size: 10px;
+      }
     </style>
   </head>
   <body>
-
     <!-- Boot overlay -->
     <div id="boot-overlay">
       <div id="boot-title">mmoRPGGame — CLIENT</div>
@@ -304,12 +711,22 @@
     </div>
 
     <!-- Auth overlay -->
-    <div id="auth-overlay" style="display:none">
+    <div id="auth-overlay" style="display: none">
       <div id="auth-box">
         <h2>◈ mmoRPGGame</h2>
-        <form id="auth-form" onsubmit="return false">
-          <input type="email" id="auth-email" placeholder="e-mail" autocomplete="email" />
-          <input type="password" id="auth-pass" placeholder="senha" autocomplete="current-password" />
+        <form id="auth-form" onsubmit="return false;">
+          <input
+            type="email"
+            id="auth-email"
+            placeholder="e-mail"
+            autocomplete="email"
+          />
+          <input
+            type="password"
+            id="auth-pass"
+            placeholder="senha"
+            autocomplete="current-password"
+          />
           <button id="auth-btn" type="submit">Entrar</button>
         </form>
         <div id="auth-error"></div>
@@ -317,7 +734,7 @@
     </div>
 
     <!-- Seleção de personagem -->
-    <div id="char-overlay" style="display:none">
+    <div id="char-overlay" style="display: none">
       <div id="char-box">
         <h2>◈ SELECIONAR PERSONAGEM</h2>
         <div id="char-list"></div>
@@ -327,10 +744,8 @@
 
     <!-- Layout principal -->
     <div id="game-wrapper">
-
       <!-- Área central -->
       <div id="main-area">
-
         <!-- Painel lateral -->
         <div id="side-panel">
           <div id="side-panel-header">
@@ -351,13 +766,13 @@
             </div>
             <div class="side-section-body" id="sec-equip">
               <div id="equip-grid">
-                <div class="equip-slot equip-head"   title="Cabeça">Cab</div>
-                <div class="equip-slot equip-body"   title="Corpo">Corp</div>
+                <div class="equip-slot equip-head" title="Cabeça">Cab</div>
+                <div class="equip-slot equip-body" title="Corpo">Corp</div>
                 <div class="equip-slot equip-weapon" title="Arma">Arma</div>
                 <div class="equip-slot equip-shield" title="Escudo">Esc</div>
-                <div class="equip-slot equip-legs"   title="Pernas">Pern</div>
-                <div class="equip-slot equip-feet"   title="Botas">Bot</div>
-                <div class="equip-slot equip-ring"   title="Anel">Anel</div>
+                <div class="equip-slot equip-legs" title="Pernas">Pern</div>
+                <div class="equip-slot equip-feet" title="Botas">Bot</div>
+                <div class="equip-slot equip-ring" title="Anel">Anel</div>
                 <div class="equip-slot equip-amulet" title="Amuleto">Amu</div>
               </div>
             </div>
@@ -381,20 +796,48 @@
             <!-- HUD overlay -->
             <div id="ui">
               <div>
-                <span id="p-name" style="color:#2ecc71;font-weight:bold;font-size:14px;text-transform:uppercase">---</span>
+                <span
+                  id="p-name"
+                  style="
+                    color: #2ecc71;
+                    font-weight: bold;
+                    font-size: 14px;
+                    text-transform: uppercase;
+                  "
+                  >---</span
+                >
               </div>
-              <div id="pos" style="color:#aaa;margin:4px 0 8px;font-size:10px">X 0 Y 0 Z 0</div>
+              <div
+                id="pos"
+                style="color: #aaa; margin: 4px 0 8px; font-size: 10px"
+              >
+                X 0 Y 0 Z 0
+              </div>
               <div class="stat-label">
                 <span>❤ HP</span>
-                <span id="hp-vals" style="color:#2ecc71">100/100</span>
+                <span id="hp-vals" style="color: #2ecc71">100/100</span>
               </div>
-              <div class="bar-bg"><div id="hp-bar-fill" class="bar-fill"></div></div>
+              <div class="bar-bg">
+                <div id="hp-bar-fill" class="bar-fill"></div>
+              </div>
               <div class="stat-label">
                 <span>🔷 MP</span>
-                <span id="mp-vals" style="color:#3498db">0/50</span>
+                <span id="mp-vals" style="color: #3498db">0/50</span>
               </div>
-              <div class="bar-bg"><div id="mp-bar-fill" class="bar-fill"></div></div>
-              <div id="regen-info" style="font-size:9px;color:#555;margin-top:4px;text-align:right">♻ regen: —</div>
+              <div class="bar-bg">
+                <div id="mp-bar-fill" class="bar-fill"></div>
+              </div>
+              <div
+                id="regen-info"
+                style="
+                  font-size: 9px;
+                  color: #555;
+                  margin-top: 4px;
+                  text-align: right;
+                "
+              >
+                ♻ regen: —
+              </div>
               <div id="status-container"></div>
             </div>
 
@@ -420,55 +863,88 @@
         <div class="tab-content" id="tab-chat">
           <div id="chat-messages"></div>
           <div id="chat-input-row">
-            <input type="text" id="chat-input" placeholder="Falar..." maxlength="120" autocomplete="off" />
+            <input
+              type="text"
+              id="chat-input"
+              placeholder="Falar..."
+              maxlength="120"
+              autocomplete="off"
+            />
             <button id="chat-send">&#9654;</button>
           </div>
         </div>
-        <div class="tab-content" id="tab-world" style="display:none"></div>
-        <div class="tab-content" id="tab-logs" style="display:none"></div>
+        <div class="tab-content" id="tab-world" style="display: none"></div>
+        <div class="tab-content" id="tab-logs" style="display: none"></div>
       </div>
-
     </div>
 
     <script type="module">
-      import { AssetManager }        from "./src/render/assetManager.js";
+      import { AssetManager } from "./src/render/assetManager.js";
       import { AnimationController } from "./src/render/animationController.js";
-      import { loadAllSprites }      from "./src/render/assetLoader.js";
-      import { buildFloorIndex, setupCanvas } from "./src/render/mapRenderer.js";
-      import { renderWorld }         from "./src/render/worldRenderer.js";
+      import { loadAllSprites } from "./src/render/assetLoader.js";
       import {
-        RPG_ENGINE, TILE_SIZE, WORLD_SETTINGS, GROUND_Z,
+        buildFloorIndex,
+        setupCanvas,
+      } from "./src/render/mapRenderer.js";
+      import { renderWorld } from "./src/render/worldRenderer.js";
+      import {
+        RPG_ENGINE,
+        TILE_SIZE,
+        WORLD_SETTINGS,
+        GROUND_Z,
       } from "./src/core/config.js";
       import { initEventLog, pushLog } from "./src/gameplay/eventLog.js";
       import {
-        initSpellHUD, updateSpellHUDPlayer, setSpellHUDTarget, resolveSpellTargetClick,
+        initSpellHUD,
+        updateSpellHUDPlayer,
+        setSpellHUDTarget,
+        resolveSpellTargetClick,
       } from "./src/gameplay/spellHUD.js";
       import {
         findAccountByEmail,
         getPlayerData,
-        syncPlayer, removePlayer,
-        watchPlayers, watchPlayerData,
+        syncPlayer,
+        removePlayer,
+        watchPlayers,
+        watchPlayerData,
         watchServerTime,
-        syncChat, watchChat,
-        applyHpToPlayer, setPlayerActionCooldown,
+        syncChat,
+        watchChat,
+        applyHpToPlayer,
+        setPlayerActionCooldown,
         submitPlayerAction,
       } from "./src/core/db.js";
       import {
-        initWorldStore, getMonsters, getPlayers, subscribe,
+        initWorldStore,
+        getMonsters,
+        getPlayers,
+        subscribe,
       } from "./src/core/worldStore.js";
       import {
-        handleStatsChanges, initCombatEngine,
-        emitHpDeltaText, emitMissText, emitStatusText,
+        handleStatsChanges,
+        initCombatEngine,
       } from "./src/gameplay/combatEngine.js";
+      import { worldEvents, EVENT_TYPES } from "./src/core/events.js";
+      import { initCombatTextUI } from "./src/clients/shared/ui/combatText.js";
       import {
-        calculateCombatResult, calculateNewHp, isInAttackRange, COMBAT,
+        calculateCombatResult,
+        calculateNewHp,
+        isInAttackRange,
+        COMBAT,
       } from "./src/gameplay/combatLogic.js";
       import { setupMovement } from "./src/gameplay/input.js";
       import { handlePlayerSync } from "./src/gameplay/playerManager.js";
       import {
-        startRegen, stopRegen, updateRegenPlayer, getCurrentRegenRates,
+        startRegen,
+        stopRegen,
+        updateRegenPlayer,
+        getCurrentRegenRates,
       } from "./src/gameplay/regenSystem.js";
-      import { floatingTexts, monitorEffects } from "./src/gameplay/gameCore.js";
+      import {
+        floatingTexts,
+        monitorEffects,
+      } from "./src/gameplay/gameCore.js";
+      import { initSchemaRegistry } from "./src/gameplay/schemaRegistry.js";
 
       // ── Boot logger ────────────────────────────────────────────────────────
       const bootLogEl = document.getElementById("boot-log");
@@ -484,17 +960,30 @@
       // ── Tabs ───────────────────────────────────────────────────────────────
       document.querySelectorAll(".tab-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
-          document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
+          document
+            .querySelectorAll(".tab-btn")
+            .forEach((b) => b.classList.remove("active"));
           btn.classList.add("active");
           const tab = btn.dataset.tab;
-          document.querySelectorAll(".tab-content").forEach((tc) => (tc.style.display = "none"));
-          document.getElementById(`tab-${tab}`).style.display = tab === "chat" ? "flex" : "";
+          document
+            .querySelectorAll(".tab-content")
+            .forEach((tc) => (tc.style.display = "none"));
+          document.getElementById(`tab-${tab}`).style.display =
+            tab === "chat" ? "flex" : "";
         });
       });
 
       // ── Event Log ─────────────────────────────────────────────────────────
-      initEventLog({ panelId: "tab-logs", showSource: false, filters: ["all"] });
-      initEventLog({ panelId: "tab-world", showSource: true, filters: ["all", "engine", "move", "field", "spawn"] });
+      initEventLog({
+        panelId: "tab-logs",
+        showSource: false,
+        filters: ["all"],
+      });
+      initEventLog({
+        panelId: "tab-world",
+        showSource: true,
+        filters: ["all", "engine", "move", "field", "spawn"],
+      });
 
       // ── Zoom ───────────────────────────────────────────────────────────────
       let zoomFactor = parseFloat(localStorage.getItem("canvasZoom") ?? "1.0");
@@ -506,24 +995,40 @@
         localStorage.setItem("canvasZoom", String(zoomFactor));
       }
       document.getElementById("zoom-in").addEventListener("click", () => {
-        zoomFactor = Math.min(2.0, +(zoomFactor + 0.1).toFixed(1)); applyZoom();
+        zoomFactor = Math.min(2.0, +(zoomFactor + 0.1).toFixed(1));
+        applyZoom();
       });
       document.getElementById("zoom-out").addEventListener("click", () => {
-        zoomFactor = Math.max(0.5, +(zoomFactor - 0.1).toFixed(1)); applyZoom();
-      });
-      document.addEventListener("wheel", (e) => {
-        if (!e.ctrlKey) return;
-        e.preventDefault();
-        zoomFactor = Math.max(0.5, Math.min(2.0, +(zoomFactor + (e.deltaY > 0 ? -0.1 : 0.1)).toFixed(1)));
+        zoomFactor = Math.max(0.5, +(zoomFactor - 0.1).toFixed(1));
         applyZoom();
-      }, { passive: false });
+      });
+      document.addEventListener(
+        "wheel",
+        (e) => {
+          if (!e.ctrlKey) return;
+          e.preventDefault();
+          zoomFactor = Math.max(
+            0.5,
+            Math.min(
+              2.0,
+              +(zoomFactor + (e.deltaY > 0 ? -0.1 : 0.1)).toFixed(1),
+            ),
+          );
+          applyZoom();
+        },
+        { passive: false },
+      );
 
       // ── Dock toggle ────────────────────────────────────────────────────────
       const mainArea = document.getElementById("main-area");
-      if (localStorage.getItem("dockSide") === "right") mainArea.classList.add("dock-right");
+      if (localStorage.getItem("dockSide") === "right")
+        mainArea.classList.add("dock-right");
       document.getElementById("dock-toggle").addEventListener("click", () => {
         mainArea.classList.toggle("dock-right");
-        localStorage.setItem("dockSide", mainArea.classList.contains("dock-right") ? "right" : "left");
+        localStorage.setItem(
+          "dockSide",
+          mainArea.classList.contains("dock-right") ? "right" : "left",
+        );
       });
 
       // ── Inventário (20 slots vazios) ───────────────────────────────────────
@@ -558,10 +1063,16 @@
       const chatMessages = document.getElementById("chat-messages");
 
       function escapeHtml(str) {
-        return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+        return String(str)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;");
       }
       function appendChatLine(msg) {
-        const time = new Date(msg.ts ?? Date.now()).toLocaleTimeString("pt-BR", { hour12: false });
+        const time = new Date(msg.ts ?? Date.now()).toLocaleTimeString(
+          "pt-BR",
+          { hour12: false },
+        );
         const div = document.createElement("div");
         div.className = "chat-line";
         const nc = msg.isGM ? "chat-name gm" : "chat-name";
@@ -593,28 +1104,39 @@
         input.value = "";
         const id = `chat_${Date.now()}_${myPos.id}`;
         await syncChat(id, {
-          id, playerId: myPos.id, name: myPos.name,
-          msg: text, x: myPos.x, y: myPos.y, z: myPos.z ?? 7,
-          ts: Date.now(), isGM: false,
+          id,
+          playerId: myPos.id,
+          name: myPos.name,
+          msg: text,
+          x: myPos.x,
+          y: myPos.y,
+          z: myPos.z ?? 7,
+          ts: Date.now(),
+          isGM: false,
         });
       }
-      document.getElementById("chat-send").addEventListener("click", sendChatMsg);
+      document
+        .getElementById("chat-send")
+        .addEventListener("click", sendChatMsg);
       document.getElementById("chat-input").addEventListener("keydown", (e) => {
-        if (e.key === "Enter") { e.stopPropagation(); sendChatMsg(); }
+        if (e.key === "Enter") {
+          e.stopPropagation();
+          sendChatMsg();
+        }
       });
 
       // ── Estado global ──────────────────────────────────────────────────────
       const assets = new AssetManager();
-      const anim   = new AnimationController();
-      let map        = {};
-      let mapData    = {}; // map_data.json — metadados dos sprites (is_walkable, etc.)
+      const anim = new AnimationController();
+      let map = {};
+      let mapData = {}; // map_data.json — metadados dos sprites (is_walkable, etc.)
       let floorIndex = null;
-      let cam        = { x: 0, y: 0 };
+      let cam = { x: 0, y: 0 };
       let canvasW, canvasH, cols, rows;
-      let activeZ    = WORLD_SETTINGS?.spawn?.z ?? GROUND_Z;
-      let myPos      = null;
+      let activeZ = WORLD_SETTINGS?.spawn?.z ?? GROUND_Z;
+      let myPos = null;
       let onlinePlayers = {};
-      let rafId      = null;
+      let rafId = null;
       let combatInterval = null;
       let autoAttackInterval = null;
       let targetLock = null;
@@ -634,7 +1156,8 @@
       }
 
       function _normalizeAppearance(appearance, fallbackId = 128) {
-        const app = appearance && typeof appearance === "object" ? appearance : {};
+        const app =
+          appearance && typeof appearance === "object" ? appearance : {};
         return {
           ...app,
           outfitId: app.outfitId ?? fallbackId,
@@ -642,34 +1165,43 @@
         };
       }
 
-      watchServerTime((offset) => { serverOffset = offset; });
+      watchServerTime((offset) => {
+        serverOffset = offset;
+      });
       const getGameTime = () => Date.now() - serverOffset;
 
       // ── Auth ───────────────────────────────────────────────────────────────
-      const CLASS_ICONS = { guerreiro: "⚔️", mago: "🔮", arqueiro: "🏹", sacerdote: "✨" };
+      const CLASS_ICONS = {
+        guerreiro: "⚔️",
+        mago: "🔮",
+        arqueiro: "🏹",
+        sacerdote: "✨",
+      };
 
       let _currentAccount = null; // conta logada (com uuid + characters[])
 
-      document.getElementById("auth-form").addEventListener("submit", async () => {
-        const email = document.getElementById("auth-email").value.trim();
-        const pass  = document.getElementById("auth-pass").value;
-        const errEl = document.getElementById("auth-error");
-        const btn   = document.getElementById("auth-btn");
-        errEl.textContent = "";
-        btn.disabled = true;
-        try {
-          const account = await findAccountByEmail(email);
-          if (!account) throw new Error("E-mail não encontrado.");
-          if (account.pass !== pass) throw new Error("Senha incorreta.");
-          _currentAccount = account;
-          document.getElementById("auth-overlay").style.display = "none";
-          showCharacterSelect();
-        } catch (e) {
-          errEl.textContent = e.message ?? "Erro ao entrar.";
-        } finally {
-          btn.disabled = false;
-        }
-      });
+      document
+        .getElementById("auth-form")
+        .addEventListener("submit", async () => {
+          const email = document.getElementById("auth-email").value.trim();
+          const pass = document.getElementById("auth-pass").value;
+          const errEl = document.getElementById("auth-error");
+          const btn = document.getElementById("auth-btn");
+          errEl.textContent = "";
+          btn.disabled = true;
+          try {
+            const account = await findAccountByEmail(email);
+            if (!account) throw new Error("E-mail não encontrado.");
+            if (account.pass !== pass) throw new Error("Senha incorreta.");
+            _currentAccount = account;
+            document.getElementById("auth-overlay").style.display = "none";
+            showCharacterSelect();
+          } catch (e) {
+            errEl.textContent = e.message ?? "Erro ao entrar.";
+          } finally {
+            btn.disabled = false;
+          }
+        });
 
       document.getElementById("btn-logout").addEventListener("click", () => {
         _cleanup();
@@ -690,7 +1222,7 @@
         if (!account) return;
 
         const charIds = account.characters ?? [];
-        const list    = document.getElementById("char-list");
+        const list = document.getElementById("char-list");
         list.innerHTML = "";
         _selectedChar = null;
         document.getElementById("char-play-btn").classList.remove("visible");
@@ -714,7 +1246,11 @@
 
           // Busca dados do personagem em players_data/
           let data;
-          try { data = await getPlayerData(charId); } catch { data = null; }
+          try {
+            data = await getPlayerData(charId);
+          } catch {
+            data = null;
+          }
 
           if (!data) {
             // Personagem deletado — slot vazio
@@ -728,25 +1264,27 @@
             continue;
           }
 
-          const card  = document.createElement("div");
+          const card = document.createElement("div");
           card.className = "char-card";
-          const cls   = data.appearance?.class ?? data.class ?? "guerreiro";
-          const icon  = CLASS_ICONS[cls] ?? "🧙";
-          const name  = data.name ?? data.gameName ?? "Herói";
+          const cls = data.appearance?.class ?? data.class ?? "guerreiro";
+          const icon = CLASS_ICONS[cls] ?? "🧙";
+          const name = data.name ?? data.gameName ?? "Herói";
           const level = data.stats?.level ?? 1;
-          const hp    = data.stats?.maxHp ?? "?";
-          const mp    = data.stats?.maxMp ?? "?";
+          const hp = data.stats?.maxHp ?? "?";
+          const mp = data.stats?.maxMp ?? "?";
 
           card.innerHTML =
             `<div class="char-avatar">${icon}</div>` +
             `<div class="char-info">` +
-              `<div class="char-name">${name}</div>` +
-              `<div class="char-meta">Nível ${level} · ${cls.charAt(0).toUpperCase()+cls.slice(1)}</div>` +
-              `<div class="char-stats">HP ${hp} · MP ${mp}</div>` +
+            `<div class="char-name">${name}</div>` +
+            `<div class="char-meta">Nível ${level} · ${cls.charAt(0).toUpperCase() + cls.slice(1)}</div>` +
+            `<div class="char-stats">HP ${hp} · MP ${mp}</div>` +
             `</div>`;
 
           card.addEventListener("click", () => {
-            document.querySelectorAll(".char-card").forEach((c) => c.classList.remove("selected"));
+            document
+              .querySelectorAll(".char-card")
+              .forEach((c) => c.classList.remove("selected"));
             card.classList.add("selected");
             _selectedChar = { charId, data };
             document.getElementById("char-play-btn").classList.add("visible");
@@ -769,12 +1307,16 @@
       // ── Boot (carrega mapa e assets antes do login) ────────────────────────
       async function boot() {
         blog("Boot iniciado.", "ok");
-        blog(`Canvas ${RPG_ENGINE.canvasCols}×${RPG_ENGINE.canvasRows} SQMs`, "info");
+        blog(
+          `Canvas ${RPG_ENGINE.canvasCols}×${RPG_ENGINE.canvasRows} SQMs`,
+          "info",
+        );
 
         // Mapa tiles
         blog("Carregando mapa...", "info");
         try {
-          const res = await fetch("./assets_novo/map_compacto.json");
+          let res = await fetch("./assets/map_compacto.json");
+          if (!res.ok) res = await fetch("./assets_novo/map_compacto.json");
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           map = await res.json();
           floorIndex = buildFloorIndex(map);
@@ -787,7 +1329,8 @@
         // Metadados dos sprites (colisão, walkable, etc.)
         blog("Carregando map_data...", "info");
         try {
-          const res = await fetch("./assets_novo/map_data.json");
+          let res = await fetch("./assets/map_data.json");
+          if (!res.ok) res = await fetch("./assets_novo/map_data.json");
           if (res.ok) {
             mapData = await res.json();
             blog(`map_data: ${Object.keys(mapData).length} sprites`, "ok");
@@ -801,20 +1344,29 @@
         // Assets
         blog("Carregando assets...", "info");
         try {
-          await loadAllSprites(assets, "./assets_novo/");
+          await loadAllSprites(assets, "./assets/");
           const hasOutfits = assets.hasOutfitsAtlas();
-          blog(`Assets carregados. outfitsAtlas=${hasOutfits}`, hasOutfits ? "ok" : "warn");
+          blog(
+            `Assets carregados. outfitsAtlas=${hasOutfits}`,
+            hasOutfits ? "ok" : "warn",
+          );
           if (hasOutfits) {
-            blog(`outfitDef(128)=${assets.hasOutfitDefinition(128)} | outfitDef(75)=${assets.hasOutfitDefinition(75)}`, "info");
+            blog(
+              `outfitDef(128)=${assets.hasOutfitDefinition(128)} | outfitDef(75)=${assets.hasOutfitDefinition(75)}`,
+              "info",
+            );
           }
         } catch (e) {
           blog(`Falha nos assets: ${e.message}`, "warn");
         }
 
         // WorldStore
+        await initSchemaRegistry({ watch: true, remoteOnly: true });
+        blog("Schemas carregados do Firebase.", "ok");
+
         initWorldStore();
         subscribe("monsters", (data) => handleStatsChanges("monsters", data));
-        subscribe("players",  (data) => handleStatsChanges("players", data));
+        subscribe("players", (data) => handleStatsChanges("players", data));
         blog("WorldStore inicializado.", "ok");
 
         return true;
@@ -825,14 +1377,18 @@
       // playerData = objeto de players_data/<charId>
       async function startGame(charId, playerData) {
         const canvas = document.getElementById("gameCanvas");
-        const ctx    = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d");
         ctx.imageSmoothingEnabled = false;
 
-        const cv = setupCanvas(canvas, RPG_ENGINE.canvasCols, RPG_ENGINE.canvasRows);
+        const cv = setupCanvas(
+          canvas,
+          RPG_ENGINE.canvasCols,
+          RPG_ENGINE.canvasRows,
+        );
         canvasW = cv.canvasW;
         canvasH = cv.canvasH;
-        cols    = cv.cols;
-        rows    = cv.rows;
+        cols = cv.cols;
+        rows = cv.rows;
 
         const uid = charId;
         myPos = {
@@ -842,9 +1398,10 @@
           y: _numOr(playerData.y, _numOr(WORLD_SETTINGS?.spawn?.y, 960)),
           z: _numOr(playerData.z, _numOr(WORLD_SETTINGS?.spawn?.z, GROUND_Z)),
           direcao: playerData.direcao ?? "frente",
-          stats:      playerData.stats      ?? { hp: 100, maxHp: 100, mp: 0, maxMp: 50 },
+          stats: playerData.stats ?? { hp: 100, maxHp: 100, mp: 0, maxMp: 50 },
           appearance: _normalizeAppearance(playerData.appearance),
-          spells:     playerData.spells     ?? {},
+          class: playerData.appearance?.class ?? playerData.class ?? null,
+          spells: playerData.spells ?? {},
           type: "player",
         };
 
@@ -853,22 +1410,26 @@
         activeZ = myPos.z;
         applyZoom();
 
-        // CombatEngine
+        // CombatEngine (initCombatEngine mantido por compatibilidade, agora no-op)
         initCombatEngine(floatingTexts, getMonsters, getPlayers);
+        // Conecta eventos de combate ao array de textos flutuantes (FASE 1)
+        initCombatTextUI(floatingTexts);
         updateUI(myPos);
 
         // Watcher dos dados do próprio jogador
         watchPlayerData(uid, (serverData) => {
           if (!serverData) return;
-          if (serverData.name)       myPos.name = serverData.name;
-          if (serverData.stats)      myPos.stats = serverData.stats;
-          if (serverData.appearance) myPos.appearance = _normalizeAppearance(serverData.appearance);
+          if (serverData.name) myPos.name = serverData.name;
+          if (serverData.stats) myPos.stats = serverData.stats;
+          if (serverData.appearance)
+            myPos.appearance = _normalizeAppearance(serverData.appearance);
           myPos.x = _numOr(serverData.x, myPos.x);
           myPos.y = _numOr(serverData.y, myPos.y);
           myPos.z = _numOr(serverData.z, myPos.z);
-          myPos.status   = serverData.status ?? null;
+          myPos.status = serverData.status ?? null;
           myPos.lastAttack = serverData.lastAttack ?? myPos.lastAttack;
-          myPos[BASIC_ATTACK_CD_KEY] = serverData[BASIC_ATTACK_CD_KEY] ?? myPos[BASIC_ATTACK_CD_KEY];
+          myPos[BASIC_ATTACK_CD_KEY] =
+            serverData[BASIC_ATTACK_CD_KEY] ?? myPos[BASIC_ATTACK_CD_KEY];
           handleStatsChanges("players", { [uid]: myPos });
           updateRegenPlayer(myPos);
           updateSpellHUDPlayer(myPos);
@@ -885,10 +1446,11 @@
 
         // Sync inicial no Firebase (para outros clientes verem este player)
         syncPlayer(uid, {
-          ...myPos, id: uid,
+          ...myPos,
+          id: uid,
           status: myPos.status ?? null,
-          stats:  myPos.stats  ?? { hp: 100, maxHp: 100 },
-          name:   myPos.name   ?? "Herói",
+          stats: myPos.stats ?? { hp: 100, maxHp: 100 },
+          name: myPos.name ?? "Herói",
           appearance: _normalizeAppearance(myPos.appearance),
         });
 
@@ -896,24 +1458,49 @@
 
         // SpellHUD
         initSpellHUD({
-          player:       myPos,
-          playerId:     uid,
+          player: myPos,
+          playerId: uid,
           getTargetLock: () => targetLock,
-          getMonsters:  getMonsters,
+          getMonsters: getMonsters,
           getGameTime,
+          sendAction: async (action) => {
+            try {
+              await submitPlayerAction(uid, action);
+              return { ok: true };
+            } catch (error) {
+              return {
+                ok: false,
+                reason: error?.message ?? "Falha ao enviar ação",
+              };
+            }
+          },
           onCast: ({ spellId, ok, reason, damage, heal, hitCount }) => {
-            if (!ok) { pushLog("rpg", "system", `[Magia] ${reason}`); return; }
-            if (damage)   pushLog("rpg", "damage", `${myPos.name} usou magia: ${damage} de dano`);
-            if (heal)     pushLog("rpg", "heal",   `${myPos.name} se curou: +${heal} HP`);
+            if (!ok) {
+              pushLog("rpg", "system", `[Magia] ${reason}`);
+              return;
+            }
+            if (damage)
+              pushLog(
+                "rpg",
+                "damage",
+                `${myPos.name} usou magia: ${damage} de dano`,
+              );
+            if (heal)
+              pushLog("rpg", "heal", `${myPos.name} se curou: +${heal} HP`);
             if (hitCount !== undefined)
-              pushLog("rpg", "damage", `${myPos.name} atingiu ${hitCount} alvos com magia`);
+              pushLog(
+                "rpg",
+                "damage",
+                `${myPos.name} atingiu ${hitCount} alvos com magia`,
+              );
             updateSpellHUDPlayer(myPos);
           },
         });
 
         // Regeneração
         startRegen({
-          player: myPos, playerId: uid,
+          player: myPos,
+          playerId: uid,
           onRegen: () => {
             updateUI(myPos);
             updateRegenHint(getCurrentRegenRates());
@@ -923,18 +1510,23 @@
 
         // Movimento
         setupMovement(
-          myPos, map, getMonsters,
+          myPos,
+          map,
+          getMonsters,
           (nx, ny, nz, dir) => {
             if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
               myPos.oldX = myPos.x;
               myPos.oldY = myPos.y;
-              myPos.x = nx; myPos.y = ny; myPos.z = nz; myPos.direcao = dir;
+              myPos.x = nx;
+              myPos.y = ny;
+              myPos.z = nz;
+              myPos.direcao = dir;
               myPos.lastMoveTime = Date.now();
               handlePlayerSync(uid, myPos);
               pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
             }
           },
-          false,   // isAdmin
+          false, // isAdmin
           mapData, // metadados de sprites para colisão (is_walkable, etc.)
         );
 
@@ -943,15 +1535,21 @@
           e.preventDefault();
           const rect = canvas.getBoundingClientRect();
           const tx = Math.floor((e.clientX - rect.left + cam.x) / TILE_SIZE);
-          const ty = Math.floor((e.clientY - rect.top  + cam.y) / TILE_SIZE);
+          const ty = Math.floor((e.clientY - rect.top + cam.y) / TILE_SIZE);
           const target = _findMonsterAtTile(tx, ty);
           if (!target) {
-            _clearTargetLock("nenhum alvo no tile"); return;
+            _clearTargetLock("nenhum alvo no tile");
+            return;
           }
           if (targetLock?.kind === "monster" && targetLock?.id === target.id) {
-            _clearTargetLock("toggle manual"); return;
+            _clearTargetLock("toggle manual");
+            return;
           }
-          targetLock = { id: target.id, kind: "monster", name: target.name ?? target.id };
+          targetLock = {
+            id: target.id,
+            kind: "monster",
+            name: target.name ?? target.id,
+          };
           pushLog("rpg", "system", `Target lock: ${targetLock.name}`);
           setSpellHUDTarget(getMonsters()[target.id] ?? target);
         });
@@ -960,16 +1558,26 @@
         window.addEventListener("spellTargetClick", async (e) => {
           const { spellId, clientX, clientY, rect } = e.detail;
           const tx = Math.floor((clientX - rect.left + cam.x) / TILE_SIZE);
-          const ty = Math.floor((clientY - rect.top  + cam.y) / TILE_SIZE);
+          const ty = Math.floor((clientY - rect.top + cam.y) / TILE_SIZE);
           const mob = _findMonsterAtTile(tx, ty);
-          if (!mob) { pushLog("rpg", "system", "[Magia] Nenhum alvo no tile clicado"); return; }
-          targetLock = { id: mob.id, kind: "monster", name: mob.name ?? mob.id };
+          if (!mob) {
+            pushLog("rpg", "system", "[Magia] Nenhum alvo no tile clicado");
+            return;
+          }
+          targetLock = {
+            id: mob.id,
+            kind: "monster",
+            name: mob.name ?? mob.id,
+          };
           await resolveSpellTargetClick(spellId, mob);
         });
 
         // ESC cancela target
-        if (lockEscHandler) window.removeEventListener("keydown", lockEscHandler);
-        lockEscHandler = (e) => { if (e.key === "Escape") _clearTargetLock("cancelado (ESC)"); };
+        if (lockEscHandler)
+          window.removeEventListener("keydown", lockEscHandler);
+        lockEscHandler = (e) => {
+          if (e.key === "Escape") _clearTargetLock("cancelado (ESC)");
+        };
         window.addEventListener("keydown", lockEscHandler);
 
         // Auto-ataque
@@ -977,7 +1585,8 @@
           if (!targetLock || targetLock.kind !== "monster") return;
           const mob = getMonsters()?.[targetLock.id] ?? null;
           if (!mob || (mob.stats?.hp ?? 0) <= 0 || mob.dead) {
-            _clearTargetLock("alvo inválido ou morto"); return;
+            _clearTargetLock("alvo inválido ou morto");
+            return;
           }
           await _tryBasicAttack({ ...mob, id: mob.id ?? targetLock.id });
         }, AUTO_ATTACK_TICK_MS);
@@ -988,18 +1597,46 @@
           for (const type in myPos.status) {
             const effect = myPos.status[type];
             if (effect?.damage) {
-              const newHp = calculateNewHp(myPos.stats.hp, -effect.damage, myPos.stats.maxHp);
-              emitHpDeltaText("players", uid, myPos, -Math.abs(effect.damage), { color: "#ff7a2f" });
-              emitStatusText(myPos, type);
+              const newHp = calculateNewHp(
+                myPos.stats.hp,
+                -effect.damage,
+                myPos.stats.maxHp,
+              );
+              worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+                defenderId: uid,
+                defenderType: "players",
+                damage: Math.abs(effect.damage),
+                defenderX: myPos.x,
+                defenderY: myPos.y,
+                defenderZ: myPos.z ?? 7,
+                isFieldDamage: true,
+              });
+              worldEvents.emit(EVENT_TYPES.ENTITY_UPDATE, {
+                entityId: uid,
+                statusLabel: type,
+                entityX: myPos.x,
+                entityY: myPos.y,
+                entityZ: myPos.z ?? 7,
+              });
               await applyHpToPlayer(uid, newHp);
-              pushLog("rpg", "damage", `${myPos.name} sofreu ${type}: ${effect.damage} HP`);
+              pushLog(
+                "rpg",
+                "damage",
+                `${myPos.name} sofreu ${type}: ${effect.damage} HP`,
+              );
             }
           }
         }, 500);
 
         pushLog("rpg", "system", `${myPos.name} entrou no mundo`);
-        blog(`Mundo carregado. Player: x=${myPos.x} y=${myPos.y} z=${myPos.z} outfitId=${myPos.appearance?.outfitId ?? "?"}`, "ok");
-        blog(`outfitsAtlas=${assets.hasOutfitsAtlas()} | canDraw128=${assets.hasOutfitDefinition(128)}`, "info");
+        blog(
+          `Mundo carregado. Player: x=${myPos.x} y=${myPos.y} z=${myPos.z} outfitId=${myPos.appearance?.outfitId ?? "?"}`,
+          "ok",
+        );
+        blog(
+          `outfitsAtlas=${assets.hasOutfitsAtlas()} | canDraw128=${assets.hasOutfitDefinition(128)}`,
+          "info",
+        );
 
         if (rafId) cancelAnimationFrame(rafId);
         rafId = requestAnimationFrame(renderLoop);
@@ -1018,7 +1655,8 @@
       }
 
       function _clearTargetLock(reason = null) {
-        if (targetLock && reason) pushLog("rpg", "system", `Target removido: ${reason}`);
+        if (targetLock && reason)
+          pushLog("rpg", "system", `Target removido: ${reason}`);
         targetLock = null;
       }
 
@@ -1026,22 +1664,19 @@
         if (!targetMob || attackInProgress) return;
         if (!isInAttackRange(myPos, targetMob, 1.5)) return;
         const nowGame = getGameTime();
-        const lastUsed = Math.max(myPos.lastAttack ?? 0, myPos[BASIC_ATTACK_CD_KEY] ?? 0);
+        const lastUsed = Math.max(
+          myPos.lastAttack ?? 0,
+          myPos[BASIC_ATTACK_CD_KEY] ?? 0,
+        );
         if (nowGame - lastUsed < COMBAT.ATTACK_COOLDOWN_MS) return;
         attackInProgress = true;
         try {
           myPos.lastAttack = nowGame;
           myPos[BASIC_ATTACK_CD_KEY] = nowGame;
-          setPlayerActionCooldown(myPos.id, BASIC_ATTACK_CD_KEY, nowGame);
-          const combatResult = calculateCombatResult(myPos.stats, targetMob.stats);
-          if (combatResult.hit) {
-            const newHp = calculateNewHp(targetMob.stats.hp, -combatResult.damage, targetMob.stats.maxHp);
-            const diff  = newHp - (targetMob.stats?.hp ?? 0);
-            if (diff !== 0) emitHpDeltaText("monsters", targetMob.id, targetMob, diff);
-          } else {
-            emitMissText(targetMob);
-          }
-          await submitPlayerAction(myPos.id, { type: "attack", targetId: targetMob.id });
+          await submitPlayerAction(myPos.id, {
+            type: "attack",
+            targetId: targetMob.id,
+          });
         } finally {
           attackInProgress = false;
         }
@@ -1049,23 +1684,27 @@
 
       // ── UI update ──────────────────────────────────────────────────────────
       function updateUI(data) {
-        const hp    = data.stats?.hp    ?? 100;
+        const hp = data.stats?.hp ?? 100;
         const maxHp = data.stats?.maxHp ?? 100;
-        const mp    = data.stats?.mp    ?? 0;
+        const mp = data.stats?.mp ?? 0;
         const maxMp = data.stats?.maxMp ?? 50;
         const hpPct = Math.max(0, Math.min(1, hp / maxHp)) * 100;
         const mpPct = Math.max(0, Math.min(1, mp / maxMp)) * 100;
 
         if (data.name) document.getElementById("p-name").innerText = data.name;
-        document.getElementById("hp-vals").innerText = `${Math.round(hp)} / ${maxHp}`;
+        document.getElementById("hp-vals").innerText =
+          `${Math.round(hp)} / ${maxHp}`;
         const hpFill = document.getElementById("hp-bar-fill");
         hpFill.style.width = `${hpPct}%`;
-        hpFill.style.backgroundColor = hpPct > 60 ? "#2ecc71" : hpPct > 30 ? "#f1c40f" : "#e74c3c";
-        document.getElementById("mp-vals").innerText = `${Math.round(mp)} / ${maxMp}`;
+        hpFill.style.backgroundColor =
+          hpPct > 60 ? "#2ecc71" : hpPct > 30 ? "#f1c40f" : "#e74c3c";
+        document.getElementById("mp-vals").innerText =
+          `${Math.round(mp)} / ${maxMp}`;
         document.getElementById("mp-bar-fill").style.width = `${mpPct}%`;
-        document.getElementById("pos").innerText = `X ${data.x}  Y ${data.y}  Z ${data.z}`;
+        document.getElementById("pos").innerText =
+          `X ${data.x}  Y ${data.y}  Z ${data.z}`;
 
-        const sc   = document.getElementById("status-container");
+        const sc = document.getElementById("status-container");
         const icons = { burning: "🔥", poisoned: "☠", electrified: "⚡" };
         sc.innerHTML = "";
         if (data.status) {
@@ -1102,7 +1741,10 @@
       // ── Render loop ────────────────────────────────────────────────────────
       let _lastTs;
       function renderLoop(ts) {
-        if (!myPos) { rafId = requestAnimationFrame(renderLoop); return; }
+        if (!myPos) {
+          rafId = requestAnimationFrame(renderLoop);
+          return;
+        }
         if (_lastTs === undefined) _lastTs = ts;
         const delta = ts - _lastTs;
         _lastTs = ts;
@@ -1112,24 +1754,35 @@
         cam.y = Math.round(myVisual.y - canvasH / 2 + TILE_SIZE / 2);
 
         const canvas = document.getElementById("gameCanvas");
-        const ctx    = canvas.getContext("2d");
+        const ctx = canvas.getContext("2d");
 
         renderWorld({
           ctx,
-          camX: cam.x, camY: cam.y,
+          camX: cam.x,
+          camY: cam.y,
           activeZ: _numOr(myPos.z, GROUND_Z),
           animClock: ts,
           ts,
-          canvasW, canvasH, cols, rows,
-          map, assets, anim, floorIndex,
+          canvasW,
+          canvasH,
+          cols,
+          rows,
+          map,
+          assets,
+          anim,
+          floorIndex,
           roofFadeRadius: RPG_ENGINE.roofFadeRadius,
-          extraEntities: { ...getMonsters(), ...getPlayers(), [myPos.id]: myPos },
+          extraEntities: {
+            ...getMonsters(),
+            ...getPlayers(),
+            [myPos.id]: myPos,
+          },
           renderOptions: {
-            showHP:     true,
-            showName:   true,
+            showHP: true,
+            showName: true,
             renderMode: "high",
-            isPlayer:   true,
-            viewMode:   "player",
+            isPlayer: true,
+            viewMode: "player",
             entitiesOnTop: true,
             mapTallBeforeEntities: false,
             upperFloorsBeforeEntities: true,
@@ -1145,10 +1798,22 @@
       function _cleanup() {
         stopRegen();
         if (myPos) removePlayer(myPos.id);
-        if (combatInterval)     { clearInterval(combatInterval);     combatInterval = null; }
-        if (autoAttackInterval) { clearInterval(autoAttackInterval); autoAttackInterval = null; }
-        if (lockEscHandler)     { window.removeEventListener("keydown", lockEscHandler); lockEscHandler = null; }
-        if (rafId)              { cancelAnimationFrame(rafId); rafId = null; }
+        if (combatInterval) {
+          clearInterval(combatInterval);
+          combatInterval = null;
+        }
+        if (autoAttackInterval) {
+          clearInterval(autoAttackInterval);
+          autoAttackInterval = null;
+        }
+        if (lockEscHandler) {
+          window.removeEventListener("keydown", lockEscHandler);
+          lockEscHandler = null;
+        }
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
       }
 
       window.addEventListener("beforeunload", _cleanup);

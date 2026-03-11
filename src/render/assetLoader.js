@@ -8,12 +8,12 @@
 Carrega todos os assets do jogo.
 @param {AssetManager} assets — instância do gerenciador
 @param {string} basePath     — caminho base (ex: "./assets/")
-@param {string} mapPath      — caminho dos assets do mapa (ex: "./assets_novo/")
+@param {string} mapPath      — caminho dos assets do mapa (ex: "./assets/")
 */
 export async function loadAllSprites(
   assets,
   basePath = "./assets/",
-  mapPath = "./assets_novo/",
+  mapPath = "./assets/",
 ) {
   let total = 0;
 
@@ -43,8 +43,8 @@ export async function loadAllSprites(
     const candidates = [
       normalizeBasePath(basePath),
       normalizeBasePath(mapPath),
-      "./assets_novo/",
       "./assets/",
+      "./assets_novo/",
     ].filter(Boolean);
 
     const tried = new Set();

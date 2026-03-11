@@ -5,13 +5,13 @@
 // =============================================================================
 
 import { getDefaultSpellSet, getSpell } from "./spellBook.js";
-import {
-  castSpell,
-  isSpellOnCooldown,
-  getSpellCooldownRemaining,
-} from "./spellEngine.js";
+import { canCastSpell } from "./spellBook.js";
 import { isInputBlocked } from "./inputController.js";
 import { SPELL_TYPE } from "./spellBook.js";
+import {
+  getActionCooldownKey,
+  getCooldownRemainingMs,
+} from "./combatScheduler.js";
 
 // ---------------------------------------------------------------------------
 // ESTADO INTERNO
@@ -22,6 +22,7 @@ let _getTargetLock = null; // () => targetLock  — getter do rpg.html
 let _getMonsters = null; // () => monsters snapshot — getter do worldStore
 let _getGameTime = null;
 let _onCast = null;
+let _sendAction = null;
 
 /** Mapa slot (1–9) → spellId */
 const _slotMap = {};
@@ -45,6 +46,7 @@ export function initSpellHUD({
   getMonsters,
   getGameTime,
   onCast,
+  sendAction,
 }) {
   _player = player;
   _playerId = playerId;
@@ -52,6 +54,7 @@ export function initSpellHUD({
   _getMonsters = getMonsters;
   _getGameTime = getGameTime;
   _onCast = onCast ?? (() => {});
+  _sendAction = sendAction ?? null;
 
   _buildSlotMap();
   _renderHUD();
@@ -89,7 +92,8 @@ function _buildSlotMap() {
     for (const [slot, spellId] of Object.entries(savedSpells)) {
       if (getSpell(spellId)) _slotMap[String(slot)] = spellId;
     }
-    return;
+    // Só usa slots salvos se ao menos um era válido (slot numérico → spellId)
+    if (Object.keys(_slotMap).length > 0) return;
   }
   const defaults = getDefaultSpellSet(_player?.class ?? null);
   for (const { slot, spellId } of defaults) {
@@ -328,13 +332,43 @@ export async function resolveSpellTargetClick(spellId, mob) {
 // EXECUÇÃO FINAL
 // ---------------------------------------------------------------------------
 async function _executeSpell(spellId, target) {
-  const result = await castSpell({
-    player: _player,
-    playerId: _playerId,
+  const spell = getSpell(spellId);
+  if (!spell) {
+    _onCast?.({ spellId, ok: false, reason: "Magia não encontrada" });
+    return;
+  }
+
+  const permission = canCastSpell(spell, _player);
+  if (!permission.ok) {
+    _onCast?.({ spellId, ok: false, reason: permission.reason });
+    return;
+  }
+
+  if (spell.type === SPELL_TYPE.DIRECT && !target?.id) {
+    _onCast?.({ spellId, ok: false, reason: "Alvo inválido" });
+    return;
+  }
+
+  if (typeof _sendAction !== "function") {
+    _onCast?.({ spellId, ok: false, reason: "Canal de ação indisponível" });
+    return;
+  }
+
+  const result = await _sendAction({
+    type: "spell",
     spellId,
-    target,
-    getGameTime: _getGameTime,
+    targetId: target?.id ?? null,
   });
+
+  if (result?.ok !== false && result?.success !== false) {
+    const now =
+      typeof _getGameTime === "function" ? _getGameTime() : Date.now();
+    const cooldownKey = getActionCooldownKey(spellId);
+    if (_player && cooldownKey) {
+      _player.lastAttack = now;
+      _player[cooldownKey] = now;
+    }
+  }
   if (_onCast) _onCast({ spellId, ...result });
 }
 
@@ -350,14 +384,15 @@ function _startCooldownLoop() {
       const overlay = document.getElementById(`spell-cd-${slot}`);
       const cell = document.getElementById(`spell-slot-${slot}`);
       if (!overlay || !cell) continue;
+      const spell = getSpell(spellId);
+      if (!spell) continue;
 
-      const onCD = isSpellOnCooldown(_playerId, spellId);
+      const remMs = getCooldownRemainingMs(_player, spellId, spell.cooldownMs);
+      const onCD = remMs > 0;
       const isPending = _pendingSpell?.spellId === spellId;
 
       if (onCD) {
-        const rem = Math.ceil(
-          getSpellCooldownRemaining(_playerId, spellId) / 1000,
-        );
+        const rem = Math.ceil(remMs / 1000);
         overlay.style.display = "flex";
         overlay.textContent = `${rem}s`;
         if (!isPending) cell.style.borderColor = "#333";

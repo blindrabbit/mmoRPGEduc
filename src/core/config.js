@@ -30,10 +30,10 @@ export const FLOORRANGE = 0;
 
 // Assets — NOVO PIPELINE (prioritário)
 export const NEW_ASSETS = {
-  basePath: "./assets_novo/",
-  mapFile: "./assets_novo/map_compacto.json",
-  dataFile: "./assets_novo/map_data.json",
-  atlasFolder: "./assets_novo/",
+  basePath: "./assets/",
+  mapFile: "./assets/map_compacto.json",
+  dataFile: "./assets/map_data.json",
+  atlasFolder: "./assets/",
 };
 
 // Tile size
@@ -53,9 +53,9 @@ export const NEW_ASSETS = {
 // ASSETS — caminhos dos arquivos de dados (compartilhado por todas as telas)
 // ───────────────────────────────────────────────────────────────────────────
 export const ASSETS = {
-  mapFile: "../assets_novo/map_compacto.json",
-  dataFile: "../assets_novo/map_data.json",
-  atlasFile: "../assets_novo/mapa_atlas.png",
+  mapFile: "../assets/map_compacto.json",
+  dataFile: "../assets/map_data.json",
+  atlasFile: "../assets/mapa_atlas.png",
 };
 
 export const GAME_CONFIG = {

@@ -1,0 +1,57 @@
+Achei três ganhos concretos para a sua meta de escala: processar ação imediatamente no onAdd, deletar ações processadas em lote (1 write em vez de N), e fundir cooldown+gasto de MP em uma única escrita por magia. Vou aplicar essas três mudanças agora.
+
+As otimizações principais já foram aplicadas nos 3 pontos críticos do fluxo. Agora vou validar erros de compilação/import e fazer um sanity check rápido de consistência para garantir que não houve regressão.
+
+Feito
+
+Reduzi o delay dentro da arquitetura atual atacando o caminho crítico de ação→processamento→sync.
+Ações agora tentam ser processadas imediatamente no child_added, sem esperar próxima janela do tick: worldTick.js:37-59.
+Mantive fallback para fila quando a ação ainda não pode ser consumida (cooldown/range/player ainda não pronto), preservando robustez.
+Otimizações aplicadas
+
+Batch de remoção de ações processadas (1 write em vez de N): db.js:744-752 e uso em worldTick.js:84-86.
+Cooldown + gasto de MP da magia unificados em uma única escrita Firebase: db.js:654-672 e uso em actionProcessor.js:264-267.
+IDs de player_actions mais únicos para evitar colisão sob carga (spam de input no mesmo ms): db.js:708-716.
+Resultado esperado
+
+Queda forte da latência percebida de cast (principalmente picos), com menos round-trips e menos contenção por tick.
+Melhor estabilidade para cenário de 20 players + 100 monstros sem mudar seu modelo de validação canônica.
+Quer que voce faça a próxima etapa de escala (instrumentação de métricas de latência por ação + contadores de fila) para você medir TPS real em teste de carga?
+
+Implementado. Resumo das mudanças:
+
+NOVO — src/core/metrics.js
+  Módulo central de métricas em memória (zero dependência de rede):
+  • TPS real com janela deslizante de 5 s
+  • Latência por ação (avg / max / histograma em 6 buckets: <10ms …≥500ms)
+  • Profundidade da fila + pico
+  • Contadores: recebidas / processadas / expiradas / cooldown / range
+
+INSTRUMENTADO — src/gameplay/actionProcessor.js
+  • enqueueAction → recordQueueDepth após push
+  • flushQueuedActions → recordQueueDepth após flush
+  • processAction → recordActionProcessed(now − action.ts) ao consumir;
+                    recordActionRejected(reason) ao rejeitar (cooldown/range/expired)
+
+INSTRUMENTADO — src/clients/world-engine/engine/worldTick.js
+  • child_added do player_actions → recordActionReceived()
+
+NOVO — src/clients/world-engine/ui/metricsHUD.js
+  Painel DOM atualizado a cada 1 s, mostra TPS/fila/latência/rejeições.
+  Botão "Reset" zera contadores para comparar runs de carga.
+
+ATUALIZADO — worldEngine.html
+  <div id="metrics-panel"> adicionado abaixo do #hud.
+
+ATUALIZADO — src/clients/world-engine/worldEngine.css
+  Estilo do #metrics-panel + classes .mhud-* (cores ok/mid/warn).
+
+ATUALIZADO — src/clients/world-engine/boot/initializer.js
+  new MetricsHUD('metrics-panel').init() chamado em initUI().
+
+Como usar para medir TPS em teste de carga:
+  1. Abra worldEngine.html — o painel aparece no canto esquerdo abaixo do HUD.
+  2. Inicie o teste de carga (20 players + 100 monstros).
+  3. Observe TPS, filaDepth e latência em tempo real.
+  4. Clique "Reset" entre cenários para zerar os acumuladores.
+  5. Os buckets de latência mostram onde estão os picos (slow ≥ 500ms).

@@ -13,6 +13,7 @@ import { FloorHUD } from "../ui/floorHUD.js";
 import { WorldStateHUD } from "../ui/worldStateHUD.js";
 import { Tooltip } from "../ui/tooltip.js";
 import { HUDRenderer } from "../rendering/hudRenderer.js";
+import { MetricsHUD } from "../ui/metricsHUD.js";
 import { GameLoop } from "../engine/gameLoop.js";
 
 export class Initializer {
@@ -37,6 +38,7 @@ export class Initializer {
     // UI
     this.floorHUD = null;
     this.worldStateHUD = null;
+    this.metricsHUD = null;
     this.tooltip = null;
     this.hudRenderer = null;
 
@@ -153,6 +155,17 @@ export class Initializer {
       this.logger,
       NEW_ASSETS,
     );
+
+    this.firebaseSync
+      .syncModelsAndSchemasFromLocal()
+      .then(() => {
+        this.logger.ok("Schemas/modelos locais sincronizados no Firebase.");
+      })
+      .catch((e) => {
+        this.logger.warn(
+          `Falha ao sincronizar schemas/modelos no boot: ${e?.message ?? e}`,
+        );
+      });
   }
 
   initInput() {
@@ -175,11 +188,13 @@ export class Initializer {
   initUI() {
     this.floorHUD = new FloorHUD(this.worldState, this.config.FLOORRANGE);
     this.worldStateHUD = new WorldStateHUD();
+    this.metricsHUD = new MetricsHUD("metrics-panel");
     this.tooltip = new Tooltip(this.canvas, this.worldState, this.config);
     this.hudRenderer = new HUDRenderer(this.worldState);
 
     this.floorHUD.update();
     this.worldStateHUD.init();
+    this.metricsHUD.init();
   }
 
   initGameLoop() {

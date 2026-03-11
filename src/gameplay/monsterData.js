@@ -77,6 +77,7 @@ export const MONSTER_TEMPLATES = {
         damage: 5,
         cooldown: 1500,
         chance: 1,
+        effectId: 1, // ID do efeito no atlas de monstros
       },
 
       // ── Onda de fogo (área em cone, não persistente) ─────────
@@ -107,7 +108,7 @@ export const MONSTER_TEMPLATES = {
         fieldDuration: 60000,
         tickRate: 1000,
         statusType: "burning",
-        effectId: 2,
+        effectId: 16,
         effectDuration: 1200,
         shape: ["00X00", "00M00"],
       },
@@ -161,7 +162,7 @@ export const MONSTER_TEMPLATES = {
         range: 2,
         damage: 25,
         cooldown: 5000,
-        chance: 0.30,
+        chance: 0.3,
       },
     ],
   },
@@ -197,6 +198,9 @@ export const MONSTER_TEMPLATES = {
     corpseFrames: ["3100", "3101", "3102"],
     corpseDuration: 30000,
     respawnDelay: 300000, // 5 minutos
+
+    // Imunidades: lista de statusTypes/elementos que causam 0 dano e não bloqueiam rota
+    immunities: ["burning", "fire"],
 
     attacks: [
       {
@@ -254,6 +258,9 @@ export const MONSTER_TEMPLATES = {
     corpseDuration: 5000,
     respawnDelay: 20000,
 
+    // Imunidades: slime é imune ao próprio veneno
+    immunities: ["poison"],
+
     attacks: [
       {
         name: "Gosma",
@@ -269,7 +276,7 @@ export const MONSTER_TEMPLATES = {
         range: 1,
         damage: 5,
         cooldown: 8000,
-        chance: 0.40,
+        chance: 0.4,
         isPersistent: true,
         isField: true,
         fieldDuration: 10000,

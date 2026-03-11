@@ -30,18 +30,15 @@ import {
   calculateFinalDamage,
   calculateNewHp,
 } from "./combatLogic.js";
-import {
-  emitHpDeltaText,
-  emitMissText,
-  emitStatusText,
-  buildCombatEffectPayload,
-} from "./combatEngine.js";
+import { buildCombatEffectPayload } from "./combatEngine.js";
+import { worldEvents, EVENT_TYPES } from "../core/events.js";
 import {
   findTarget,
   decideMoveTo,
   decideMoveBFS,
   decideWander,
   isTileBlocked,
+  hasDangerousField,
   hasSpellLOS,
   selectAttack,
   getLookAtDirection,
@@ -51,6 +48,16 @@ import {
   buildFieldPayload,
   buildFieldEffectFallbackPayload,
 } from "./fieldPayload.js";
+import {
+  resolveStatusEffectId,
+  normalizeMonsterAttackAbility,
+  ABILITY_KIND,
+} from "./abilityCore.js";
+import { buildStatusEffectVisualPayload } from "./abilityEngine.js";
+import {
+  getMonsterAttackCooldownKey,
+  normalizeCombatCooldownMs,
+} from "./combatScheduler.js";
 import { pushLog } from "./eventLog.js";
 import {
   getMonsters,
@@ -147,8 +154,10 @@ export function applyToMob(id, obj, updates) {
 // ---------------------------------------------------------------------------
 // TICK PRINCIPAL — IA em batch com throttling
 // ---------------------------------------------------------------------------
-export async function tickMonsters() {
-  const now = Date.now();
+export async function tickMonsters({
+  now = Date.now(),
+  allowCombat = false,
+} = {}) {
   const updates = {};
   const monsters = getMonsters(); // snapshot do store
 
@@ -177,7 +186,7 @@ export async function tickMonsters() {
       });
     }
 
-    await processAI(id, mob, now, updates);
+    await processAI(id, mob, now, updates, { allowCombat });
   }
 
   // 1 única escrita para todas as mudanças do tick
@@ -248,13 +257,15 @@ export function handleMonsterDeathLocal(id, mob, updates, now) {
 // ---------------------------------------------------------------------------
 // INTELIGÊNCIA ARTIFICIAL
 // ---------------------------------------------------------------------------
-async function processAI(id, mob, now, updates) {
+async function processAI(id, mob, now, updates, { allowCombat = false } = {}) {
   const template = MONSTER_TEMPLATES[mob.species];
   if (!template) return;
 
   const behavior = { range: 7, loseAggro: 10, ...template.behavior };
   const players = getPlayers();
   const monsters = getMonsters();
+  const fields = getFields();
+  const mobImmunities = template?.immunities ?? [];
 
   const target = findTarget(mob, players, behavior.range);
 
@@ -268,7 +279,9 @@ async function processAI(id, mob, now, updates) {
     }
 
     // Seleção e execução de ataque
-    const atk = selectAttack(mob, template.attacks ?? [], dist, now);
+    const atk = allowCombat
+      ? selectAttack(mob, template.attacks ?? [], dist, now)
+      : null;
     if (window.DEBUG_AI) {
       const tag = `[AI:${mob.name ?? id}]`;
       console.log(
@@ -279,18 +292,21 @@ async function processAI(id, mob, now, updates) {
         const attacks = template.attacks ?? [];
         const byRange = attacks.filter((a) => dist <= (a.range ?? 1) + 0.5);
         const byCd = byRange.filter((a) => {
-          const k = "cd" + a.name.replace(/[^a-zA-Z0-9]/g, "");
-          return now - (mob[k] ?? 0) >= (a.cooldown ?? 1500);
+          const k = getMonsterAttackCooldownKey(a.name);
+          return (
+            now - (mob[k] ?? 0) >= normalizeCombatCooldownMs(a.cooldown ?? 0)
+          );
         });
         console.log(
           `${tag} atk=null | totalAtaques=${attacks.length} noAlcance=${byRange.length} semCooldown=${byCd.length}`,
         );
         byRange.forEach((a) => {
-          const k = "cd" + a.name.replace(/[^a-zA-Z0-9]/g, "");
+          const k = getMonsterAttackCooldownKey(a.name);
           const elapsed = now - (mob[k] ?? 0);
-          const ready = elapsed >= (a.cooldown ?? 1500);
+          const cooldownMs = normalizeCombatCooldownMs(a.cooldown ?? 0);
+          const ready = elapsed >= cooldownMs;
           console.log(
-            `${tag}   └─ "${a.name}" range=${a.range} cd=${a.cooldown}ms decorrido=${elapsed}ms pronto=${ready}`,
+            `${tag}   └─ "${a.name}" range=${a.range} cd=${cooldownMs}ms decorrido=${elapsed}ms pronto=${ready}`,
           );
         });
       } else {
@@ -332,7 +348,8 @@ async function processAI(id, mob, now, updates) {
           players,
           id,
           nexoData,
-        )
+        ) &&
+        !hasDangerousField(move.nx, move.ny, z, fields, mobImmunities)
       ) {
         // Caminho direto livre
         applyToMob(
@@ -341,7 +358,7 @@ async function processAI(id, mob, now, updates) {
           updates,
         );
       } else {
-        // Caminho bloqueado — tenta BFS para contornar paredes
+        // Caminho direto bloqueado — usa BFS ciente de entidades e campos
         const bfs = decideMoveBFS(
           mob,
           Math.round(target.x),
@@ -349,48 +366,19 @@ async function processAI(id, mob, now, updates) {
           z,
           map,
           nexoData,
+          monsters,
+          players,
+          fields,
+          mobImmunities,
         );
-        if (
-          bfs &&
-          !isTileBlocked(
-            bfs.nx,
-            bfs.ny,
-            z,
-            map,
-            monsters,
-            players,
-            id,
-            nexoData,
-          )
-        ) {
+        if (bfs) {
           applyToMob(
             id,
             { x: bfs.nx, y: bfs.ny, direcao: bfs.direcao, lastMoveTime: now },
             updates,
           );
-        } else {
-          // Sem caminho — wander para não ficar parado
-          const w = decideWander(mob);
-          if (
-            w &&
-            !isTileBlocked(
-              w.nx,
-              w.ny,
-              z,
-              map,
-              getMonsters(),
-              players,
-              id,
-              nexoData,
-            )
-          ) {
-            applyToMob(
-              id,
-              { x: w.nx, y: w.ny, direcao: w.direcao, lastMoveTime: now },
-              updates,
-            );
-          }
         }
+        // Se BFS não encontrou caminho, o monstro simplesmente aguarda o próximo tick
       }
     }
   } else {
@@ -411,7 +399,8 @@ async function processAI(id, mob, now, updates) {
           players,
           id,
           nexoData,
-        )
+        ) &&
+        !hasDangerousField(w.nx, w.ny, mob.z ?? 7, fields, mobImmunities)
       ) {
         applyToMob(
           id,
@@ -431,14 +420,19 @@ function calcStep(speed) {
 // EXECUÇÃO DE ATAQUE
 // ---------------------------------------------------------------------------
 async function executeAttack(id, mob, target, attack, updates, now) {
-  const cdKey = "cd" + attack.name.replace(/[^a-zA-Z0-9]/g, "");
+  const ability = normalizeMonsterAttackAbility(attack, {
+    monsterSpecies: mob.species,
+  });
+  if (!ability) return;
+
+  const cdKey = getMonsterAttackCooldownKey(ability.name);
 
   // Registra cooldown no store E no Firebase imediatamente
   applyToMob(id, { lastAttack: now, [cdKey]: now }, updates);
 
   // Ataque de área
-  if (attack.type === "area" && attack.shape) {
-    const coords = parseShape(attack.shape, mob.direcao);
+  if (ability.kind === ABILITY_KIND.AREA && ability.shape) {
+    const coords = parseShape(ability.shape, mob.direcao);
     const mz = mob.z ?? 7;
     const mx = Math.round(mob.x);
     const my = Math.round(mob.y);
@@ -447,7 +441,7 @@ async function executeAttack(id, mob, target, attack, updates, now) {
     if (window.DEBUG_AI) {
       const tag = `[AI:${mob.name ?? id}]`;
       console.log(
-        `${tag} executeAttack AREA "${attack.name}" | dir=${mob.direcao} tiles=${coords.length} isPersistent=${!!attack.isPersistent}`,
+        `${tag} executeAttack AREA "${ability.name}" | dir=${mob.direcao} tiles=${coords.length} isPersistent=${!!ability.visuals.isPersistent}`,
       );
       console.log(
         `${tag}   coordenadas:`,
@@ -460,12 +454,12 @@ async function executeAttack(id, mob, target, attack, updates, now) {
       const ty = my + relY;
       const tz = mz;
       const baseId = `f${tx}${ty}${tz}`;
-      const effectId = attack.isPersistent ? baseId : `${baseId}wave`;
+      const effectId = ability.visuals.isPersistent ? baseId : `${baseId}wave`;
 
       // Filtro LOS: não atravessa paredes
       if (!hasSpellLOS(mx, my, tx, ty, tz, map, nexoData)) continue;
 
-      if (attack.isPersistent) {
+      if (ability.visuals.isPersistent) {
         mergeUpdate(
           updates,
           `${PATHS.fields}/${baseId}`,
@@ -475,17 +469,37 @@ async function executeAttack(id, mob, target, attack, updates, now) {
             y: ty,
             z: tz,
             now,
-            damage: attack.damage,
-            fieldId: attack.fieldId ?? attack.effectId,
-            effectId: attack.effectId,
-            fieldDuration: attack.fieldDuration ?? 5000,
-            tickRate: attack.tickRate ?? 1000,
-            statusType: attack.statusType ?? null,
+            damage: ability.damage,
+            fieldId: ability.visuals.fieldId,
+            effectId: ability.visuals.effectId,
+            fieldDuration: ability.visuals.fieldDuration ?? 5000,
+            tickRate: ability.raw?.tickRate ?? 1000,
+            statusType: ability.statusType ?? null,
+          }),
+        );
+
+        // Espelha em world_effects para compatibilidade entre clientes.
+        mergeUpdate(
+          updates,
+          `${PATHS.effects}/${baseId}`,
+          buildFieldEffectFallbackPayload({
+            x: tx,
+            y: ty,
+            z: tz,
+            now,
+            isPersistent: true,
+            isField: true,
+            fieldDuration: ability.visuals.fieldDuration ?? 5000,
+            effectDuration: ability.visuals.effectDuration ?? 1200,
+            effectId: resolveStatusEffectId(
+              ability.statusType,
+              ability.visuals.effectId,
+            ),
           }),
         );
       }
 
-      if (!attack.isField || !attack.isPersistent) {
+      if (!ability.visuals.isField || !ability.visuals.isPersistent) {
         mergeUpdate(
           updates,
           `${PATHS.effects}/${effectId}`,
@@ -494,18 +508,21 @@ async function executeAttack(id, mob, target, attack, updates, now) {
             y: ty,
             z: tz,
             now,
-            isPersistent: attack.isPersistent,
+            isPersistent: ability.visuals.isPersistent,
             isField: false,
-            fieldDuration: attack.fieldDuration ?? 5000,
-            effectDuration: attack.effectDuration ?? 1200,
-            effectId: Number(attack.effectId ?? (attack.isPersistent ? 2 : 1)),
+            fieldDuration: ability.visuals.fieldDuration ?? 5000,
+            effectDuration: ability.visuals.effectDuration ?? 1200,
+            effectId: Number(
+              ability.visuals.effectId ??
+                (ability.visuals.isPersistent ? 2 : 1),
+            ),
           }),
         );
       }
 
       // Dano direto: ataques de área não-persistentes causam dano imediato
       // (ex: Onda de Fogo — efeito visual + dano instantâneo, sem campo residual)
-      if (!attack.isPersistent && (attack.damage ?? 0) > 0) {
+      if (!ability.visuals.isPersistent && (ability.damage ?? 0) > 0) {
         for (const pid in players) {
           const p = players[pid];
           if (!p?.stats?.hp || !p.id) continue;
@@ -514,12 +531,19 @@ async function executeAttack(id, mob, target, attack, updates, now) {
             Math.round(p.y) === ty &&
             (p.z ?? 7) === tz
           ) {
-            const newHp = Math.max(0, p.stats.hp - attack.damage);
-            emitHpDeltaText("players", pid, p, -Math.abs(attack.damage));
+            const newHp = Math.max(0, p.stats.hp - ability.damage);
+            worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+              defenderId: pid,
+              defenderType: "players",
+              damage: Math.abs(ability.damage),
+              defenderX: p.x,
+              defenderY: p.y,
+              defenderZ: p.z ?? 7,
+            });
             await applyHpToPlayer(pid, newHp);
             pushLog(
               "damage",
-              `${mob.name} causou ${attack.damage} em ${p.name ?? pid} [${attack.name}] HP ${newHp}/${p.stats.maxHp ?? "?"}`,
+              `${mob.name} causou ${ability.damage} em ${p.name ?? pid} [${ability.name}] HP ${newHp}/${p.stats.maxHp ?? "?"}`,
             );
             if (newHp <= 0) await handlePlayerDeath(p, mob);
           }
@@ -529,7 +553,7 @@ async function executeAttack(id, mob, target, attack, updates, now) {
 
     pushLog(
       "field",
-      `${mob.name} usou ${attack.name}`,
+      `${mob.name} usou ${ability.name}`,
       mob.x,
       mob.y,
       `z${mob.z ?? 7}`,
@@ -540,7 +564,7 @@ async function executeAttack(id, mob, target, attack, updates, now) {
   // Ataque físico direto
   if (window.DEBUG_AI) {
     console.log(
-      `[AI:${mob.name ?? id}] executeAttack MELEE "${attack.name}" | alvo=${target?.id} hp=${target?.stats?.hp}`,
+      `[AI:${mob.name ?? id}] executeAttack MELEE "${ability.name}" | alvo=${target?.id} hp=${target?.stats?.hp}`,
     );
     if (!target?.stats?.hp || !target?.id) {
       console.warn(
@@ -558,9 +582,16 @@ async function executeAttack(id, mob, target, attack, updates, now) {
   );
 
   if (combatResult.hit) {
-    const dmg = calculateFinalDamage(attack.damage ?? 0, combatResult);
+    const dmg = calculateFinalDamage(ability.damage ?? 0, combatResult);
     const newHp = calculateNewHp(target.stats.hp, -dmg, target.stats.maxHp);
-    emitHpDeltaText("players", target.id, target, -Math.abs(dmg));
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+      defenderId: target.id,
+      defenderType: "players",
+      damage: Math.abs(dmg),
+      defenderX: target.x,
+      defenderY: target.y,
+      defenderZ: target.z ?? 7,
+    });
     const hitFxId = `hit_${id}_${target.id}_${now}`;
     const hitFx = buildCombatEffectPayload("attackHit", {
       id: hitFxId,
@@ -578,12 +609,16 @@ async function executeAttack(id, mob, target, attack, updates, now) {
 
     pushLog(
       "damage",
-      `${mob.name} atacou ${target.name ?? target.id}: ${dmg} HP [${attack.name}] HP ${newHp}/${target.stats.maxHp ?? "?"}`,
+      `${mob.name} atacou ${target.name ?? target.id}: ${dmg} HP [${ability.name}] HP ${newHp}/${target.stats.maxHp ?? "?"}`,
     );
 
     if (newHp <= 0) await handlePlayerDeath(target, mob);
   } else {
-    emitMissText(target);
+    worldEvents.emit(EVENT_TYPES.COMBAT_MISS, {
+      defenderX: target.x,
+      defenderY: target.y,
+      defenderZ: target.z ?? 7,
+    });
     const missFxId = `miss_${id}_${target.id}_${now}`;
     const missFx = buildCombatEffectPayload("attackMiss", {
       id: missFxId,
@@ -597,7 +632,7 @@ async function executeAttack(id, mob, target, attack, updates, now) {
     }
     pushLog(
       "damage",
-      `${mob.name} errou ${target.name ?? target.id} [${attack.name}] MISS`,
+      `${mob.name} errou ${target.name ?? target.id} [${ability.name}] MISS`,
     );
   }
 }
@@ -725,11 +760,40 @@ export async function tickFields() {
       ) {
         const dmg = field.damage ?? 0;
         const newHp = Math.max(0, p.stats.hp - dmg);
-        emitHpDeltaText("players", pid, p, -Math.abs(dmg), {
-          color: "#ff7a2f",
+        worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+          defenderId: pid,
+          defenderType: "players",
+          damage: Math.abs(dmg),
+          defenderX: p.x,
+          defenderY: p.y,
+          defenderZ: p.z ?? 7,
+          isFieldDamage: true,
         });
         if (field.statusType) {
-          emitStatusText(p, field.statusType);
+          worldEvents.emit(EVENT_TYPES.ENTITY_UPDATE, {
+            entityId: pid,
+            statusLabel: field.statusType,
+            entityX: p.x,
+            entityY: p.y,
+            entityZ: p.z ?? 7,
+          });
+
+          // Persistir um efeito curto no alvo para todos os clientes (RPG/worldEngine).
+          const statusEffectId = resolveStatusEffectId(
+            field.statusType,
+            field.effectId,
+          );
+          const statusFx = buildStatusEffectVisualPayload({
+            statusType: field.statusType,
+            targetId: pid,
+            x: Number(p.x ?? field.x ?? 0),
+            y: Number(p.y ?? field.y ?? 0),
+            z: Number(p.z ?? field.z ?? 7),
+            now,
+            fallbackEffectId: statusEffectId,
+            duration: 1200,
+          });
+          updates[`${PATHS.effects}/${statusFx.id}`] = statusFx.payload;
         }
         await applyHpToPlayer(pid, newHp);
         pushLog(
@@ -743,6 +807,49 @@ export async function tickFields() {
             y: field.y,
             z: field.z ?? 7,
           });
+      }
+    }
+
+    // Aplica dano a monstros na mesma posição
+    const monsters = getMonsters();
+    for (const mid in monsters) {
+      const mob = monsters[mid];
+      if (!mob || mob.dead || !(mob.stats?.hp > 0)) continue;
+      if (
+        Math.round(mob.x) !== field.x ||
+        Math.round(mob.y) !== field.y ||
+        (mob.z ?? 7) !== (field.z ?? 7)
+      )
+        continue;
+
+      // Verifica imunidade do monstro ao tipo/elemento do campo
+      const tmpl = MONSTER_TEMPLATES[mob.species];
+      const immunities = tmpl?.immunities ?? [];
+      const fieldElement = field.statusType ?? field.element ?? null;
+      if (fieldElement && immunities.includes(fieldElement)) continue;
+
+      const dmg = field.damage ?? 0;
+      if (dmg <= 0) continue;
+
+      const newHp = Math.max(0, mob.stats.hp - dmg);
+      worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+        defenderId: mid,
+        defenderType: "monsters",
+        damage: dmg,
+        defenderX: mob.x,
+        defenderY: mob.y,
+        defenderZ: mob.z ?? 7,
+        isFieldDamage: true,
+      });
+      // Persiste HP no Firebase (via batch) e atualiza store local
+      updates[`${PATHS.monsters}/${mid}/stats/hp`] = newHp;
+      applyMonstersLocal(mid, { stats: { ...mob.stats, hp: newHp } });
+      pushLog(
+        "damage",
+        `Campo causou ${dmg} de dano em ${mob.name ?? mid} HP ${newHp}/${mob.stats.maxHp ?? "?"}`,
+      );
+      if (newHp <= 0) {
+        handleMonsterDeathLocal(mid, mob, updates, now);
       }
     }
 

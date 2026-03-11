@@ -20,7 +20,7 @@ export class AssetManager {
   // ═══════════════════════════════════════════════════════════════
   // NOVO: Carregar Assets do Mapa (Pipeline Python)
   // ═══════════════════════════════════════════════════════════════
-  async loadMapAssets(basePath = "./assets_novo/") {
+  async loadMapAssets(basePath = "./assets/") {
     try {
       // 1. Carregar map_data.json (metadata completa)
       const dataRes = await fetch(`${basePath}map_data.json`);
@@ -244,6 +244,93 @@ export class AssetManager {
     }
   }
 
+  _clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  _hashString(value) {
+    const text = String(value ?? "");
+    let hash = 0;
+    for (let index = 0; index < text.length; index++) {
+      hash = (hash * 31 + text.charCodeAt(index)) >>> 0;
+    }
+    return hash;
+  }
+
+  _getFieldStagePhaseIndex(
+    nativeFrameCount,
+    elapsedMs,
+    context = {},
+    phases = [],
+  ) {
+    const frameCount = Math.max(1, Number(nativeFrameCount ?? 1));
+    if (frameCount === 1) return 0;
+
+    const phaseDurations = Array.isArray(phases)
+      ? phases
+          .map((phase) => Number(phase?.d_min ?? phase?.d_max ?? 0))
+          .filter((value) => value > 0)
+      : [];
+    const atlasDuration = phaseDurations.reduce((sum, value) => sum + value, 0);
+    const explicitDuration = Number(
+      context.fieldDuration ?? context.totalDuration ?? 0,
+    );
+    const totalDuration = Math.max(
+      1,
+      explicitDuration || atlasDuration || frameCount * 120,
+    );
+    const elapsed = Math.max(0, Number(elapsedMs ?? 0));
+    const progress = this._clamp(elapsed / totalDuration, 0, 0.999999);
+
+    // Regra visual: 3 tamanhos ao longo da vida do field.
+    // Dentro de cada tamanho, alterna entre 2 frames do atlas.
+    const stageIndex = progress < 1 / 3 ? 0 : progress < 2 / 3 ? 1 : 2;
+    const stageFramePairs = [
+      [0, Math.min(1, frameCount - 1)],
+      [
+        Math.min(Math.max(1, Math.floor((frameCount - 1) / 2)), frameCount - 1),
+        Math.min(
+          Math.max(2, Math.floor((frameCount - 1) / 2) + 1),
+          frameCount - 1,
+        ),
+      ],
+      [Math.max(0, frameCount - 2), frameCount - 1],
+    ];
+
+    const pair = stageFramePairs[
+      Math.min(stageIndex, stageFramePairs.length - 1)
+    ] ?? [0, 0];
+    const uniquePair = pair[0] === pair[1] ? [pair[0]] : pair;
+
+    const stageStartRatio = stageIndex / 3;
+    const stageStartTime = totalDuration * stageStartRatio;
+    const localElapsed = Math.max(0, elapsed - stageStartTime);
+
+    const phaseDuration = Math.max(
+      60,
+      Number(
+        phaseDurations[uniquePair[0]] ??
+          phaseDurations[uniquePair[1] ?? uniquePair[0]] ??
+          120,
+      ),
+    );
+
+    if (uniquePair.length === 1) return uniquePair[0];
+
+    const pairIndex =
+      Math.floor(localElapsed / phaseDuration) % uniquePair.length;
+    return uniquePair[pairIndex] ?? uniquePair[0];
+  }
+
+  _getFieldVariantIndex(spritesPerFrame, context = {}) {
+    const variants = Math.max(1, Number(spritesPerFrame ?? 1));
+    if (variants === 1) return 0;
+    const seed =
+      context.variantSeed ??
+      `${context.id ?? "field"}:${context.x ?? 0}:${context.y ?? 0}:${context.z ?? 7}`;
+    return this._hashString(seed) % variants;
+  }
+
   // ═══════════════════════════════════════════════════════════════
   // OUTFITS — Sprites de jogadores (novo formato de atlas)
   // Retorna array de { sheet, info: {x,y,w,h}, colOffset }
@@ -267,15 +354,15 @@ export class AssetManager {
 
     // Seleciona grupo: group_id=1 (walking) se em movimento, senão group_id=0 (idle)
     const groups = outfit.groups ?? [];
-    const walkGroup  = groups.find((g) => g.group_id === 1);
-    const idleGroup  = groups.find((g) => g.group_id === 0) ?? groups[0];
-    const group = (isWalking && walkGroup) ? walkGroup : idleGroup;
+    const walkGroup = groups.find((g) => g.group_id === 1);
+    const idleGroup = groups.find((g) => g.group_id === 0) ?? groups[0];
+    const group = isWalking && walkGroup ? walkGroup : idleGroup;
     if (!group) return [];
 
     const pat = group.pattern ?? {};
-    const W = pat.width  ?? 4; // direções
+    const W = pat.width ?? 4; // direções
     const H = pat.height ?? 3; // passos (frames de caminhada)
-    const D = pat.depth  ?? 2; // profundidade (coluna esq/dir)
+    const D = pat.depth ?? 2; // profundidade (coluna esq/dir)
     const L = pat.layers ?? 2; // camadas de cor
 
     const nFrames = group.n_frames ?? 1;
@@ -299,7 +386,7 @@ export class AssetManager {
     const step = 0;
 
     const perFrame = H * D * W * L;
-    const baseLocalIdx = (((step * D + depthIdx) * W + dirIdx) * L + baseLayer);
+    const baseLocalIdx = ((step * D + depthIdx) * W + dirIdx) * L + baseLayer;
     const baseIdx = frame * perFrame + baseLocalIdx;
 
     const spriteId = ids[baseIdx];
@@ -308,19 +395,21 @@ export class AssetManager {
     const spriteMeta = this.outfitsAtlas.data?.sprites?.[String(spriteId)];
     if (!spriteMeta) return [];
 
-    const out = [{
-      sheet: this.outfitsAtlas.image,
-      info: {
-        x: spriteMeta.x,
-        y: spriteMeta.y,
-        w: spriteMeta.w,
-        h: spriteMeta.h,
+    const out = [
+      {
+        sheet: this.outfitsAtlas.image,
+        info: {
+          x: spriteMeta.x,
+          y: spriteMeta.y,
+          w: spriteMeta.w,
+          h: spriteMeta.h,
+        },
+        colOffset: 0,
       },
-      colOffset: 0,
-    }];
+    ];
 
     if (includeTintMask && L > 1) {
-      const maskLocalIdx = (((step * D + depthIdx) * W + dirIdx) * L + maskLayer);
+      const maskLocalIdx = ((step * D + depthIdx) * W + dirIdx) * L + maskLayer;
       const maskIdx = frame * perFrame + maskLocalIdx;
       const maskSpriteId = ids[maskIdx];
       const maskMeta =
@@ -343,6 +432,184 @@ export class AssetManager {
     }
 
     return out;
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // EFFECTS — Sprites de efeitos de magia/combate (effects_atlas)
+  // Retorna { sheet, info: {x,y,w,h} } para o frame atual
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Retorna o sprite do frame correto para um efeito animado.
+   * @param {number} effectId - ID do efeito (chave em effects_data.json)
+   * @param {number} elapsedMs - Tempo decorrido desde startTime do efeito
+   * @returns {{ sheet: HTMLImageElement, info: {x,y,w,h} } | null}
+   */
+  getEffectSprite(effectId, elapsedMs = 0) {
+    if (!this.hasEffectsAtlas()) return null;
+    const def = this.effectsAtlas.data?.[String(effectId)];
+    if (!def?.variants) return null;
+
+    const phases = def.animation?.phases ?? [];
+    const nFrames = def.n_frames ?? Object.keys(def.variants).length;
+    let frame = nFrames - 1; // default: último frame (animação encerrada)
+
+    if (phases.length > 0) {
+      let t = 0;
+      for (let i = 0; i < phases.length; i++) {
+        t += phases[i].d_min ?? 100;
+        if (elapsedMs < t) {
+          frame = i;
+          break;
+        }
+      }
+    } else if (nFrames > 0) {
+      // Sem fases: distribui uniformemente a cada 100ms
+      frame = Math.min(nFrames - 1, Math.floor(elapsedMs / 100));
+    }
+
+    const variant = def.variants[String(frame)] ?? def.variants["0"];
+    if (!variant) return null;
+
+    return {
+      sheet: this.effectsAtlas.image,
+      info: { x: variant.x, y: variant.y, w: variant.w, h: variant.h },
+    };
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // FIELDS — Sprites de campos (veneno, fogo no chão, etc.)
+  // Retorna array de { sheet, info: {x,y,w,h} }
+  // ═══════════════════════════════════════════════════════════════
+
+  /**
+   * Retorna sprites para um campo (field) de magia.
+   * @param {number} fieldSpriteId - sprite_id no fields_data.json
+   * @param {number} [elapsedMs]
+   * @param {Object} [context]
+   * @returns {Array<{ sheet: HTMLImageElement, info: {x,y,w,h} }>}
+   */
+  getFieldSprites(fieldSpriteId, elapsedMs = 0, context = {}) {
+    if (!this.hasFieldsAtlas()) return [];
+    const atlasData = this.fieldsAtlas.data ?? {};
+    const fieldDef = atlasData.fields?.[String(fieldSpriteId)];
+
+    if (fieldDef?.groups?.length) {
+      const group =
+        fieldDef.groups.find(
+          (entry) =>
+            Array.isArray(entry?.sprite_ids) && entry.sprite_ids.length > 0,
+        ) ?? fieldDef.groups[0];
+
+      const pattern = group?.pattern ?? {};
+      const spritesPerFrame = Math.max(
+        1,
+        Number(
+          group?.sprites_per_frame ??
+            (pattern.width ?? 1) *
+              (pattern.height ?? 1) *
+              (pattern.depth ?? 1) *
+              (pattern.layers ?? 1),
+        ),
+      );
+      const spriteIds = Array.isArray(group?.sprite_ids)
+        ? group.sprite_ids
+        : [];
+      const nativeFrameCount = Math.max(
+        1,
+        Number(
+          group?.n_frames ??
+            Math.floor(spriteIds.length / spritesPerFrame) ??
+            1,
+        ),
+      );
+      const phaseIndex = this._getFieldStagePhaseIndex(
+        nativeFrameCount,
+        elapsedMs,
+        context,
+        group?.animation?.phases,
+      );
+      const variantIndex = this._getFieldVariantIndex(spritesPerFrame, context);
+      const spriteId = spriteIds[phaseIndex * spritesPerFrame + variantIndex];
+      const spriteMeta =
+        spriteId != null ? atlasData.sprites?.[String(spriteId)] : null;
+
+      if (spriteMeta) {
+        return [
+          {
+            sheet: this.fieldsAtlas.image,
+            info: {
+              x: spriteMeta.x,
+              y: spriteMeta.y,
+              w: spriteMeta.w,
+              h: spriteMeta.h,
+            },
+          },
+        ];
+      }
+    }
+
+    const sprite = atlasData.sprites?.[String(fieldSpriteId)];
+    if (!sprite) return [];
+    return [
+      {
+        sheet: this.fieldsAtlas.image,
+        info: { x: sprite.x, y: sprite.y, w: sprite.w, h: sprite.h },
+      },
+    ];
+  }
+
+  /**
+   * Retorna um sprite pelo ID numérico do item.
+   * Tenta primeiro o pipeline novo (mapAtlasLookup) e depois os sprites legados.
+   *
+   * @param {number} itemId
+   * @returns {{ sheet: HTMLImageElement, info: {x,y,w,h} } | null}
+   */
+  getSpriteById(itemId) {
+    // 1. Pipeline novo (map atlas)
+    const mapSprite = this.getMapSprite(itemId);
+    if (mapSprite?.sheet) {
+      return {
+        sheet: mapSprite.sheet,
+        info: {
+          x: mapSprite.x,
+          y: mapSprite.y,
+          w: mapSprite.w,
+          h: mapSprite.h,
+        },
+      };
+    }
+    // 2. Sprites legados carregados via loadSpriteSheet
+    const legacy = this.sprites.get(Number(itemId));
+    if (legacy?.sheet) {
+      return {
+        sheet: legacy.sheet,
+        info: { x: legacy.x, y: legacy.y, w: legacy.w, h: legacy.h },
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Retorna um sprite de um pack legado (monstros, outfits antigos).
+   * Compatível com packs carregados via loadPack() — formato TexturePacker.
+   *
+   * @param {string} packName - Nome do pack (ex: "monstros_01")
+   * @param {string} filename - Nome do frame (ex: "123.png")
+   * @returns {{ sheet: HTMLImageElement, info: {x,y,w,h} } | null}
+   */
+  getSprite(packName, filename) {
+    const p = this.packs[packName];
+    if (!p?.data?.frames) return null;
+    const frame = p.data.frames[filename];
+    if (!frame) return null;
+    // Suporta tanto { frame: {x,y,w,h} } (TexturePacker) quanto {x,y,w,h} direto
+    const f = frame.frame ?? frame;
+    return {
+      sheet: p.image,
+      info: { x: f.x, y: f.y, w: f.w, h: f.h },
+    };
   }
 
   hasPack(name) {
@@ -379,6 +646,9 @@ export class AssetManager {
   }
   get mapItemCount() {
     return Object.keys(this.mapData).length;
+  }
+  get atlasCount() {
+    return (this.mapAtlases?.length ?? 0) + Object.keys(this.packs).length;
   }
 
   _loadImage(url) {

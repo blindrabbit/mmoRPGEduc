@@ -1,4 +1,7 @@
 // =============================================================================
+
+import { normalizeSpellAbility } from "./abilityCore.js";
+import { normalizeCombatCooldownMs } from "./combatScheduler.js";
 // spellBook.js — mmoRPGGame
 // Camada 3: Catálogo canônico de todas as magias do jogo.
 // REGRA: ZERO imports de Firebase, worldStore ou DOM.
@@ -156,6 +159,7 @@ export const SPELLS = {
     classes: ["mago"],
     damage: { base: 40, variance: 0.25 },
     aoeRadius: 3, // atinge monstros em 3 tiles de raio
+    fieldId: 2118,
     effectId: 2, // efeito de campo de fogo (field)
     selfEffectId: null,
     effectDuration: 1380, // sprite id 2 = 1280ms + 100ms margem
@@ -174,8 +178,8 @@ export const SPELLS = {
     classes: ["cavaleiro"],
     damage: { base: 35, variance: 0.2 },
     aoeRadius: 2,
-    effectId: 25, // efeito de tremor (sprite id 25, 11 frames × 100ms)
-    selfEffectId: 25,
+    effectId: 4, // efeito de tremor (sprite id 25, 11 frames × 100ms)
+    selfEffectId: 4,
     effectDuration: 1200, // 11 frames × 100ms = 1100ms + 100ms margem
     description: "Abala o solo causando dano em área próxima.",
   },
@@ -193,7 +197,7 @@ export const SPELLS = {
     duration: 8000, // buff dura 8s
     statMod: { stat: "def", delta: +15 },
     effectId: null,
-    selfEffectId: 27,
+    selfEffectId: 13,
     effectDuration: 900,
     description: "Envolve o personagem em energia protetora (+15 DEF por 8s).",
   },
@@ -257,7 +261,12 @@ export const SPELL_SETS = {
  * @returns {object|null}
  */
 export function getSpell(spellId) {
-  return SPELLS[spellId] ?? null;
+  const spell = SPELLS[spellId] ?? null;
+  if (!spell) return null;
+  return {
+    ...spell,
+    cooldownMs: normalizeCombatCooldownMs(spell.cooldownMs),
+  };
 }
 
 /**
@@ -340,4 +349,14 @@ export function calcSpellResult(spell, casterStats, targetStats = null) {
   }
 
   return { damage, heal };
+}
+
+/**
+ * Retorna todas as magias normalizadas no schema unificado de abilities.
+ * Útil para sistemas que tratam habilidades de player/monstro de forma única.
+ */
+export function getNormalizedSpellAbilities() {
+  return Object.values(SPELLS)
+    .map((spell) => normalizeSpellAbility(spell))
+    .filter(Boolean);
 }

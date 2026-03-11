@@ -3,6 +3,13 @@
 // Camada 1: Único ponto de acesso ao Firebase Realtime Database.
 // =============================================================================
 
+// =============================================================================
+// db.js — mmoRPGEduc (ATUALIZADO)
+//
+// ADIÇÕES: Exports compatíveis com NetworkInterface
+// Mantém compatibilidade com código legado
+// =============================================================================
+
 import {
   dbGet,
   dbSet,
@@ -93,10 +100,13 @@ export const PATHS = {
     `accounts/${userOrUuid.includes("@") ? encodeUser(userOrUuid) : userOrUuid}`,
   serverTime: ".info/serverTimeOffset",
   monsterTemplates: "monster_templates",
-  actions:           "player_actions",
-  action:            (id) => safePath("player_actions", id),
-  chat:              "world_chat",
-  chatMsg:           (id) => safePath("world_chat", id),
+  gameSchemas: "game_schemas",
+  entitySchemas: "game_schemas/entities",
+  abilitySchemas: "game_schemas/abilities",
+  actions: "player_actions",
+  action: (id) => safePath("player_actions", id),
+  chat: "world_chat",
+  chatMsg: (id) => safePath("world_chat", id),
 };
 
 const WRITE_GUARD = {
@@ -114,12 +124,7 @@ const WRITE_GUARD = {
   maxTickRate: 60_000,
 };
 
-const VALID_DIRECTIONS = new Set([
-  "frente",
-  "costas",
-  "lado",
-  "lado-esquerdo",
-]);
+const VALID_DIRECTIONS = new Set(["frente", "costas", "lado", "lado-esquerdo"]);
 
 function toNumberOrNull(value) {
   const parsed = Number(value);
@@ -167,12 +172,14 @@ function enforceEntityBounds(entity, type) {
 
     if (maxHp != null) stats.maxHp = clamp(maxHp, 1, WRITE_GUARD.maxHp);
     if (hp != null) {
-      const hpCap = stats.maxHp != null ? Number(stats.maxHp) : WRITE_GUARD.maxHp;
+      const hpCap =
+        stats.maxHp != null ? Number(stats.maxHp) : WRITE_GUARD.maxHp;
       stats.hp = clamp(hp, WRITE_GUARD.minHp, hpCap);
     }
     if (maxMp != null) stats.maxMp = clamp(maxMp, 0, WRITE_GUARD.maxHp);
     if (mp != null) {
-      const mpCap = stats.maxMp != null ? Number(stats.maxMp) : WRITE_GUARD.maxHp;
+      const mpCap =
+        stats.maxMp != null ? Number(stats.maxMp) : WRITE_GUARD.maxHp;
       stats.mp = clamp(mp, 0, mpCap);
     }
 
@@ -252,14 +259,22 @@ function sanitizePrimitivePath(path, value) {
     return clamp(numericField, WRITE_GUARD.minHp, WRITE_GUARD.maxHp);
   }
 
-  if (/\/(lastMoveTime|lastAttack|lastAiTick|startTime|expiry|lastTick)$/.test(path)) {
+  if (
+    /\/(lastMoveTime|lastAttack|lastAiTick|startTime|expiry|lastTick)$/.test(
+      path,
+    )
+  ) {
     if (numericField == null) return undefined;
     return Math.max(0, Math.round(numericField));
   }
 
   if (/\/(effectDuration|fieldDuration)$/.test(path)) {
     if (numericField == null) return undefined;
-    return clamp(numericField, WRITE_GUARD.minDuration, WRITE_GUARD.maxDuration);
+    return clamp(
+      numericField,
+      WRITE_GUARD.minDuration,
+      WRITE_GUARD.maxDuration,
+    );
   }
 
   if (/\/tickRate$/.test(path)) {
@@ -283,7 +298,10 @@ function sanitizeObjectPath(path, value) {
   if (value === null) return null;
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
 
-  if (/^online_players\/[^/]+$/.test(path) || /^players_data\/[^/]+$/.test(path)) {
+  if (
+    /^online_players\/[^/]+$/.test(path) ||
+    /^players_data\/[^/]+$/.test(path)
+  ) {
     const id = path.split("/")[1];
     return enforceEntityBounds(makePlayer({ id, ...value }), "player");
   }
@@ -343,7 +361,9 @@ export const dbUpdate = (updates) => {
   const clean = sanitizeUpdatesMap(updates);
   const keys = Object.keys(clean);
   if (!keys.length) {
-    console.warn("[db] dbUpdate bloqueado: nenhuma operação válida após validação");
+    console.warn(
+      "[db] dbUpdate bloqueado: nenhuma operação válida após validação",
+    );
     return Promise.resolve();
   }
   return _dbUpdateClient(clean);
@@ -498,6 +518,9 @@ export const syncMonster = (id, data) => syncEntity(PATHS.monsters, id, data);
 export const syncPlayer = (id, data) => syncEntity(PATHS.players, id, data);
 export const syncEffect = (id, data) => syncEntity(PATHS.effects, id, data);
 export const syncField = (id, data) => syncEntity(PATHS.fields, id, data);
+// Aliases usados por spellEngine.js
+export const syncFieldEffect = syncField;
+export const removeFieldEffect = (id) => removeEntity(PATHS.fields, id);
 
 export const removePlayer = (id) => removeEntity(PATHS.players, id);
 export const removeMonster = (id) => removeEntity(PATHS.monsters, id);
@@ -513,6 +536,16 @@ export const watchMonsterTemplates = (cb) =>
 export const getMonsterTemplates = () => dbGet(PATHS.monsterTemplates);
 export const setMonsterTemplates = (data) =>
   dbSet(PATHS.monsterTemplates, data);
+
+// ---------------------------------------------------------------------------
+// GAME SCHEMAS — configuração canônica de leitura (players/monsters/abilities)
+// ---------------------------------------------------------------------------
+export const watchEntitySchemas = (cb) => dbWatch(PATHS.entitySchemas, cb);
+export const watchAbilitySchemas = (cb) => dbWatch(PATHS.abilitySchemas, cb);
+export const getEntitySchemas = () => dbGet(PATHS.entitySchemas);
+export const getAbilitySchemas = () => dbGet(PATHS.abilitySchemas);
+export const setEntitySchemas = (data) => dbSet(PATHS.entitySchemas, data);
+export const setAbilitySchemas = (data) => dbSet(PATHS.abilitySchemas, data);
 
 export const kickAllPlayers = () => dbSet(PATHS.players, null);
 
@@ -614,7 +647,27 @@ export function respawnPlayer(id, { x, y, z, hp }) {
 export function applyMpToPlayer(id, newMp) {
   return batchWrite({
     [`${PATHS.playerDataStats(id)}/mp`]: Number(newMp),
-    [`${PATHS.playerStats(id)}/mp`]:     Number(newMp),
+    [`${PATHS.playerStats(id)}/mp`]: Number(newMp),
+  });
+}
+
+export function spendMpAndSetCooldown(
+  id,
+  actionKey,
+  newMp,
+  timestamp = Date.now(),
+) {
+  const cdKey = normalizeCooldownKey(actionKey);
+  if (!cdKey) return Promise.resolve();
+
+  const ts = Math.max(0, Math.round(Number(timestamp) || Date.now()));
+  return batchWrite({
+    [`${PATHS.player(id)}/${cdKey}`]: ts,
+    [`${PATHS.playerData(id)}/${cdKey}`]: ts,
+    [`${PATHS.player(id)}/lastAttack`]: ts,
+    [`${PATHS.playerData(id)}/lastAttack`]: ts,
+    [`${PATHS.playerDataStats(id)}/mp`]: Number(newMp),
+    [`${PATHS.playerStats(id)}/mp`]: Number(newMp),
   });
 }
 
@@ -663,13 +716,13 @@ export const batchWrite = (updates) => dbUpdate(updates);
  * @returns {Promise}
  */
 export function submitPlayerAction(playerId, action) {
-  const id  = `${playerId}_${Date.now()}`;
-  const ts  = Date.now();
+  const id = `${playerId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const ts = Date.now();
   return dbSet(PATHS.action(id), {
     id,
     playerId: String(playerId),
     ts,
-    expiresAt: ts + 5000,   // worldEngine ignora ações com mais de 5s
+    expiresAt: ts + 5000, // worldEngine ignora ações com mais de 5s
     ...action,
   });
 }
@@ -686,6 +739,16 @@ export function getPlayerActions() {
  */
 export function deletePlayerAction(id) {
   return dbSet(PATHS.action(id), null);
+}
+
+export function deletePlayerActions(ids = []) {
+  const updates = {};
+  for (const id of ids) {
+    if (!id) continue;
+    updates[PATHS.action(id)] = null;
+  }
+  if (Object.keys(updates).length === 0) return Promise.resolve();
+  return batchWrite(updates);
 }
 
 /**
@@ -707,15 +770,15 @@ const CHAT_TTL_MS = 5 * 60 * 1000; // 5 minutos
 export function syncChat(id, data) {
   if (!id || !data?.msg) return Promise.resolve();
   const payload = {
-    id:       String(id),
+    id: String(id),
     playerId: String(data.playerId ?? ""),
-    name:     String(data.name ?? "?").slice(0, 32),
-    msg:      String(data.msg).slice(0, 120),
-    x:        Number(data.x ?? 0),
-    y:        Number(data.y ?? 0),
-    z:        Number(data.z ?? 0),
-    ts:       Number(data.ts ?? Date.now()),
-    isGM:     Boolean(data.isGM ?? false),
+    name: String(data.name ?? "?").slice(0, 32),
+    msg: String(data.msg).slice(0, 120),
+    x: Number(data.x ?? 0),
+    y: Number(data.y ?? 0),
+    z: Number(data.z ?? 0),
+    ts: Number(data.ts ?? Date.now()),
+    isGM: Boolean(data.isGM ?? false),
   };
   return dbSet(PATHS.chatMsg(id), payload);
 }
@@ -887,4 +950,106 @@ export async function runSchemaMigration({ dryRun = true } = {}) {
   }
 
   return result;
+}
+
+// =============================================================================
+// NOVAS FUNÇÕES PARA NETWORK INTERFACE (Adicionar ao final do arquivo)
+// =============================================================================
+
+/**
+ * Wrapper para watchPlayers compatível com subscribe() do adapter
+ * @param {Function} callback
+ * @returns {Function} unsubscribe
+ */
+export function watchPlayersSubscribe(callback) {
+  return watchPlayers((data) => {
+    callback({
+      type: "snapshot",
+      data,
+      timestamp: Date.now(),
+    });
+  });
+}
+
+/**
+ * Wrapper para watchMonsters compatível com subscribe() do adapter
+ */
+export function watchMonstersSubscribe(callback) {
+  return watchMonsters((data) => {
+    callback({
+      type: "snapshot",
+      data,
+      timestamp: Date.now(),
+    });
+  });
+}
+
+/**
+ * Wrapper para watchEffects compatível com subscribe() do adapter
+ */
+export function watchEffectsSubscribe(callback) {
+  return watchEffects((data) => {
+    callback({
+      type: "snapshot",
+      data,
+      timestamp: Date.now(),
+    });
+  });
+}
+
+/**
+ * Obtém snapshot de múltiplos canais de uma vez
+ * @param {string[]} channels
+ * @returns {Promise<Object>}
+ */
+export async function getMultiSnapshot(channels) {
+  const result = {};
+
+  const channelMap = {
+    players: PATHS.players,
+    monsters: PATHS.monsters,
+    effects: PATHS.effects,
+    fields: PATHS.fields,
+    worldState: PATHS.worldState,
+  };
+
+  for (const channel of channels) {
+    const path = channelMap[channel];
+    if (path) {
+      try {
+        result[channel] = await dbGet(path);
+      } catch (error) {
+        console.warn(`[db] Failed to fetch snapshot for ${channel}:`, error);
+        result[channel] = null;
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Batch write com validação e logging
+ * @param {Object} updates
+ * @param {Object} options
+ * @returns {Promise}
+ */
+export async function safeBatchWrite(updates, options = {}) {
+  const { logChanges = false, validate = true, source = "unknown" } = options;
+
+  if (validate) {
+    // Re-valida updates antes de enviar
+    const sanitized = sanitizeUpdatesMap(updates);
+    if (Object.keys(sanitized).length === 0) {
+      console.warn("[db] safeBatchWrite: no valid updates after sanitization");
+      return Promise.resolve();
+    }
+    updates = sanitized;
+  }
+
+  if (logChanges) {
+    console.log(`[db] Batch write from ${source}:`, Object.keys(updates));
+  }
+
+  return dbUpdate(updates);
 }

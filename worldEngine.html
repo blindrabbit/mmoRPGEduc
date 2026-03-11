@@ -11,7 +11,6 @@
     <link rel="stylesheet" href="./src/clients/world-engine/worldEngine.css" />
   </head>
   <body>
-
     <!-- ═══════════════════════════════════════════════════════
          Boot overlay — visível até o init() completar
     ═══════════════════════════════════════════════════════════ -->
@@ -24,7 +23,7 @@
           <button class="tab-btn" data-tab="world">Eventos do Mundo</button>
         </div>
         <div class="tab-content" id="tab-logs"></div>
-        <div class="tab-content" id="tab-world" style="display:none"></div>
+        <div class="tab-content" id="tab-world" style="display: none"></div>
       </div>
     </div>
 
@@ -39,8 +38,14 @@
       ENT&nbsp;&nbsp;<span id="hud-ent">0</span><br />
       WORLD <span id="hud-world">N/A</span><br />
       GC&nbsp;&nbsp;&nbsp;<span id="hud-gc">0</span><br />
-      WAKE  <span id="hud-wake">N/A</span>
+      WAKE <span id="hud-wake">N/A</span>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Painel de métricas de desempenho (TPS / Latência / Fila)
+         Preenchido dinamicamente por metricsHUD.js
+    ═══════════════════════════════════════════════════════════ -->
+    <div id="metrics-panel"></div>
 
     <!-- ═══════════════════════════════════════════════════════
          Painel de sincronização Firebase
@@ -48,9 +53,18 @@
     <div id="upload-panel" class="side-panel">
       <div class="panel-title">FIREBASE SYNC</div>
       <button class="upload-btn" id="btn-reload-world">Recarregar Mundo</button>
+      <button class="upload-btn" id="btn-sync-models">Publicar Modelos</button>
       <button class="upload-btn" id="btn-schema-preview">Preview Schema</button>
       <button class="upload-btn" id="btn-schema-run">Aplicar Schema</button>
       <div id="upload-status">Pronto.</div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Painel GM — Spawn / Remove / Go To Player / Chat
+         Preenchido dinamicamente por adminPanel.js após o boot
+    ═══════════════════════════════════════════════════════════ -->
+    <div id="gm-panel">
+      <p style="color: #555; font-size: 10px; padding: 8px">Carregando...</p>
     </div>
 
     <!-- ═══════════════════════════════════════════════════════
@@ -73,18 +87,19 @@
     ═══════════════════════════════════════════════════════════ -->
     <script type="module">
       import { WORLDENGINE, FLOORRANGE, TILE_SIZE } from "./src/core/config.js";
-      import { WorldState }  from "./src/core/worldState.js";
+      import { WorldState } from "./src/core/worldState.js";
       import { CanvasSetup } from "./src/clients/world-engine/rendering/canvasSetup.js";
-      import { BootLogger }  from "./src/clients/world-engine/engine/bootLogger.js";
+      import { BootLogger } from "./src/clients/world-engine/engine/bootLogger.js";
       import { Initializer } from "./src/clients/world-engine/boot/initializer.js";
+      import { initAdminPanel } from "./src/clients/world-engine/adminPanel.js";
 
       // ── Tab switching do painel de boot ────────────────────
       document.querySelectorAll(".tab-btn").forEach((btn) => {
         btn.addEventListener("click", () => {
           const target = btn.dataset.tab;
-          document.querySelectorAll(".tab-btn").forEach((b) =>
-            b.classList.toggle("active", b === btn),
-          );
+          document
+            .querySelectorAll(".tab-btn")
+            .forEach((b) => b.classList.toggle("active", b === btn));
           document.querySelectorAll(".tab-content").forEach((c) => {
             c.style.display = c.id === `tab-${target}` ? "" : "none";
           });
@@ -97,10 +112,10 @@
         logger.info("Boot iniciado.");
         logger.info(
           `Config: ${WORLDENGINE.canvasCols}x${WORLDENGINE.canvasRows} SQMs` +
-          `  tick ${WORLDENGINE.worldTickMs}ms`,
+            `  tick ${WORLDENGINE.worldTickMs}ms`,
         );
 
-        const canvas      = document.getElementById("gameCanvas");
+        const canvas = document.getElementById("gameCanvas");
         const canvasSetup = new CanvasSetup(
           canvas,
           WORLDENGINE.canvasCols,
@@ -108,10 +123,10 @@
         );
         logger.ok(
           `Canvas ${canvasSetup.canvasW}x${canvasSetup.canvasH}px` +
-          `  ${canvasSetup.cols}x${canvasSetup.rows} SQMs`,
+            `  ${canvasSetup.cols}x${canvasSetup.rows} SQMs`,
         );
 
-        const worldState  = new WorldState();
+        const worldState = new WorldState();
         const initializer = new Initializer({
           logger,
           canvas,
@@ -123,6 +138,31 @@
         try {
           await initializer.init();
           document.getElementById("boot-overlay").classList.add("hidden");
+
+          // ── Painel GM ────────────────────────────────────────
+          initAdminPanel({
+            camera: worldState.camera,
+            getGameTime: () => Date.now(),
+            adminId: "worldengine",
+            adminName: "WorldEngine",
+            containerId: "gm-panel",
+          });
+
+          // Expostos para os botões onclick do adminPanel
+          window.changeZ = (delta) => {
+            worldState.activeZ = Math.max(
+              0,
+              Math.min(15, worldState.activeZ + delta),
+            );
+            initializer.floorHUD?.update();
+            const el = document.getElementById("stat-z");
+            if (el) el.textContent = worldState.activeZ;
+          };
+          window.toggleDebug = () => {
+            window.DEBUG_RENDER = !window.DEBUG_RENDER;
+          };
+
+          logger.ok("Painel GM iniciado.");
         } catch (e) {
           logger.error(`Falha no boot: ${e.message}`, e);
         }

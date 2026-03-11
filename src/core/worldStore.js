@@ -16,6 +16,7 @@ import {
   watchPlayers,
   watchEffectsChildren,
   watchFields,
+  watchMonsterTemplates,
   watchChat,
   dbGet,
   PATHS,
@@ -23,6 +24,7 @@ import {
 import {
   inferSpeciesFromName,
   getMonsterTemplates,
+  setMonsterTemplates,
 } from "./remoteTemplates.js";
 import { normalizeCollection, normalizeEntity } from "./schema.js";
 
@@ -34,7 +36,7 @@ const state = {
   players: {}, // online_players
   effects: {}, // world_effects
   fields: {}, // world_fields
-  chat: [],    // world_chat (array de mensagens recentes)
+  chat: [], // world_chat (array de mensagens recentes)
 };
 
 // Subscribers por canal
@@ -121,6 +123,11 @@ export function initWorldStore() {
   watchFields((data) => {
     state.fields = normalizeCollection(data, "field");
     notify("fields", state.fields);
+  });
+
+  // monster_templates — catálogo remoto canônico (nome/species/ataques)
+  watchMonsterTemplates((data) => {
+    setMonsterTemplates(data || {});
   });
 
   // world_chat — mensagens de chat (child_added, entregue uma a uma)
@@ -277,13 +284,13 @@ function mergeMonsters(incoming) {
         ),
       };
 
-      // If after merge the monster still lacks a name, try to fill it from
-      // the template list (which is synced separately). This covers monsters
-      // spawned automatically without admin-provided name.
-      if (!merged.name && merged.species) {
+      // Normaliza nome canônico por espécie para evitar drift entre
+      // monsterData/monster_templates e registros antigos em world_entities.
+      if (merged.species) {
         const remote = getMonsterTemplates();
-        if (remote && remote[merged.species]?.name) {
-          merged.name = remote[merged.species].name;
+        const canonicalName = remote?.[merged.species]?.name;
+        if (canonicalName) {
+          merged.name = canonicalName;
         }
       }
 

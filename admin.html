@@ -421,6 +421,7 @@
         handleStatsChanges,
         initCombatEngine,
       } from "./src/gameplay/combatEngine.js";
+      import { initCombatTextUI } from "./src/clients/shared/ui/combatText.js";
       import { loadAllSprites } from "./src/render/assetLoader.js";
       import { MONSTER_TEMPLATES } from "./src/gameplay/monsterData.js";
       import { renderWorld } from "./src/render/worldRenderer.js";
@@ -921,8 +922,10 @@
           const totalPacks = await loadAllSprites(assets);
           pushLog("admin", "system", `Sprites carregados: ${totalPacks} packs`);
 
-          // 6. CombatEngine
-          initCombatEngine([], getMonsters, getPlayers);
+          // 6. CombatEngine (initCombatEngine mantido por compatibilidade, agora no-op)
+          const _adminFloatingTexts = [];
+          initCombatEngine(_adminFloatingTexts, getMonsters, getPlayers);
+          initCombatTextUI(_adminFloatingTexts);
 
           // 7. GM online
           // ✅ syncPlayer substitui dbSet('online_players/ADMIN_ID', adminPos)

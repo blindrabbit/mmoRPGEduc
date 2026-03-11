@@ -61,13 +61,8 @@
         <canvas id="gameCanvas"></canvas>
       </div>
       <div id="sidebar">
-        <h2>World Engine</h2>
-        <div class="stat">Tiles: <span id="stat-tiles">0</span></div>
-        <div class="stat">Atlas: <span id="stat-atlas">0</span></div>
-        <div class="stat">Z: <span id="stat-z">7</span></div>
-        <button onclick="changeZ(1)">Z +1</button>
-        <button onclick="changeZ(-1)">Z -1</button>
-        <button onclick="toggleDebug()">Debug</button>
+        <!-- Preenchido dinamicamente por adminPanel.js -->
+        <p style="color:#666;font-size:11px;padding:10px;">Carregando painel...</p>
       </div>
     </div>
 
@@ -79,10 +74,11 @@
         centerCamera,
         buildFloorIndex,
         setAssetManagerRef,
-        renderMap,
       } from "./render/mapRenderer.js";
       import { renderWorld } from "./render/worldRenderer.js";
       import { WORLD_ENGINE, TILE_SIZE } from "./core/config.js";
+      import { initWorldStore, getPlayers, getMonsters } from "./core/worldStore.js";
+      import { initAdminPanel } from "./clients/world-engine/adminPanel.js";
 
       window.DEBUG_RENDER = false;
 
@@ -99,9 +95,10 @@
 
       async function initialize() {
         setupCanvas(canvas, WORLD_ENGINE.canvasCols, WORLD_ENGINE.canvasRows);
-        await loadAllSprites(assets, "./assets_novo/");
+        await loadAllSprites(assets, "./assets/");
 
-        const mapRes = await fetch("./assets_novo/map_compact.json");
+        let mapRes = await fetch("./assets/map_compacto.json");
+        if (!mapRes.ok) mapRes = await fetch("./assets_novo/map_compacto.json");
         map = await mapRes.json();
         floorIndex = buildFloorIndex(map);
 
@@ -111,16 +108,32 @@
           WORLD_ENGINE.canvasRows,
         );
 
-        document.getElementById("stat-tiles").textContent =
-          Object.keys(map).length;
-        document.getElementById("stat-atlas").textContent = assets.atlasCount;
+        // Firebase live state
+        initWorldStore();
+
+        // Admin panel — injeta UI no #sidebar, conecta câmera
+        initAdminPanel({
+          camera,
+          getGameTime: () => Date.now(),
+          adminId: "worldengine",
+          adminName: "WorldEngine",
+          containerId: "sidebar",
+        });
+
+        // Atualiza badges de diagnóstico (tiles e atlas) após painel ser montado
+        const elTiles = document.getElementById("stat-tiles");
+        const elAtlas = document.getElementById("stat-atlas");
+        if (elTiles) elTiles.textContent = Object.keys(map).length;
+        if (elAtlas) elAtlas.textContent = assets.atlasCount;
 
         gameLoop();
       }
 
+      // Expostos globalmente para os botões do painel (gerados pelo adminPanel)
       window.changeZ = (delta) => {
         activeZ = Math.max(0, Math.min(15, activeZ + delta));
-        document.getElementById("stat-z").textContent = activeZ;
+        const el = document.getElementById("stat-z");
+        if (el) el.textContent = activeZ;
       };
 
       window.toggleDebug = () => {
@@ -129,6 +142,11 @@
 
       function gameLoop() {
         animClock += 16;
+
+        // Combina jogadores e monstros do worldStore para renderização ao vivo
+        const livePlayers  = getPlayers()  ?? {};
+        const liveMonsters = getMonsters() ?? {};
+        const extraEntities = { ...livePlayers, ...liveMonsters };
 
         renderWorld({
           ctx,
@@ -145,7 +163,7 @@
           assets,
           anim: null,
           floorIndex,
-          extraEntities: {},
+          extraEntities,
           renderOptions: { showHP: true, showName: true },
         });
 

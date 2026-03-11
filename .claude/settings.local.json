@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python organize_project.py)",
+      "Bash(python migrate_clients.py)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(node -e \"const fs=require\\(''fs''\\); const d=JSON.parse\\(fs.readFileSync\\(''g:/Meu Drive/SEDU/2026/RPG_Novo/_Editor de Mapa/output/atlas/atlas_walls_00.json'',''utf8''\\)\\); const k100=Object.entries\\(d\\).filter\\(\\([k]\\)=>k.startsWith\\(''100_''\\)\\); console.log\\(''Keys for 100:'', k100.slice\\(0,20\\)\\); console.log\\(''Sample key:'', Object.keys\\(d\\)[0]\\);\")",
+      "Bash(node -e \"const fs=require\\(''fs''\\); const d=JSON.parse\\(fs.readFileSync\\(''g:/Meu Drive/SEDU/2026/RPG_Novo/_Editor de Mapa/output/atlas/atlas_walls_00.json'',''utf8''\\)\\); console.log\\(JSON.stringify\\(d\\).slice\\(0,800\\)\\);\")",
+      "Bash(xargs grep -l \"atlas\")",
+      "Bash(xargs grep -l \"itens_producao\\\\|atlas_walls\\\\|pack\\\\|sprite.*atlas\")",
+      "Bash(xargs ls -la)",
+      "Bash(sort -k6,7)",
+      "Bash(node -e \":*)",
+      "Bash(node:*)",
+      "Bash(node -e \"require\\(''canvas''\\)\")",
+      "Bash(node -e \"require\\(''sharp''\\)\")",
+      "Bash(node -e \"require\\(''jimp''\\)\")",
+      "Bash(npm install --no-save jimp)",
+      "Bash(npm list -g sharp jimp)",
+      "Bash(npm install -g jimp)",
+      "Bash(python otbmMapToJsonMapFull.py --help)",
+      "Bash(python3 -c \"from PIL import Image; print\\(''Pillow OK''\\)\")",
+      "Bash(python -c \"from PIL import Image; print\\(''Pillow OK''\\)\")",
+      "Bash(python fix_atlas_pack.py)",
+      "Bash(python -c \":*)"
+    ]
+  }
+}

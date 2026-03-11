@@ -19,10 +19,11 @@
 import {
   batchWrite,
   applyHpToPlayer,
-  applyMpToPlayer,
   syncEffect,
+  spendMpAndSetCooldown,
   encodeUser,
   PATHS,
+  setPlayerActionCooldown,
 } from "../core/db.js";
 
 import { getMonsters, getPlayers } from "../core/worldStore.js";
@@ -32,6 +33,10 @@ import {
   mergeUpdate,
   applyToMob,
 } from "./monsterManager.js";
+import {
+  buildFieldPayload,
+  buildFieldEffectFallbackPayload,
+} from "./fieldPayload.js";
 
 import {
   getSpell,
@@ -39,6 +44,7 @@ import {
   calcSpellResult,
   SPELL_TYPE,
 } from "./spellBook.js";
+import { resolveFieldVisualIds } from "./abilityCore.js";
 
 import {
   calculateCombatResult,
@@ -48,25 +54,47 @@ import {
   COMBAT,
 } from "./combatLogic.js";
 
-import {
-  emitHpDeltaText,
-  emitMissText,
-  buildCombatEffectPayload,
-} from "./combatEngine.js";
+import { buildCombatEffectPayload } from "./combatEngine.js";
+import { worldEvents, EVENT_TYPES } from "../core/events.js";
 
 import { pushLog } from "./eventLog.js";
+import {
+  getQueuedCombatActionKey,
+  isCombatActionReady,
+} from "./combatScheduler.js";
+import {
+  recordActionProcessed,
+  recordActionRejected,
+  recordQueueDepth,
+} from "../core/metrics.js";
 
-// ---------------------------------------------------------------------------
-// COOLDOWNS — gerenciados aqui, não no cliente
-// Chave: `${playerId}:${actionKey}` → timestamp de liberação
-// ---------------------------------------------------------------------------
-const _cooldowns = new Map();
+const _queuedActions = new Map();
 
-function _isOnCooldown(playerId, key) {
-  return Date.now() < (_cooldowns.get(`${playerId}:${key}`) ?? 0);
+export function enqueueAction(actionId, action) {
+  if (!actionId || !action) return;
+  const queueKey = getQueuedCombatActionKey(actionId, action);
+  _queuedActions.set(queueKey, { actionId, action });
+  recordQueueDepth(_queuedActions.size);
 }
-function _setCooldown(playerId, key, ms) {
-  _cooldowns.set(`${playerId}:${key}`, Date.now() + ms);
+
+export async function flushQueuedActions(now = Date.now()) {
+  const pending = Array.from(_queuedActions.values()).sort(
+    (left, right) =>
+      Number(left?.action?.ts ?? 0) - Number(right?.action?.ts ?? 0),
+  );
+
+  const processedActionIds = [];
+  for (const item of pending) {
+    if (!item?.actionId || !item?.action) continue;
+    const result = await processAction(item.actionId, item.action, now);
+    const queueKey = getQueuedCombatActionKey(item.actionId, item.action);
+    if (result?.consumed) {
+      _queuedActions.delete(queueKey);
+      processedActionIds.push(item.actionId);
+    }
+  }
+  recordQueueDepth(_queuedActions.size);
+  return processedActionIds;
 }
 
 // ---------------------------------------------------------------------------
@@ -74,12 +102,29 @@ function _setCooldown(playerId, key, ms) {
 // Cada ação é processada individualmente e de forma imediata (event-driven).
 // ---------------------------------------------------------------------------
 export async function processAction(actionId, action, now) {
-  if (!action || !actionId) return;
+  if (!action || !actionId) return { consumed: true, reason: "invalid" };
 
   // Ação expirada (lag extremo, reconexão tardia, etc.)
-  if (action.expiresAt && now > action.expiresAt) return;
+  if (action.expiresAt && now > action.expiresAt) {
+    recordActionRejected("expired");
+    return { consumed: true, reason: "expired" };
+  }
 
-  await _dispatch(actionId, action, now);
+  const result = await _dispatch(actionId, action, now);
+
+  if (result?.consumed) {
+    // Latência = tempo desde que cliente escreveu a ação até ser processada
+    const clientTs = Number(action.ts ?? 0);
+    if (clientTs > 0) {
+      recordActionProcessed(now - clientTs);
+    } else {
+      recordActionProcessed(0);
+    }
+  } else if (result?.reason) {
+    recordActionRejected(result.reason);
+  }
+
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -101,18 +146,19 @@ function resolvePlayerKey(players, playerIdRaw) {
 
 async function _dispatch(actionId, action, now) {
   const { type, playerId } = action;
-  if (!playerId) return;
+  if (!playerId) return { consumed: true, reason: "missing-player" };
 
   const players = getPlayers();
   const playerKey = resolvePlayerKey(players, playerId);
-  if (!playerKey) return; // player offline/não sincronizado ou ID não casou
+  if (!playerKey) return { consumed: false, reason: "player-not-ready" };
 
   const player = players[playerKey];
-  if (!player) return; // player offline ou não sincronizado
+  if (!player) return { consumed: false, reason: "player-not-ready" };
 
   // Normaliza action.playerId para o formato real usado no worldStore/Firebase
   // (evita ignorar ações quando o ID no banco está encodado).
-  const normalizedAction = playerKey === playerId ? action : { ...action, playerId: playerKey };
+  const normalizedAction =
+    playerKey === playerId ? action : { ...action, playerId: playerKey };
 
   switch (type) {
     case "attack":
@@ -121,6 +167,7 @@ async function _dispatch(actionId, action, now) {
       return _processSpell(normalizedAction, player, now);
     default:
       console.warn("[actionProcessor] Tipo de ação desconhecido:", type);
+      return { consumed: true, reason: "unknown-type" };
   }
 }
 
@@ -130,16 +177,24 @@ async function _dispatch(actionId, action, now) {
 async function _processAttack(action, player, now) {
   const { playerId, targetId } = action;
 
-  // Cooldown do ataque básico (server-side, não editável pelo cliente)
-  if (_isOnCooldown(playerId, "basicAttack")) return;
+  if (
+    !isCombatActionReady(player, "basicAttack", COMBAT.ATTACK_COOLDOWN_MS, now)
+  ) {
+    return { consumed: false, reason: "cooldown" };
+  }
 
   const monsters = getMonsters();
   const target = monsters[targetId];
 
-  if (!target || (target.stats?.hp ?? 0) <= 0 || target.dead) return;
-  if (!isInAttackRange(player, target, 1.5)) return;
+  if (!target || (target.stats?.hp ?? 0) <= 0 || target.dead) {
+    return { consumed: true, reason: "target-invalid" };
+  }
+  if (!isInAttackRange(player, target, 1.5)) {
+    return { consumed: false, reason: "out-of-range" };
+  }
 
-  _setCooldown(playerId, "basicAttack", COMBAT.ATTACK_COOLDOWN_MS);
+  player.lastAttack = now;
+  await setPlayerActionCooldown(playerId, "basicAttack", now);
   const updates = {};
   const result = calculateCombatResult(player.stats, target.stats);
 
@@ -147,7 +202,14 @@ async function _processAttack(action, player, now) {
     const dmg = result.damage;
     const newHp = calculateNewHp(target.stats.hp, -dmg, target.stats.maxHp);
 
-    emitHpDeltaText("monsters", targetId, target, -dmg);
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+      defenderId: targetId,
+      defenderType: "monsters",
+      damage: dmg,
+      defenderX: target.x,
+      defenderY: target.y,
+      defenderZ: target.z ?? 7,
+    });
 
     const fxId = `hit_player_${playerId}_${targetId}_${now}`;
     const hitFx = buildCombatEffectPayload("attackHit", {
@@ -180,8 +242,13 @@ async function _processAttack(action, player, now) {
       "damage",
       `${player.name} atacou ${target.name ?? targetId}: ${dmg} HP`,
     );
+    return { consumed: true, reason: "hit" };
   } else {
-    emitMissText(target);
+    worldEvents.emit(EVENT_TYPES.COMBAT_MISS, {
+      defenderX: target.x,
+      defenderY: target.y,
+      defenderZ: target.z ?? 7,
+    });
     const fxId = `miss_player_${playerId}_${targetId}_${now}`;
     const missFx = buildCombatEffectPayload("attackMiss", {
       id: fxId,
@@ -192,6 +259,7 @@ async function _processAttack(action, player, now) {
     });
     if (missFx) await syncEffect(fxId, missFx);
     pushLog("damage", `${player.name} errou ${target.name ?? targetId} [MISS]`);
+    return { consumed: true, reason: "miss" };
   }
 }
 
@@ -202,21 +270,23 @@ async function _processSpell(action, player, now) {
   const { playerId, spellId, targetId } = action;
 
   const spell = getSpell(spellId);
-  if (!spell) return;
+  if (!spell) return { consumed: true, reason: "spell-missing" };
 
   // ── Validações canônicas (cliente não pode burlar) ────────────────────
   const perm = canCastSpell(spell, player);
   if (!perm.ok) {
     pushLog("system", `[${player.name}] magia negada: ${perm.reason}`);
-    return;
+    return { consumed: true, reason: "permission-denied" };
   }
 
-  if (_isOnCooldown(playerId, spellId)) return;
+  if (!isCombatActionReady(player, spellId, spell.cooldownMs, now)) {
+    return { consumed: false, reason: "cooldown" };
+  }
 
   // ── Custo de MP ───────────────────────────────────────────────────────
-  _setCooldown(playerId, spellId, spell.cooldownMs);
+  player.lastAttack = now;
   const newMp = Math.max(0, (player.stats?.mp ?? 0) - spell.mpCost);
-  await applyMpToPlayer(playerId, newMp);
+  await spendMpAndSetCooldown(playerId, spellId, newMp, now);
 
   const z = player.z ?? 7;
 
@@ -224,15 +294,26 @@ async function _processSpell(action, player, now) {
   if (spell.type === SPELL_TYPE.DIRECT) {
     const monsters = getMonsters();
     const target = monsters[targetId];
-    if (!target || (target.stats?.hp ?? 0) <= 0 || target.dead) return;
+    if (!target || (target.stats?.hp ?? 0) <= 0 || target.dead) {
+      return { consumed: true, reason: "target-invalid" };
+    }
 
     const dist = Math.hypot(target.x - player.x, target.y - player.y);
-    if (dist > (spell.range ?? 4) + 0.5) return;
+    if (dist > (spell.range ?? 4) + 0.5) {
+      return { consumed: false, reason: "out-of-range" };
+    }
 
     const { damage } = calcSpellResult(spell, player.stats, target.stats);
     const newHp = calculateNewHp(target.stats.hp, -damage, target.stats.maxHp);
 
-    emitHpDeltaText("monsters", targetId, target, -damage);
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+      defenderId: targetId,
+      defenderType: "monsters",
+      damage,
+      defenderX: target.x,
+      defenderY: target.y,
+      defenderZ: target.z ?? 7,
+    });
 
     const updates = {};
 
@@ -265,7 +346,7 @@ async function _processSpell(action, player, now) {
       "damage",
       `${player.name} usou ${spell.name}: ${damage} HP em ${target.name ?? targetId}`,
     );
-    return;
+    return { consumed: true, reason: "direct-cast" };
   }
 
   // ── SELF ─────────────────────────────────────────────────────────────
@@ -276,7 +357,15 @@ async function _processSpell(action, player, now) {
       (player.stats?.hp ?? 100) + heal,
     );
 
-    emitHpDeltaText("players", playerId, player, +heal);
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+      defenderId: playerId,
+      defenderType: "players",
+      damage: -heal,
+      isHeal: true,
+      defenderX: player.x,
+      defenderY: player.y,
+      defenderZ: player.z ?? 7,
+    });
     await applyHpToPlayer(playerId, newHp);
 
     if (spell.selfEffectId != null) {
@@ -294,7 +383,7 @@ async function _processSpell(action, player, now) {
       );
     }
     pushLog("heal", `${player.name} se curou: +${heal} HP`);
-    return;
+    return { consumed: true, reason: "self-cast" };
   }
 
   // ── AOE ───────────────────────────────────────────────────────────────
@@ -310,7 +399,14 @@ async function _processSpell(action, player, now) {
         continue;
       const { damage } = calcSpellResult(spell, player.stats, mob.stats);
       const newHp = calculateNewHp(mob.stats.hp, -damage, mob.stats.maxHp);
-      emitHpDeltaText("monsters", mid, mob, -damage);
+      worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+        defenderId: mid,
+        defenderType: "monsters",
+        damage,
+        defenderX: mob.x,
+        defenderY: mob.y,
+        defenderZ: mob.z ?? 7,
+      });
       hits.push({ id: mid, mob, newHp, damage });
     }
 
@@ -319,23 +415,57 @@ async function _processSpell(action, player, now) {
       const radiusCeil = Math.ceil(radius);
       const fxUpdates = {};
       const tileNow = Date.now();
-      // Magias com isField: true vão para world_fields (renderizado no chão).
-      // Magias sem isField vão para world_effects (renderizado na camada top).
-      const fxBasePath = spell.isField ? "world_fields" : "world_effects";
+      const visuals = resolveFieldVisualIds({
+        fieldId: spell.fieldId,
+        effectId: spell.effectId,
+        statusType: spell.statusType,
+      });
       for (let dx = -radiusCeil; dx <= radiusCeil; dx++) {
         for (let dy = -radiusCeil; dy <= radiusCeil; dy++) {
           if (Math.hypot(dx, dy) > radius + 0.5) continue;
           const fxId = `spell_${spellId}_${playerId}_${now}_${dx}_${dy}`;
-          fxUpdates[`${fxBasePath}/${fxId}`] = _spellFx({
+          const targetX = Math.round(player.x) + dx;
+          const targetY = Math.round(player.y) + dy;
+
+          if (spell.isField) {
+            fxUpdates[`world_fields/${fxId}`] = buildFieldPayload({
+              id: fxId,
+              x: targetX,
+              y: targetY,
+              z,
+              now: tileNow,
+              damage,
+              fieldId: visuals.fieldId,
+              effectId: visuals.effectId,
+              fieldDuration: spell.fieldDuration ?? spell.effectDuration,
+              tickRate: spell.tickRate ?? 1000,
+              statusType: spell.statusType ?? null,
+            });
+            fxUpdates[`world_effects/${fxId}`] =
+              buildFieldEffectFallbackPayload({
+                x: targetX,
+                y: targetY,
+                z,
+                now: tileNow,
+                isPersistent: true,
+                isField: true,
+                fieldDuration: spell.fieldDuration ?? spell.effectDuration,
+                effectDuration: spell.effectDuration,
+                effectId: visuals.effectId,
+              });
+            continue;
+          }
+
+          fxUpdates[`world_effects/${fxId}`] = _spellFx({
             id: fxId,
             effectId: spell.effectId,
-            x: Math.round(player.x) + dx,
-            y: Math.round(player.y) + dy,
+            x: targetX,
+            y: targetY,
             z,
-            duration: spell.isField ? (spell.fieldDuration ?? spell.effectDuration) : spell.effectDuration,
+            duration: spell.effectDuration,
             startTime: tileNow,
-            isField: spell.isField ?? false,
-            fieldDuration: spell.fieldDuration ?? 0,
+            isField: false,
+            fieldDuration: 0,
           });
         }
       }
@@ -361,14 +491,16 @@ async function _processSpell(action, player, now) {
       "damage",
       `${player.name} usou ${spell.name}: atingiu ${hits.length} alvos`,
     );
-    return;
+    return { consumed: true, reason: "aoe-cast" };
   }
 
   // ── BUFF / DEBUFF ─────────────────────────────────────────────────────
   if (spell.type === SPELL_TYPE.BUFF) {
     const isSelf = !targetId || !spell.range;
     const { stat, delta } = spell.statMod ?? {};
-    if (!stat || delta === undefined) return;
+    if (!stat || delta === undefined) {
+      return { consumed: true, reason: "buff-invalid" };
+    }
 
     if (isSelf) {
       const current = player.stats?.[stat] ?? 0;
@@ -401,7 +533,9 @@ async function _processSpell(action, player, now) {
     } else {
       const monsters = getMonsters();
       const target = monsters[targetId];
-      if (!target || (target.stats?.hp ?? 0) <= 0) return;
+      if (!target || (target.stats?.hp ?? 0) <= 0) {
+        return { consumed: true, reason: "target-invalid" };
+      }
       const current = target.stats?.[stat] ?? 0;
       await batchWrite({
         [`world_entities/${targetId}/stats/${stat}`]: current + delta,
@@ -427,7 +561,10 @@ async function _processSpell(action, player, now) {
       }, spell.duration ?? 5000);
     }
     pushLog("system", `${player.name} usou ${spell.name}`);
+    return { consumed: true, reason: "buff-cast" };
   }
+
+  return { consumed: true, reason: "processed" };
 }
 
 // ---------------------------------------------------------------------------

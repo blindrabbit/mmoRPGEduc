@@ -18,7 +18,7 @@
 
 import { REGEN_RATES, REGEN_TICK_MS } from '../core/config.js';
 import { applyHpToPlayer, applyMpToPlayer, batchWrite, PATHS } from '../core/db.js';
-import { emitHpDeltaText } from './combatEngine.js';
+import { worldEvents, EVENT_TYPES } from '../core/events.js';
 
 // ---------------------------------------------------------------------------
 // ESTADO INTERNO
@@ -178,11 +178,9 @@ async function _tick() {
 
   // Texto flutuante de cura de HP (apenas se ganhar >= 1)
   if (actualHp >= 1) {
-    emitHpDeltaText('players', _playerId, _player, +actualHp, {
-      color: '#27ae60',
-      font: 'bold 10px Tahoma',
-      rise: 18,
-      duration: 700,
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+      defenderId: _playerId, defenderType: 'players', damage: -actualHp, isHeal: true,
+      defenderX: _player.x, defenderY: _player.y, defenderZ: _player.z ?? 7,
     });
   }
 

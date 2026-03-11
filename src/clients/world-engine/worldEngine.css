@@ -19,6 +19,78 @@
   z-index: 10;
 }
 
+/* ── Metrics HUD (canto superior esquerdo, abaixo do #hud) ───── */
+#metrics-panel {
+  position: fixed;
+  top: 160px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.88);
+  color: #ccc;
+  font: 10px monospace;
+  padding: 8px 12px;
+  border: 1px solid #444;
+  border-radius: 5px;
+  min-width: 170px;
+  z-index: 10;
+  line-height: 1.7;
+}
+
+.mhud-title {
+  color: #f0c040;
+  font-weight: bold;
+  letter-spacing: 1px;
+  margin-bottom: 3px;
+}
+.mhud-section {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.mhud-sub {
+  justify-content: flex-start;
+}
+.mhud-buckets {
+  flex-direction: column;
+}
+.mhud-label {
+  color: #888;
+}
+.mhud-value {
+  color: #ddd;
+}
+.mhud-dim {
+  color: #555;
+  font-size: 9px;
+}
+.mhud-sep {
+  border-top: 1px solid #333;
+  margin: 4px 0;
+}
+.mhud-ok {
+  color: #2ecc71;
+}
+.mhud-mid {
+  color: #f0c040;
+}
+.mhud-warn {
+  color: #e74c3c;
+}
+#metrics-panel .metrics-reset-btn {
+  margin-top: 6px;
+  width: 100%;
+  background: #222;
+  color: #888;
+  border: 1px solid #444;
+  border-radius: 3px;
+  cursor: pointer;
+  font: 9px monospace;
+  padding: 2px 0;
+}
+#metrics-panel .metrics-reset-btn:hover {
+  color: #fff;
+  border-color: #888;
+}
+
 /* ── Floor HUD (centro inferior) ────────────────────────────── */
 #floor-hud {
   position: fixed;
@@ -43,9 +115,20 @@
   border: 1px solid #333;
 }
 
-.floor-pill.active { background: #2ecc71; color: #000; font-weight: bold; border-color: #2ecc71; }
-.floor-pill.above  { color: #7fb3ff; border-color: #3a5a8a; }
-.floor-pill.below  { color: #ff9966; border-color: #7a4a2a; }
+.floor-pill.active {
+  background: #2ecc71;
+  color: #000;
+  font-weight: bold;
+  border-color: #2ecc71;
+}
+.floor-pill.above {
+  color: #7fb3ff;
+  border-color: #3a5a8a;
+}
+.floor-pill.below {
+  color: #ff9966;
+  border-color: #7a4a2a;
+}
 
 /* ── Tick HUD (inferior direita) ────────────────────────────── */
 #tick-hud {
@@ -101,9 +184,24 @@
   z-index: 10;
 }
 
-/* ── Upload/sync panel (override do base para posicionamento) ── */
+/* ── Upload/sync panel — aparece acima do painel GM ──────────── */
 #upload-panel {
   position: fixed;
   top: 10px;
-  right: 10px;
+  right: 290px;
+}
+
+/* ── Painel GM (sidebar direita) ───────────────────────────── */
+#gm-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 100vh;
+  background: rgba(10, 10, 20, 0.96);
+  border-left: 1px solid #333;
+  overflow-y: auto;
+  z-index: 20;
+  padding: 8px;
+  box-sizing: border-box;
 }

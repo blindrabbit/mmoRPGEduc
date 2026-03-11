@@ -9,6 +9,7 @@
 import { TILE_SIZE, ENTITY_RENDER, GROUND_Z } from "../core/config.js";
 import { renderMap } from "./mapRenderer.js";
 import { getMonsters, getPlayers } from "../core/worldStore.js";
+import { getMonsterTemplates } from "../core/remoteTemplates.js";
 import {
   drawCorpses,
   drawVisualEffects,
@@ -66,15 +67,17 @@ function toCamelCase(str) {
 }
 
 function resolveDisplayName(ent, id, isMonster, remoteTemplates) {
-  if (ent.name) return toCamelCase(ent.name);
   if (isMonster) {
+    // Monstros devem exibir nome canônico da espécie/template.
     if (remoteTemplates && ent.species) {
       const tmpl = remoteTemplates[ent.species];
       if (tmpl && tmpl.name) return toCamelCase(tmpl.name);
     }
-    if (ent.template) return toCamelCase(ent.template);
     if (ent.species) return toCamelCase(ent.species);
+    if (ent.template) return toCamelCase(ent.template);
+    if (ent.name) return toCamelCase(ent.name);
   } else {
+    if (ent.name) return toCamelCase(ent.name);
     if (ent.template) return toCamelCase(ent.template);
     if (ent.species) return toCamelCase(ent.species);
   }
@@ -124,7 +127,12 @@ function renderEntitiesFull(
   camY,
   activeZ,
   ts,
-  { showHP = true, showName = true, renderMode = "high" },
+  {
+    showHP = true,
+    showName = true,
+    renderMode = "high",
+    remoteTemplates = null,
+  },
 ) {
   const visible = [];
 
@@ -137,7 +145,9 @@ function renderEntitiesFull(
     const entZNumRaw = Number(ent.z);
     const entZNum = Number.isFinite(entZNumRaw)
       ? entZNumRaw
-      : (Number.isFinite(activeZNum) ? activeZNum : 7);
+      : Number.isFinite(activeZNum)
+        ? activeZNum
+        : 7;
     const floorRef = Number.isFinite(activeZNum) ? activeZNum : 7;
     if (entZNum !== floorRef) continue;
 
@@ -200,7 +210,11 @@ function renderEntitiesFull(
     }
 
     // Fallback de outfitId para players: se o ID não existe no atlas, usa 128
-    if (!isMonster && assets?.hasOutfitsAtlas?.() && !assets.hasOutfitDefinition(outfitId)) {
+    if (
+      !isMonster &&
+      assets?.hasOutfitsAtlas?.() &&
+      !assets.hasOutfitDefinition(outfitId)
+    ) {
       outfitId = 128;
     }
 
@@ -223,7 +237,9 @@ function renderEntitiesFull(
           outfitId,
         },
       };
-      spriteDrawn = anim.drawManual(ctx, assets, entForDraw, vPos.x, vPos.y, camX, camY) === true;
+      spriteDrawn =
+        anim.drawManual(ctx, assets, entForDraw, vPos.x, vPos.y, camX, camY) ===
+        true;
     }
 
     if (!spriteDrawn) {
@@ -281,7 +297,12 @@ function renderEntitiesFull(
 
     // Nome
     if (showName) {
-      const displayName = resolveDisplayName(ent, id, isMonster, null);
+      const displayName = resolveDisplayName(
+        ent,
+        id,
+        isMonster,
+        remoteTemplates,
+      );
       if (displayName) {
         const pct = Math.max(0, Math.min(1, hp / maxHp));
         const nameY = spriteTopY + ENTITY_RENDER.labelNameY;
@@ -323,23 +344,23 @@ export function renderWorld({
   renderOptions = { showHP: true, showName: true, renderMode: "high" },
 }) {
   const { showHP, showName } = renderOptions;
+  const remoteTemplates = getMonsterTemplates();
   const perfEnabled = window.DEBUG_RENDER_PERF === true;
-  const perf =
-    perfEnabled
-      ? (window.__renderPerf ??= {
-          frameCount: 0,
-          total: 0,
-          mapBase: 0,
-          corpses: 0,
-          fxGround: 0,
-          entities: 0,
-          mapTall: 0,
-          fxTop: 0,
-          mapAbove: 0,
-          floating: 0,
-          mapTop: 0,
-        })
-      : null;
+  const perf = perfEnabled
+    ? (window.__renderPerf ??= {
+        frameCount: 0,
+        total: 0,
+        mapBase: 0,
+        corpses: 0,
+        fxGround: 0,
+        entities: 0,
+        mapTall: 0,
+        fxTop: 0,
+        mapAbove: 0,
+        floating: 0,
+        mapTop: 0,
+      })
+    : null;
   const frameStart = perfEnabled ? performance.now() : 0;
   const lockTarget = renderOptions.lockTarget ?? null;
   const renderMode = renderOptions.renderMode ?? renderOptions.mode ?? "high";
@@ -393,9 +414,16 @@ export function renderWorld({
     spriteMeta?.flags_raw?.unpass === true ||
     spriteMeta?.game?.category_type === "wall";
   const isOccluder = (spriteMeta) => {
-    const category = String(spriteMeta?.game?.category_type ?? "").toLowerCase();
+    const category = String(
+      spriteMeta?.game?.category_type ?? "",
+    ).toLowerCase();
     if (blocksPlayer(spriteMeta)) return true;
-    if (["wall", "tree", "vegetation", "flora", "foliage", "building"].includes(category)) return true;
+    if (
+      ["wall", "tree", "vegetation", "flora", "foliage", "building"].includes(
+        category,
+      )
+    )
+      return true;
     return (spriteMeta?.grid_size ?? TILE_SIZE) > TILE_SIZE;
   };
 
@@ -558,7 +586,7 @@ export function renderWorld({
     }
     allEntities = { ...livingMonsters, ...getPlayers() };
   }
-  
+
   // 5.1 Marcador de lock target (ABAIXO dos sprites)
   if (lockTarget?.id) {
     const locked = allEntities?.[lockTarget.id];
@@ -584,7 +612,7 @@ export function renderWorld({
         camYWorld,
         activeZ,
         ts,
-        { showHP, showName, renderMode, labelsSameFloorOnly },
+        { showHP, showName, renderMode, labelsSameFloorOnly, remoteTemplates },
       );
     });
   } else {
@@ -597,7 +625,7 @@ export function renderWorld({
       camYWorld,
       activeZ,
       ts,
-      { showHP, showName, renderMode, labelsSameFloorOnly },
+      { showHP, showName, renderMode, labelsSameFloorOnly, remoteTemplates },
     );
   }
 
