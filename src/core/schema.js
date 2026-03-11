@@ -152,6 +152,7 @@ export function makeStats({
 
   return {
     ...extra,
+    level: toNumber(level, 1),
     hp: toNumber(hp, 100),
     maxHp: toNumber(maxHp, 100),
     mp: toNumber(mp, 50),

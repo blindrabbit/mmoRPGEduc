@@ -214,60 +214,63 @@ export function drawFloatingTexts(ctx, camX, camY) {
 }
 
 // ---------------------------------------------------------------------------
+// HELPERS DE RENDER — usados por drawVisualEffects e drawCorpses
+// ---------------------------------------------------------------------------
+function getCategoryConfig(key) {
+  const categories = EFFECTS_RENDER?.categories ?? {};
+  return categories[key] ?? categories.generic ?? {};
+}
+
+function resolveEffectCategory(entry, forcedLayer = null) {
+  if (forcedLayer === "ground" || entry?.isField) return "field";
+
+  const effectType = String(entry?.effectType ?? "").toLowerCase();
+  const effectId = String(entry?.id ?? "").toLowerCase();
+
+  if (
+    effectType === "attackhit" ||
+    effectType === "attackmiss" ||
+    effectId.startsWith("hit_") ||
+    effectId.startsWith("miss_") ||
+    effectId.includes("hit_player_") ||
+    effectId.includes("miss_player_")
+  ) {
+    return "attack";
+  }
+
+  if (effectType === "wave" || effectId.includes("wave")) return "wave";
+  if (entry?.type === "corpse" || effectId.startsWith("corpse"))
+    return "corpse";
+
+  return "generic";
+}
+
+function getRenderBase(entry, category) {
+  const cfg = getCategoryConfig(category);
+  let baseX = Number(entry?.x ?? 0);
+  let baseY = Number(entry?.y ?? 0);
+
+  if (cfg?.snapToTile) {
+    baseX = Math.round(baseX);
+    baseY = Math.round(baseY);
+  }
+
+  if (!Number.isFinite(baseX)) baseX = 0;
+  if (!Number.isFinite(baseY)) baseY = 0;
+
+  return {
+    baseX,
+    baseY,
+    offX: Number(EFFECTS_RENDER.offsetX ?? 0) + Number(cfg?.offsetX ?? 0),
+    offY: Number(EFFECTS_RENDER.offsetY ?? 0) + Number(cfg?.offsetY ?? 0),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // EFEITOS VISUAIS — lê de getEffects() do worldStore
 // ---------------------------------------------------------------------------
 export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
   const now = Date.now();
-
-  const getCategoryConfig = (key) => {
-    const categories = EFFECTS_RENDER?.categories ?? {};
-    return categories[key] ?? categories.generic ?? {};
-  };
-
-  const resolveEffectCategory = (entry, forcedLayer = null) => {
-    if (forcedLayer === "ground" || entry?.isField) return "field";
-
-    const effectType = String(entry?.effectType ?? "").toLowerCase();
-    const effectId = String(entry?.id ?? "").toLowerCase();
-
-    if (
-      effectType === "attackhit" ||
-      effectType === "attackmiss" ||
-      effectId.startsWith("hit_") ||
-      effectId.startsWith("miss_") ||
-      effectId.includes("hit_player_") ||
-      effectId.includes("miss_player_")
-    ) {
-      return "attack";
-    }
-
-    if (effectType === "wave" || effectId.includes("wave")) return "wave";
-    if (entry?.type === "corpse" || effectId.startsWith("corpse"))
-      return "corpse";
-
-    return "generic";
-  };
-
-  const getRenderBase = (entry, category) => {
-    const cfg = getCategoryConfig(category);
-    let baseX = Number(entry?.x ?? 0);
-    let baseY = Number(entry?.y ?? 0);
-
-    if (cfg?.snapToTile) {
-      baseX = Math.round(baseX);
-      baseY = Math.round(baseY);
-    }
-
-    if (!Number.isFinite(baseX)) baseX = 0;
-    if (!Number.isFinite(baseY)) baseY = 0;
-
-    return {
-      baseX,
-      baseY,
-      offX: Number(EFFECTS_RENDER.offsetX ?? 0) + Number(cfg?.offsetX ?? 0),
-      offY: Number(EFFECTS_RENDER.offsetY ?? 0) + Number(cfg?.offsetY ?? 0),
-    };
-  };
 
   if (layer === "ground") {
     const activeFields = { ...(getFields() ?? {}) };
