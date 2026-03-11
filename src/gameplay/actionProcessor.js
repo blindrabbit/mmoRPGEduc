@@ -52,6 +52,7 @@ import {
 import { createField } from "./magic/fieldSystem.js";
 import { pushLog } from "./eventLog.js";
 import { registerDamage, registerLastHit } from "./progression/xpManager.js";
+import { getSpellPower, getHealPower } from "./progression/progressionSystem.js";
 
 // ---------------------------------------------------------------------------
 // COOLDOWNS — gerenciados aqui, não no cliente
@@ -288,7 +289,11 @@ async function _processSpell(action, player, now) {
     const dist = Math.hypot(target.x - player.x, target.y - player.y);
     if (dist > (spell.range ?? 4) + 0.5) return;
 
-    const { damage } = calcSpellResult(spell, player.stats, target.stats);
+    const baseResult = calcSpellResult(spell, player.stats, target.stats);
+    const spellPower = getSpellPower(player);
+    const damage = spellPower > 0
+      ? Math.floor(baseResult.damage * (1 + spellPower / 100))
+      : baseResult.damage;
     const newHp = calculateNewHp(target.stats.hp, -damage, target.stats.maxHp);
 
     // Emitir evento via combatService (não UI direta)
@@ -345,7 +350,11 @@ async function _processSpell(action, player, now) {
 
   // ── SELF ───────────────────────────────────────────────────────────────
   if (spell.type === SPELL_TYPE.SELF) {
-    const { heal } = calcSpellResult(spell, player.stats);
+    const baseHealResult = calcSpellResult(spell, player.stats);
+    const healPower = getHealPower(player);
+    const heal = healPower > 0
+      ? Math.floor(baseHealResult.heal * (1 + healPower / 100))
+      : baseHealResult.heal;
     const newHp = Math.min(
       player.stats?.maxHp ?? 100,
       (player.stats?.hp ?? 100) + heal,
@@ -378,6 +387,7 @@ async function _processSpell(action, player, now) {
     const radius = spell.aoeRadius ?? 2;
     const hits = [];
     const fxUpdates = {};
+    const aoeSpellPower = getSpellPower(player);
 
     for (const [mid, mob] of Object.entries(monsters)) {
       if (!mob || (mob.stats?.hp ?? 0) <= 0 || mob.dead) continue;
@@ -385,7 +395,10 @@ async function _processSpell(action, player, now) {
       if (Math.hypot(mob.x - player.x, mob.y - player.y) > radius + 0.5)
         continue;
 
-      const { damage } = calcSpellResult(spell, player.stats, mob.stats);
+      const aoeBase = calcSpellResult(spell, player.stats, mob.stats);
+      const damage = aoeSpellPower > 0
+        ? Math.floor(aoeBase.damage * (1 + aoeSpellPower / 100))
+        : aoeBase.damage;
       const newHp = calculateNewHp(mob.stats.hp, -damage, mob.stats.maxHp);
 
       emitDamage(mid, "monsters", damage, mob, {

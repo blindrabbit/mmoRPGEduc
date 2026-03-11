@@ -37,6 +37,7 @@ export const EVENT_TYPES = {
   PROGRESSION_XP_GAIN: "progression:xpGain",
   PROGRESSION_LEVEL_UP: "progression:levelUp",
   PROGRESSION_STAT_ALLOCATED: "progression:statAllocated",
+  PROGRESSION_STATS_RECALCULATED: "progression:statsRecalculated",
 
   // === ENTIDADES ===
   ENTITY_SPAWN: "entity:spawn",
@@ -47,10 +48,6 @@ export const EVENT_TYPES = {
   WORLD_STATE_CHANGE: "world:stateChange",
   CHAT_MESSAGE: "chat:message",
   SYSTEM_LOG: "system:log",
-
-  PROGRESSION_XP_GAIN: "progression:xpGain",
-  PROGRESSION_LEVEL_UP: "progression:levelUp",
-  PROGRESSION_STAT_ALLOCATED: "progression:statAllocated",
 };
 
 /**

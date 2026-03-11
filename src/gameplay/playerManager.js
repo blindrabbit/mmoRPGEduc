@@ -12,6 +12,7 @@ import {
   getPlayerData,
   applyHpToPlayer,
   respawnPlayer as dbRespawnPlayer,
+  getWorldSpawn,
   batchWrite,
   PATHS,
 } from "../core/db.js";
@@ -72,7 +73,9 @@ export async function resetPlayerStatus(playerId) {
  * @param {string} playerId
  */
 export async function respawnPlayer(playerId) {
-  const { x, y, z } = WORLDSETTINGS.spawn;
+  // Lê spawn do Firebase; fallback para config local se ainda não definido
+  const spawn = (await getWorldSpawn()) ?? WORLDSETTINGS.spawn;
+  const { x, y, z } = spawn;
   const data = await getPlayerData(playerId);
   const hp = data?.stats?.maxHp ?? 100;
   // dbRespawnPlayer (db.js) atualiza players_data + online_players atomicamente
@@ -102,7 +105,8 @@ export async function createPlayer(playerId, nameOrData, playerClass) {
 
   const resolvedClass = payload.class || "cavaleiro";
   const cls = PLAYERCLASSES?.[resolvedClass] ?? PLAYERCLASSES?.cavaleiro ?? {};
-  const spawn = WORLDSETTINGS.spawn;
+  // Lê spawn do Firebase; fallback para config local se ainda não definido
+  const spawn = (await getWorldSpawn()) ?? WORLDSETTINGS.spawn;
   const initialStats = initializePlayerStats(resolvedClass);
 
   const player = makePlayer({

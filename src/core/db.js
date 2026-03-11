@@ -108,6 +108,8 @@ export const PATHS = {
   action: (id) => safePath("player_actions", id),
   chat: "world_chat",
   chatMsg: (id) => safePath("world_chat", id),
+  worldConfig: "world_config",
+  worldSpawn: "world_config/spawn",
 };
 
 const WRITE_GUARD = {
@@ -752,6 +754,32 @@ export function respawnPlayer(id, { x, y, z, hp }) {
     [`${PATHS.player(id)}/z`]: Number(z),
     [`${PATHS.playerStats(id)}/hp`]: Number(hp),
   });
+}
+
+// ---------------------------------------------------------------------------
+// WORLD CONFIG — Spawn / Respawn
+// ---------------------------------------------------------------------------
+
+/**
+ * Lê o ponto de spawn configurado no Firebase.
+ * Retorna null se ainda não definido (playerManager usa WORLDSETTINGS como fallback).
+ * @returns {Promise<{x:number, y:number, z:number}|null>}
+ */
+export async function getWorldSpawn() {
+  const data = await dbGet(PATHS.worldSpawn);
+  if (!data || typeof data.x !== "number") return null;
+  return { x: data.x, y: data.y, z: data.z };
+}
+
+/**
+ * Persiste o ponto de spawn no Firebase.
+ * Use no painel GM para definir spawn/respawn globalmente.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ */
+export function setWorldSpawn(x, y, z) {
+  return dbSet(PATHS.worldSpawn, { x: Number(x), y: Number(y), z: Number(z) });
 }
 
 export function applyMpToPlayer(id, newMp) {

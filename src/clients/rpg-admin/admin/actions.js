@@ -10,7 +10,8 @@ import { MONSTER_TEMPLATES } from "../../../gameplay/monsterData.js";
 import { syncMonster } from "../../../core/db.js"; // helper de escrita para entidades
 import { makeMonster } from "../../../core/schema.js";
 
-const GROUND_Z = 7; // ← térreo OTBM
+const GROUND_Z = 7; // térreo OTBM (fallback)
+const WORLD_SPAWN_PATH = "world_config/spawn";
 
 // ─── Funções Lógicas ──────────────────────────────────────────────────────────
 
@@ -24,13 +25,17 @@ export async function applyDamage(playerId, amount) {
   await update(statsRef, { hp: newHp });
   await update(ref(db, `online_players/${playerId}/stats`), { hp: newHp });
 
-  // Morte: respawn no térreo
+  // Morte: respawn no ponto configurado no Firebase
   if (newHp <= 0) {
+    const spawnSnap = await get(ref(db, WORLD_SPAWN_PATH));
+    const sp = spawnSnap.val() ?? { x: 100, y: 100, z: GROUND_Z };
+    const respawnHp = stats.maxHp ?? 100;
     await update(ref(db, `players_data/${playerId}`), {
-      x: 80,
-      y: 80,
-      z: GROUND_Z,
-      "stats/hp": 100, // ← z 7 (era z 0)
+      x: sp.x, y: sp.y, z: sp.z,
+      "stats/hp": respawnHp,
+    });
+    await update(ref(db, `online_players/${playerId}`), {
+      x: sp.x, y: sp.y, z: sp.z,
     });
   }
 }
@@ -52,6 +57,16 @@ export async function syncEntity(path, data) {
 // ─── Comandos do Menu GM ──────────────────────────────────────────────────────
 
 const COMMANDS = [
+  {
+    label: "📍 Definir Spawn Aqui",
+    color: "#f1c40f",
+    requirePlayer: false,
+    action: async (ctx) => {
+      const sp = { x: ctx.targetTile.x, y: ctx.targetTile.y, z: ctx.adminPos.z };
+      await set(ref(db, WORLD_SPAWN_PATH), sp);
+      ctx.addLog(`Spawn definido: X${sp.x} Y${sp.y} Z${sp.z}`, "#f1c40f");
+    },
+  },
   {
     label: "📌 Teleportar GM Aqui",
     color: "#fff",

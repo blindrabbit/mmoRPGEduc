@@ -1041,10 +1041,8 @@
                     text-align: left;
                   "
                 >
-                  + FOR
-                  <span id="stat-val-for" style="float: right; color: #aaa"
-                    >0</span
-                  >
+                  💪 + FOR
+                  <span id="stat-val-for" style="float: right; color: #aaa">0</span>
                 </button>
                 <button
                   id="btn-alloc-int"
@@ -1061,10 +1059,8 @@
                     text-align: left;
                   "
                 >
-                  + INT
-                  <span id="stat-val-int" style="float: right; color: #aaa"
-                    >0</span
-                  >
+                  ✨ + INT
+                  <span id="stat-val-int" style="float: right; color: #aaa">0</span>
                 </button>
                 <button
                   id="btn-alloc-agi"
@@ -1081,10 +1077,8 @@
                     text-align: left;
                   "
                 >
-                  + AGI
-                  <span id="stat-val-agi" style="float: right; color: #aaa"
-                    >0</span
-                  >
+                  👟 + AGI
+                  <span id="stat-val-agi" style="float: right; color: #aaa">0</span>
                 </button>
                 <button
                   id="btn-alloc-vit"
@@ -1101,10 +1095,8 @@
                     text-align: left;
                   "
                 >
-                  + VIT
-                  <span id="stat-val-vit" style="float: right; color: #aaa"
-                    >0</span
-                  >
+                  🛡 + VIT
+                  <span id="stat-val-vit" style="float: right; color: #aaa">0</span>
                 </button>
               </div>
             </div>
@@ -1523,8 +1515,9 @@
       }
 
       function _xpToNextLevel(level) {
+        // Mesma fórmula de progressionSystem.js: floor(100 * n^1.75)
         const lvl = Math.max(1, Number(level) || 1);
-        return Math.floor(10 * Math.pow(1.15, lvl - 1));
+        return Math.floor(100 * Math.pow(lvl, 1.75));
       }
 
       function _pushXpFloatingText(deltaXp, entity) {
@@ -2241,20 +2234,17 @@
         if (levelEl) levelEl.textContent = `Level ${level}`;
         if (xpFillEl) xpFillEl.style.width = `${xpPct}%`;
         if (xpTextEl) xpTextEl.textContent = `${xp} / ${xpToNext} XP`;
+        const availPts = Number(data.stats?.availableStatPoints ?? 0) || 0;
         if (pointsEl) {
-          pointsEl.textContent = `Pontos: ${Number(data.stats?.availableStatPoints ?? 0) || 0}`;
+          pointsEl.textContent = availPts > 0
+            ? `✦ ${availPts} ponto${availPts !== 1 ? "s" : ""} disponível${availPts !== 1 ? "s" : ""}`
+            : "";
         }
 
-        // Atualiza valores alocados nos botões de atributo
-        const alloc = data.stats?.allocatedStats ?? {};
-        const forEl = document.getElementById("stat-val-for");
-        const intEl = document.getElementById("stat-val-int");
-        const agiEl = document.getElementById("stat-val-agi");
-        const vitEl = document.getElementById("stat-val-vit");
-        if (forEl) forEl.textContent = alloc.FOR ?? 0;
-        if (intEl) intEl.textContent = alloc.INT ?? 0;
-        if (agiEl) agiEl.textContent = alloc.AGI ?? 0;
-        if (vitEl) vitEl.textContent = alloc.VIT ?? 0;
+        // Mostrar painel de alocação somente quando há pontos disponíveis
+        const allocPanel = document.getElementById("stat-allocation-panel");
+        if (allocPanel) allocPanel.style.display = availPts > 0 ? "flex" : "none";
+        // Valores dos botões são atualizados em _updateSideStats (via calculateTotalStats)
 
         const sc = document.getElementById("side-status-container");
         const icons = { burning: "🔥", poisoned: "☠", electrified: "⚡" };
@@ -2277,22 +2267,60 @@
         const s = player.stats ?? {};
         const calculated = calculateTotalStats(player);
         const total = calculated.totalStats ?? {};
+        const auto  = calculated.autoStats ?? {};
+        const manual = calculated.effectiveManual ?? {};
         const attackPower = Math.round(getAttackPower(player));
         const defensePower = Math.round(getDefense(player, 0));
         const spellPower = Math.round(calculated.spellPower ?? 0);
-        const healPower = Math.round(calculated.healPower ?? 0);
+        const healPower  = Math.round(calculated.healPower ?? 0);
+
+        // Linha de atributo com tooltip mostrando origem dos pontos
+        function _sRow(icon, label, stat) {
+          const tot  = Math.round(total[stat]  ?? 0);
+          const lvl  = Math.round(auto[stat]   ?? 0);
+          const man  = Math.round(manual[stat] ?? 0);
+          const tip  = `De nível: ${lvl}  |  Distribuído: ${man}`;
+          return `<div class="stat-row" title="${tip}" style="cursor:help">` +
+                 `<span>${icon} ${label}</span><span>${tot}</span></div>`;
+        }
+
         el.innerHTML =
           `<div class="stat-row"><span>❤ HP</span><span>${Math.round(s.hp ?? 0)}/${s.maxHp ?? 0}</span></div>` +
           `<div class="stat-row"><span>🔷 MP</span><span>${Math.round(s.mp ?? 0)}/${s.maxMp ?? 0}</span></div>` +
-          `<div class="stat-row"><span>💪 FOR</span><span>${Math.round(total.FOR ?? 0)}</span></div>` +
-          `<div class="stat-row"><span>✨ INT</span><span>${Math.round(total.INT ?? 0)}</span></div>` +
-          `<div class="stat-row"><span>👟 AGI</span><span>${Math.round(total.AGI ?? 0)}</span></div>` +
-          `<div class="stat-row"><span>🛡 VIT</span><span>${Math.round(total.VIT ?? 0)}</span></div>` +
+          _sRow("💪", "FOR", "FOR") +
+          _sRow("✨", "INT", "INT") +
+          _sRow("👟", "AGI", "AGI") +
+          _sRow("🛡", "VIT", "VIT") +
           `<div class="stat-row"><span>⚔ PODER</span><span>${attackPower}</span></div>` +
           `<div class="stat-row"><span>🧱 RESIST</span><span>${defensePower}</span></div>` +
           `<div class="stat-row"><span>🔮 MAGIA</span><span>${spellPower}</span></div>` +
           `<div class="stat-row"><span>💚 CURA</span><span>${healPower}</span></div>` +
           `<div class="stat-row"><span>⭐ LVL</span><span>${s.level ?? 1}</span></div>`;
+
+        // Atualiza botões de alocação: total visível + tooltip de breakdown
+        const btnData = [
+          ["btn-alloc-for", "stat-val-for", "💪 + FOR", "FOR"],
+          ["btn-alloc-int", "stat-val-int", "✨ + INT", "INT"],
+          ["btn-alloc-agi", "stat-val-agi", "👟 + AGI", "AGI"],
+          ["btn-alloc-vit", "stat-val-vit", "🛡 + VIT", "VIT"],
+        ];
+        for (const [btnId, valId, label, stat] of btnData) {
+          const btn = document.getElementById(btnId);
+          const val = document.getElementById(valId);
+          if (val) val.textContent = Math.round(total[stat] ?? 0);
+          if (btn) {
+            const lvl = Math.round(auto[stat]   ?? 0);
+            const man = Math.round(manual[stat] ?? 0);
+            btn.title = `De nível: ${lvl}  |  Distribuído: ${man}`;
+            // Atualiza o texto do botão preservando o span interno
+            const firstChild = btn.firstChild;
+            if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
+              firstChild.textContent = `${label}  `;
+            } else {
+              btn.insertBefore(document.createTextNode(`${label}  `), btn.firstChild);
+            }
+          }
+        }
       }
 
       function updateRegenHint({ hp, mp, tickMs } = {}) {

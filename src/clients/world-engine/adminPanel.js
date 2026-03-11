@@ -28,6 +28,7 @@ import { getPlayers, getMonsters } from "../../core/worldStore.js";
 import { makeMonster } from "../../core/schema.js";
 import { MONSTER_TEMPLATES } from "../../gameplay/monsterData.js";
 import { migrateMonstersToCurrentTemplates } from "../../gameplay/monsterMigration.js";
+import { runMigration as runPlayerStatsMigration, previewPlayerMigration } from "../../gameplay/progression/migratePlayerStats.js";
 
 // ---------------------------------------------------------------------------
 // CONSTANTES
@@ -170,6 +171,11 @@ function _buildUI(container) {
       <button id="btn-remove-all" class="danger">🗑 Remover Todos os Monstros</button>
       <div id="monster-list" style="max-height:100px;overflow-y:auto;font-size:11px;color:#aaa;"></div>
 
+      <!-- MIGRAÇÃO DE JOGADORES -->
+      <h3>⚗ Jogadores — Migração de Stats</h3>
+      <button id="btn-migrate-players-dry">🔍 Preview (sem salvar)</button>
+      <button id="btn-migrate-players" class="danger">⚗ Aplicar Migração de XP/Stats</button>
+
       <!-- GO TO PLAYER -->
       <h3>🧭 Go to Player</h3>
       <div class="row">
@@ -209,6 +215,12 @@ function _bindButtons() {
   document
     .getElementById("btn-remove-all")
     .addEventListener("click", _removeAllMonsters);
+  document
+    .getElementById("btn-migrate-players-dry")
+    .addEventListener("click", _migratePlayersDry);
+  document
+    .getElementById("btn-migrate-players")
+    .addEventListener("click", _migratePlayers);
   document
     .getElementById("btn-goto-player")
     .addEventListener("click", _gotoPlayer);
@@ -310,6 +322,56 @@ async function _removeAllMonsters() {
   if (!confirm("Remover TODOS os monstros do mundo?")) return;
   await clearMonsters();
   _logSystem("🗑 Todos os monstros removidos.");
+}
+
+async function _migratePlayersDry() {
+  _logSystem("🔍 Calculando preview da migração (sem salvar)...");
+  const result = await runPlayerStatsMigration({ dryRun: true });
+  if (!result.success) {
+    _logSystem(`❌ Erro no preview: ${result.error}`);
+    return;
+  }
+  _logSystem(`🔍 Preview: ${result.migrated} jogador(es). Veja o console para detalhes.`);
+  for (const r of result.results) {
+    _logSystem(
+      `  ${r.playerId} (${r.class}): nível ${r.oldLevel}→${r.newLevel} | ${r.totalXp} XP | ${r.pointsRestored} pts`,
+    );
+  }
+}
+
+async function _migratePlayers() {
+  if (
+    !confirm(
+      "Migrar TODOS os jogadores?\n\n" +
+      "• Recalcula nível pela nova curva 100×n^1.75\n" +
+      "• Reseta allocatedStats para zero\n" +
+      "• Devolve todos os pontos como disponíveis\n" +
+      "• Restaura HP/MP ao máximo\n\n" +
+      "Esta ação não pode ser desfeita automaticamente.",
+    )
+  ) return;
+
+  _logSystem("⚗ Aplicando migração de stats dos jogadores...");
+  const result = await runPlayerStatsMigration({ dryRun: false });
+
+  if (!result.success && result.error) {
+    _logSystem(`❌ Migração falhou: ${result.error}`);
+    return;
+  }
+
+  _logSystem(
+    `✅ Migração concluída: ${result.migrated} jogador(es) migrado(s), ${result.errors} erro(s).`,
+  );
+  for (const r of result.results) {
+    _logSystem(
+      `  ✓ ${r.playerId} (${r.class}): nível ${r.oldLevel}→${r.newLevel} | ${r.pointsRestored} pts devolvidos`,
+    );
+  }
+  if (result.errorDetails?.length > 0) {
+    for (const e of result.errorDetails) {
+      _logSystem(`  ✗ ${e.playerId}: ${e.error}`);
+    }
+  }
 }
 
 async function _migrateMonsters() {
