@@ -14,11 +14,13 @@ import { normalizeCombatCooldownMs } from "./combatScheduler.js";
 // TIPOS DE MAGIA
 // Usados para determinar comportamento no spellEngine.js
 // ---------------------------------------------------------------------------
+// LINHA ~17: Atualizar SPELL_TYPE para incluir FIELD
 export const SPELL_TYPE = {
-  DIRECT: "direct", // dano direto num alvo único (requer targetLock)
-  SELF: "self", // efeito no próprio jogador (heal, buff)
-  AOE: "aoe", // área de efeito ao redor do jogador
-  BUFF: "buff", // buff/debuff persistente num alvo ou self
+  DIRECT: "direct", // dano direto num alvo único
+  SELF: "self", // efeito no próprio jogador
+  AOE: "aoe", // área de efeito ao redor
+  BUFF: "buff", // buff/debuff persistente
+  FIELD: "field", // ✅ ADICIONAR: campo persistente no chão
 };
 
 // ---------------------------------------------------------------------------
@@ -182,6 +184,33 @@ export const SPELLS = {
     selfEffectId: 4,
     effectDuration: 1200, // 11 frames × 100ms = 1100ms + 100ms margem
     description: "Abala o solo causando dano em área próxima.",
+  },
+
+  fireField: {
+    id: "fireField",
+    name: "Campo de Fogo",
+    type: SPELL_TYPE.FIELD, // ✅ Usar enum em vez de isField: true
+    mpCost: 25,
+    cooldownMs: 4000,
+    minLevel: 4,
+    classes: ["mago"],
+    range: 3,
+    // Manter fieldData para compatibilidade com fieldPayload.js
+    fieldData: {
+      fieldId: 2118,
+      effectId: 2,
+      duration: 4000,
+      tickDamage: { base: 8, variance: 0.15, interval: 1000 },
+      damageType: "fire",
+      affectEnemies: true,
+      affectAllies: false,
+    },
+    // Legacy support: manter isField para código antigo
+    isField: true,
+    fieldDuration: 4000,
+    effectId: 2,
+    effectDuration: 700,
+    description: "Cria um campo de fogo que queima inimigos periodicamente.",
   },
 
   // ─── BUFF / DEBUFF ───────────────────────────────────────────────────────
