@@ -94,8 +94,8 @@ export function decideMoveTo(mob, tx, ty) {
 // @param {object} mob - { x, y, z, direcao }
 // @returns {{ nx, ny, direcao }|null}
 // ---------------------------------------------------------------------------
-export function decideWander(mob) {
-  if (Math.random() > 0.05) return null; // 95% de chance de não mover
+export function decideWander(mob, forced = false) {
+  if (!forced && Math.random() > 0.05) return null; // 95% de chance de não mover
 
   const DIRS = [
     { dx: 1, dy: 0 },

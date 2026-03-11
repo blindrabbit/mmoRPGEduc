@@ -394,8 +394,21 @@ async function processAI(id, mob, now, updates, { allowCombat = false } = {}) {
             { x: bfs.nx, y: bfs.ny, direcao: bfs.direcao, lastMoveTime: now },
             updates,
           );
+        } else {
+          // BFS sem caminho → wander forçado para contornar o obstáculo
+          const w = decideWander(mob, true);
+          if (
+            w &&
+            !isTileBlocked(w.nx, w.ny, z, map, monsters, players, id, nexoData) &&
+            !hasDangerousField(w.nx, w.ny, z, fields, mobImmunities)
+          ) {
+            applyToMob(
+              id,
+              { x: w.nx, y: w.ny, direcao: w.direcao, lastMoveTime: now },
+              updates,
+            );
+          }
         }
-        // Se BFS não encontrou caminho, o monstro simplesmente aguarda o próximo tick
       }
     }
   } else {
