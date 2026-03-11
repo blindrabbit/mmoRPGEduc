@@ -69,8 +69,11 @@ export function initWorldStore() {
   initialized = true;
 
   // world_entities — monstros
+  // Nota: a guarda tickRunning foi removida — ela bloqueava novos spawns e atualizações
+  // de combat quando ticks se sobrepunham (async setInterval). mergeMonsters já preserva
+  // os campos de AI local (lastAiTick, lastAttack) via spread order, portanto é seguro
+  // atualizar o store mesmo durante um tick em andamento.
   watchMonsters((data) => {
-    if (tickRunning) return; // WorldEngine não sobrescreve durante tick
     mergeMonsters(normalizeCollection(data, "monster"));
     notify("monsters", state.monsters);
   });

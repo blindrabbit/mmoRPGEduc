@@ -382,7 +382,7 @@ export function drawVisualEffects(ctx, assets, camX, camY, layer = "top") {
 
     const totalDuration = effect.effectDuration ?? 1200;
     const startTime = effect.startTime ?? effect.expiry - totalDuration;
-    const safeElapsed = Math.max(0, now - startTime);
+    const safeElapsed = Number.isFinite(startTime) ? Math.max(0, now - startTime) : 0;
     let spritesToDraw = [];
 
     if (!spritesToDraw.length) {

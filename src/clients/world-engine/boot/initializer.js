@@ -15,13 +15,7 @@ import { WorldStateHUD } from "../ui/worldStateHUD.js";
 import { Tooltip } from "../ui/tooltip.js";
 import { HUDRenderer } from "../rendering/hudRenderer.js";
 import { MetricsHUD } from "../ui/metricsHUD.js";
-import {
-  initGameLoop as initWorkerLoop,
-  startLoop,
-  syncGameEntities,
-} from "../engine/gameLoop.js";
 import { createProgressionUI } from "../../shared/ui/ProgressionUI.js";
-import { watchMonsters, watchPlayers, watchFields } from "../../../core/db.js";
 import { renderWorld } from "../../../render/worldRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
@@ -75,9 +69,10 @@ export class Initializer {
     // 4. Inicializar UI
     this.initUI();
 
-    // 5. Inicializar loop de rendering (rAF) + worker tick
+    // 5. Inicializar loop de rendering (rAF)
+    // Nota: WorldTick já processa a IA e atualiza o Firebase.
+    // O worker bridge é redundante aqui e causaria double-update no worldStore.
     this.initGameLoop();
-    await this.initWorkerSync();
 
     // 6. Marcar como ready
     this.worldState.ready = true;
@@ -266,38 +261,6 @@ export class Initializer {
     };
     this._rafId = requestAnimationFrame(tick);
     this.logger.ok("[GameLoop] Loop de rendering iniciado (rAF).");
-  }
-
-  /**
-   * Inicializa o worker de tick e configura sync contínuo Firebase → Worker.
-   * Os watchers fornecem o snapshot inicial na primeira chamada (sem necessidade
-   * de busca separada).
-   */
-  async initWorkerSync() {
-    const { WORLDENGINE } = this.config;
-
-    const ok = await initWorkerLoop({
-      tickInterval: WORLDENGINE.worldTickMs ?? 100,
-      onTick: () => {},
-    });
-
-    if (!ok) {
-      this.logger.warn(
-        "[Worker] Falha ao iniciar worker — usando só main thread.",
-      );
-      return;
-    }
-
-    // Firebase → Worker: a primeira chamada de cada watcher já envia o snapshot
-    // inicial, as chamadas seguintes enviam deltas em tempo real.
-    this._workerUnsubscribers = [
-      watchMonsters((monsters) => syncGameEntities({ monsters })),
-      watchPlayers((players) => syncGameEntities({ players })),
-      watchFields((fields) => syncGameEntities({ fields })),
-    ];
-
-    startLoop();
-    this.logger.ok("[Worker] Game loop worker iniciado e Firebase sync ativo.");
   }
 
   initProgressionUI() {
