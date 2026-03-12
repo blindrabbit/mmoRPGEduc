@@ -265,9 +265,7 @@ export class DragDropManager {
     if (!this._drag.active && !this._drag.pending) return;
 
     if (this._drag.active) {
-      const bestDrop =
-        this._drag.bestDropZone ?? this._checkDropZones(e.clientX, e.clientY);
-      const dropEl = bestDrop?.el ?? this._getDropZoneAt(e.clientX, e.clientY);
+      const dropEl = this._getDropZoneAt(e.clientX, e.clientY);
 
       if (dropEl) {
         this._executeDrop(dropEl);
@@ -517,6 +515,14 @@ export class DragDropManager {
   _checkDropZones(x, y) {
     if (!this._dropZones.length) this._refreshDropZones();
 
+    let connectedCount = 0;
+    for (const zoneEl of this._dropZones) {
+      if (zoneEl?.isConnected) connectedCount += 1;
+    }
+    if (connectedCount === 0) {
+      this._refreshDropZones();
+    }
+
     let best = null;
     for (const zoneEl of this._dropZones) {
       if (!zoneEl?.isConnected) continue;
@@ -542,6 +548,14 @@ export class DragDropManager {
   _calculateDropScore(dropEl, pointerX, pointerY) {
     const rect = dropEl.getBoundingClientRect();
     if (!rect || rect.width <= 0 || rect.height <= 0) return -1000;
+
+    const expand = 18;
+    const insideExpandedRect =
+      pointerX >= rect.left - expand &&
+      pointerX <= rect.right + expand &&
+      pointerY >= rect.top - expand &&
+      pointerY <= rect.bottom + expand;
+    if (!insideExpandedRect) return -1000;
 
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
