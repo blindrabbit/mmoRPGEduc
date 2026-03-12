@@ -15,10 +15,8 @@ import {
 } from "../../../core/network/EngineProtocol.js";
 
 // Resolve o path do worker relativo a este arquivo (funciona independente do HTML)
-const _DEFAULT_WORKER_URL = new URL(
-  "./worldTick.worker.js",
-  import.meta.url,
-).href;
+const _DEFAULT_WORKER_URL = new URL("./worldTick.worker.js", import.meta.url)
+  .href;
 
 export class WorkerBridge {
   constructor(options = {}) {
@@ -79,9 +77,8 @@ export class WorkerBridge {
 
   async _initMainFallback(config, initialState) {
     // Import dinâmico para evitar circular deps
-    const { createWorldEngine } = await import(
-      "../../../core/engine/WorldEngineCore.js"
-    );
+    const { createWorldEngine } =
+      await import("../../../core/engine/WorldEngineCore.js");
 
     this._core = createWorldEngine({
       ...config,
@@ -286,9 +283,9 @@ export class WorkerBridge {
     this._onReady = callback;
   }
 
-  // =============================================================================
+  // ===============================================================
   // HELPERS INTERNOS
-  // =============================================================================
+  // ===============================================================
 
   _handleEvent(event) {
     if (this._onEvent) {

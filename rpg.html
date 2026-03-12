@@ -1265,6 +1265,7 @@
         setPlayerActionCooldown,
         submitPlayerAction,
         createNewCharacter,
+        formatDisplayName,
         registerPlayerDisconnect,
         dbTouchPresence,
       } from "./src/core/db.js";
@@ -1726,6 +1727,7 @@
               _currentAccount.uuid,
               _currentCharSlot,
               _selectedClass,
+              _currentAccount.fullName,
             );
 
             // Adicionar ID do novo personagem à conta localmente
@@ -1848,7 +1850,9 @@
         const uid = charId;
         myPos = {
           id: uid,
-          name: playerData.name ?? playerData.gameName ?? "Herói",
+          name: _currentAccount?.fullName
+            ? formatDisplayName(_currentAccount.fullName)
+            : (playerData.name ?? playerData.gameName ?? "Herói"),
           x: _numOr(playerData.x, _numOr(WORLD_SETTINGS?.spawn?.x, 960)),
           y: _numOr(playerData.y, _numOr(WORLD_SETTINGS?.spawn?.y, 960)),
           z: _numOr(playerData.z, _numOr(WORLD_SETTINGS?.spawn?.z, GROUND_Z)),

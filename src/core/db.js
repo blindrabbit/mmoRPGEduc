@@ -10,6 +10,7 @@
 // Mantém compatibilidade com código legado
 // =============================================================================
 
+import { WORLD_SETTINGS } from "./config.js";
 import {
   dbGet,
   dbSet,
@@ -471,7 +472,7 @@ export const deleteAccount = (uuid) => {
  * @param {string} PlayerClass - Classe do personagem (Cavaleiro, Mago, etc)
  * @returns {string} ID do novo personagem
  */
-export const createNewCharacter = async (uuid, slotIndex, playerClass) => {
+export const createNewCharacter = async (uuid, slotIndex, playerClass, accountFullName = null) => {
   const normalizeClass = (value) => {
     const raw = String(value ?? "cavaleiro")
       .trim()
@@ -520,12 +521,12 @@ export const createNewCharacter = async (uuid, slotIndex, playerClass) => {
 
   // 3. Montar dados completos do novo personagem
   const newCharData = {
-    name: `${normalizedClass} ${slotIndex + 1}`,
+    name: accountFullName ? formatDisplayName(accountFullName) : `${normalizedClass} ${slotIndex + 1}`,
     class: normalizedClass,
     appearance: { class: normalizedClass },
-    x: 960,
-    y: 960,
-    z: 7,
+    x: WORLD_SETTINGS.spawn.x,
+    y: WORLD_SETTINGS.spawn.y,
+    z: WORLD_SETTINGS.spawn.z,
     direcao: "frente",
     stats: stats,
     spells: {},
