@@ -25,27 +25,27 @@ import { TILE_SIZE } from '../../../core/config.js';
 
 export const INVENTORY_CONFIG = Object.freeze({
   slots: 20,
-  cols: 5,  // grid 5×4
+  cols: 5, // grid 5×4
 
   // Layout visual dos slots de equipamento (linha/coluna no grid CSS)
   equipmentLayout: [
-    { slot: 'helmet',  label: 'Capacete', row: 1, col: 2 },
-    { slot: 'amulet',  label: 'Amuleto',  row: 1, col: 3 },
-    { slot: 'weapon',  label: 'Arma',     row: 2, col: 1 },
-    { slot: 'armor',   label: 'Armadura', row: 2, col: 2 },
-    { slot: 'shield',  label: 'Escudo',   row: 2, col: 3 },
-    { slot: 'ring',    label: 'Anel',     row: 3, col: 1 },
-    { slot: 'boots',   label: 'Botas',    row: 3, col: 2 },
-    { slot: 'backpack',label: 'Mochila',  row: 3, col: 3 },
+    { slot: "helmet", label: "Cab", row: 1, col: 2 },
+    { slot: "ring", label: "Anel", row: 2, col: 1 },
+    { slot: "armor", label: "Corp", row: 2, col: 2 },
+    { slot: "amulet", label: "Amu", row: 2, col: 3 },
+    { slot: "weapon", label: "Arma", row: 3, col: 1 },
+    { slot: "backpack", label: "Moch", row: 3, col: 2 },
+    { slot: "shield", label: "Esc", row: 3, col: 3 },
+    { slot: "boots", label: "Bot", row: 4, col: 2 },
   ],
 
   // Cores de raridade (usadas no border-color do slot)
   rarity: {
-    common: '#888',
-    uncommon: '#4c4',
-    rare: '#48f',
-    epic: '#a4f',
-    legendary: '#f84',
+    common: "#888",
+    uncommon: "#4c4",
+    rare: "#48f",
+    epic: "#a4f",
+    legendary: "#f84",
   },
 });
 
@@ -121,14 +121,14 @@ export class InventoryUI {
 
   show() {
     this._visible = true;
-    const panel = this._container.querySelector('.inventory-panel');
-    if (panel) panel.classList.add('visible');
+    const panel = this._container.querySelector(".inventory-panel");
+    if (panel) panel.classList.add("visible");
   }
 
   hide() {
     this._visible = false;
-    const panel = this._container.querySelector('.inventory-panel');
-    if (panel) panel.classList.remove('visible');
+    const panel = this._container.querySelector(".inventory-panel");
+    if (panel) panel.classList.remove("visible");
   }
 
   toggle() {
@@ -157,8 +157,14 @@ export class InventoryUI {
     this._unsubs.push(
       worldEvents.subscribe(EVENT_TYPES.INVENTORY_UPDATED, (e) => {
         if (e.playerId !== this._playerId) return;
-        if (e.inventory) { this._inventory = e.inventory; this._renderInventoryGrid(); }
-        if (e.equipment) { this._equipment = e.equipment; this._renderEquipmentGrid(); }
+        if (e.inventory) {
+          this._inventory = e.inventory;
+          this._renderInventoryGrid();
+        }
+        if (e.equipment) {
+          this._equipment = e.equipment;
+          this._renderEquipmentGrid();
+        }
       }),
     );
 
@@ -182,22 +188,26 @@ export class InventoryUI {
 
     this._unsubs.push(
       worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_START, () => {
-        this._container.classList.add('is-dragging');
+        this._container.classList.add("is-dragging");
       }),
     );
 
     this._unsubs.push(
       worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_END, () => {
-        this._container.classList.remove('is-dragging');
+        this._container.classList.remove("is-dragging");
       }),
     );
 
     this._unsubs.push(
-      worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_VALID, () => this._showFeedback('valid')),
+      worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_VALID, () =>
+        this._showFeedback("valid"),
+      ),
     );
 
     this._unsubs.push(
-      worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, () => this._showFeedback('invalid')),
+      worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, () =>
+        this._showFeedback("invalid"),
+      ),
     );
   }
 
@@ -227,15 +237,16 @@ export class InventoryUI {
       </div>
     `;
 
-    this._container.querySelector('.inventory-close')
-      ?.addEventListener('click', () => this.hide());
+    this._container
+      .querySelector(".inventory-close")
+      ?.addEventListener("click", () => this.hide());
 
     this._renderInventoryGrid();
     this._renderEquipmentGrid();
   }
 
   _renderInventoryGrid() {
-    const grid = this._container.querySelector('.inventory-grid');
+    const grid = this._container.querySelector(".inventory-grid");
     if (!grid) return;
 
     const slots = Array.from({ length: INVENTORY_CONFIG.slots }, (_, i) => {
@@ -245,27 +256,29 @@ export class InventoryUI {
   }
 
   _renderEquipmentGrid() {
-    const grid = this._container.querySelector('.equipment-grid');
+    const grid = this._container.querySelector(".equipment-grid");
     if (!grid) return;
 
-    const slots = INVENTORY_CONFIG.equipmentLayout.map(({ slot, label, row, col }) => {
-      const item = this._equipment[slot] ?? null;
-      const el = this._buildEquipmentSlot(slot, label, item);
-      el.style.gridRow = row;
-      el.style.gridColumn = col;
-      return el;
-    });
+    const slots = INVENTORY_CONFIG.equipmentLayout.map(
+      ({ slot, label, row, col }) => {
+        const item = this._equipment[slot] ?? null;
+        const el = this._buildEquipmentSlot(slot, label, item);
+        el.style.gridRow = row;
+        el.style.gridColumn = col;
+        return el;
+      },
+    );
     grid.replaceChildren(...slots);
   }
 
   _renderStatsPreview(stats) {
-    const el = this._container.querySelector('.inventory-stats-preview');
+    const el = this._container.querySelector(".inventory-stats-preview");
     if (!el) return;
     const parts = [];
     if (stats.atk != null) parts.push(`ATK ${stats.atk}`);
     if (stats.def != null) parts.push(`DEF ${stats.def}`);
     if (stats.maxHp != null) parts.push(`HP ${stats.maxHp}`);
-    el.textContent = parts.join('  ');
+    el.textContent = parts.join("  ");
   }
 
   // ---------------------------------------------------------------------------
@@ -273,72 +286,79 @@ export class InventoryUI {
   // ---------------------------------------------------------------------------
 
   _buildInventorySlot(slotIndex, item) {
-    const el = document.createElement('div');
-    el.className = 'inventory-slot';
-    el.dataset.dropZone = 'inventory';
+    const el = document.createElement("div");
+    el.className = "inventory-slot";
+    el.dataset.dropZone = "inventory";
     el.dataset.dropSlot = slotIndex;
 
     if (item) {
-      el.classList.add('has-item');
-      el.dataset.itemSource = 'inventory';
+      el.classList.add("has-item");
+      el.dataset.itemSource = "inventory";
       el.dataset.itemSlot = slotIndex;
-      if (item.rarity) el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? '';
+      if (item.rarity)
+        el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? "";
 
-      const icon = document.createElement('div');
+      const icon = document.createElement("div");
       const builtIcon = this._buildItemIcon(item);
       if (builtIcon) {
-        builtIcon.setAttribute('aria-label', item.name ?? 'item');
+        builtIcon.setAttribute("aria-label", item.name ?? "item");
         el.appendChild(builtIcon);
       } else {
-        icon.className = 'item-icon';
+        icon.className = "item-icon";
         if (item.spriteId != null) icon.dataset.spriteId = item.spriteId;
-        icon.setAttribute('aria-label', item.name);
+        icon.setAttribute("aria-label", item.name);
         el.appendChild(icon);
       }
 
       if (item.stackable && (item.quantity ?? 1) > 1) {
-        const qty = document.createElement('span');
-        qty.className = 'item-qty';
+        const qty = document.createElement("span");
+        qty.className = "item-qty";
         qty.textContent = item.quantity;
         el.appendChild(qty);
       }
 
       el.title = this._buildTooltipText(item);
-      el.addEventListener('dblclick', () => this._onInventoryDblClick(slotIndex, item));
+      el.addEventListener("dblclick", () =>
+        this._onInventoryDblClick(slotIndex, item),
+      );
     }
 
     return el;
   }
 
   _buildEquipmentSlot(slot, label, item) {
-    const el = document.createElement('div');
+    const el = document.createElement("div");
     el.className = `equipment-slot equip-${slot}`;
-    el.dataset.dropZone = 'equipment';
+    el.dataset.dropZone = "equipment";
     el.dataset.dropEquipSlot = slot;
-    el.setAttribute('aria-label', label);
+    el.setAttribute("aria-label", label);
 
     if (item) {
-      el.classList.add('has-item');
-      el.dataset.itemSource = 'equipment';
+      el.classList.add("has-item");
+      el.dataset.itemSource = "equipment";
       el.dataset.itemEquipSlot = slot;
-      if (item.rarity) el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? '';
+      if (item.rarity)
+        el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? "";
 
       const icon = this._buildItemIcon(item);
       if (icon) {
-        icon.setAttribute('aria-label', item.name ?? 'item');
+        icon.setAttribute("aria-label", item.name ?? "item");
         el.appendChild(icon);
       } else {
-        const fallbackIcon = document.createElement('div');
-        fallbackIcon.className = 'item-icon';
-        if (item.spriteId != null) fallbackIcon.dataset.spriteId = item.spriteId;
-        fallbackIcon.setAttribute('aria-label', item.name);
+        const fallbackIcon = document.createElement("div");
+        fallbackIcon.className = "item-icon";
+        if (item.spriteId != null)
+          fallbackIcon.dataset.spriteId = item.spriteId;
+        fallbackIcon.setAttribute("aria-label", item.name);
         el.appendChild(fallbackIcon);
       }
       el.title = this._buildTooltipText(item);
-      el.addEventListener('dblclick', () => this._sendAction({ itemAction: 'unequip', equipSlot: slot }));
+      el.addEventListener("dblclick", () =>
+        this._sendAction({ itemAction: "unequip", equipSlot: slot }),
+      );
     } else {
-      const lbl = document.createElement('span');
-      lbl.className = 'slot-label';
+      const lbl = document.createElement("span");
+      lbl.className = "slot-label";
       lbl.textContent = label;
       el.appendChild(lbl);
     }
@@ -351,19 +371,21 @@ export class InventoryUI {
   // ---------------------------------------------------------------------------
 
   _onInventoryDblClick(slotIndex, item) {
-    if (item.type === 'equipment') {
-      this._sendAction({ itemAction: 'equip', slotIndex });
-    } else if (item.type === 'consumable') {
-      this._sendAction({ itemAction: 'use', slotIndex });
+    if (item.type === "equipment") {
+      this._sendAction({ itemAction: "equip", slotIndex });
+    } else if (item.type === "consumable") {
+      this._sendAction({ itemAction: "use", slotIndex });
     }
   }
 
   _sendAction(payload) {
     if (!this._engine) return;
-    this._engine.sendAction({
-      type: 'item',
-      payload: { ...payload, playerId: this._playerId },
-    }).catch((err) => console.error('[InventoryUI] sendAction error:', err));
+    this._engine
+      .sendAction({
+        type: "item",
+        payload: { ...payload, playerId: this._playerId },
+      })
+      .catch((err) => console.error("[InventoryUI] sendAction error:", err));
   }
 
   // ---------------------------------------------------------------------------
@@ -371,24 +393,27 @@ export class InventoryUI {
   // ---------------------------------------------------------------------------
 
   _resolveItemData(source, key) {
-    if (source === 'inventory') return this._inventory[key] ?? null;
-    if (source === 'equipment') return this._equipment[key] ?? null;
+    if (source === "inventory") return this._inventory[key] ?? null;
+    if (source === "equipment") return this._equipment[key] ?? null;
     return null;
   }
 
   _showFeedback(type) {
-    const el = this._container.querySelector('.inventory-feedback');
+    const el = this._container.querySelector(".inventory-feedback");
     if (!el) return;
-    el.textContent = type === 'invalid' ? 'Local inválido' : '';
+    el.textContent = type === "invalid" ? "Local inválido" : "";
     el.className = `inventory-feedback feedback-${type}`;
     clearTimeout(this._feedbackTimeout);
     this._feedbackTimeout = setTimeout(() => {
-      if (el) { el.textContent = ''; el.className = 'inventory-feedback'; }
+      if (el) {
+        el.textContent = "";
+        el.className = "inventory-feedback";
+      }
     }, 1200);
   }
 
   _buildItemIcon(item) {
-    if (typeof this._createItemIconElement !== 'function') return null;
+    if (typeof this._createItemIconElement !== "function") return null;
     try {
       const built = this._createItemIconElement(item);
       if (built instanceof HTMLElement) return built;
@@ -401,7 +426,7 @@ export class InventoryUI {
   _buildTooltipText(item) {
     const lines = [`${item.name} [${item.type}]`];
     const externalDesc =
-      typeof this._getItemDescription === 'function'
+      typeof this._getItemDescription === "function"
         ? this._getItemDescription(item)
         : null;
     if (item.description) lines.push(item.description);
@@ -409,14 +434,15 @@ export class InventoryUI {
     if (item.stats) {
       lines.push(
         Object.entries(item.stats)
-          .map(([k, v]) => `${k}: ${v > 0 ? '+' : ''}${v}`)
-          .join('  '),
+          .map(([k, v]) => `${k}: ${v > 0 ? "+" : ""}${v}`)
+          .join("  "),
       );
     }
-    if (item.effect) lines.push(`Efeito: ${item.effect.type} +${item.effect.value ?? ''}`);
+    if (item.effect)
+      lines.push(`Efeito: ${item.effect.type} +${item.effect.value ?? ""}`);
     if (item.value) lines.push(`Valor: ${item.value} gold`);
     if (item.weight) lines.push(`Peso: ${item.weight}`);
-    return lines.join('\n');
+    return lines.join("\n");
   }
 
   // ---------------------------------------------------------------------------
@@ -424,20 +450,20 @@ export class InventoryUI {
   // ---------------------------------------------------------------------------
 
   _injectStyles() {
-    if (document.getElementById('inventory-ui-styles')) return;
-    const style = document.createElement('style');
-    style.id = 'inventory-ui-styles';
+    if (document.getElementById("inventory-ui-styles")) return;
+    const style = document.createElement("style");
+    style.id = "inventory-ui-styles";
     style.textContent = `
       .inventory-panel {
         display: none;
         position: absolute;
-        top: 60px; right: 16px;
-        background: rgba(15, 15, 25, 0.96);
-        border: 1px solid #444;
+        top: 60px; right: 12px;
+        background: #0d1117;
+        border: 1px solid #1a2a3a;
         border-radius: 8px;
         padding: 10px;
-        min-width: 260px;
-        font-family: Tahoma, sans-serif;
+        min-width: 270px;
+        font-family: monospace;
         font-size: 11px;
         color: #ddd;
         user-select: none;
@@ -449,24 +475,25 @@ export class InventoryUI {
         display: flex; align-items: center; gap: 8px;
         margin-bottom: 8px;
       }
-      .inventory-title { font-weight: bold; font-size: 12px; flex: 1; }
-      .inventory-stats-preview { font-size: 10px; color: #8cf; }
+      .inventory-title { font-weight: bold; font-size: 12px; flex: 1; color: #2ecc71; }
+      .inventory-stats-preview { font-size: 10px; color: #aaa; }
       .inventory-close {
-        background: none; border: 1px solid #555; color: #aaa;
+        background: #111827; border: 1px solid #1a2a3a; color: #aaa;
         border-radius: 4px; width: 20px; height: 20px;
         cursor: pointer; font-size: 11px; line-height: 1;
       }
-      .inventory-close:hover { background: #333; color: #fff; }
+      .inventory-close:hover { background: #1a2a3a; color: #fff; }
 
       .inventory-body { display: flex; gap: 12px; }
-      .section-label { font-size: 10px; color: #888; margin: 0 0 4px; }
+      .section-label { font-size: 10px; color: #7f8c8d; margin: 0 0 4px; }
 
       /* Equipment grid: 3 cols × 3 rows */
       .equipment-grid {
         display: grid;
         grid-template-columns: repeat(3, ${TILE_SIZE}px);
-        grid-template-rows: repeat(3, ${TILE_SIZE}px);
-        gap: 3px;
+        grid-template-rows: repeat(4, ${TILE_SIZE}px);
+        gap: 4px;
+        padding: 6px;
       }
 
       /* Inventory grid: COLS cols */
@@ -474,24 +501,28 @@ export class InventoryUI {
         display: grid;
         grid-template-columns: repeat(${INVENTORY_CONFIG.cols}, ${TILE_SIZE}px);
         gap: 3px;
+        padding: 6px;
       }
 
       .inventory-slot, .equipment-slot {
         width: ${TILE_SIZE}px; height: ${TILE_SIZE}px;
-        background: #1a1a2e;
-        border: 1px solid #333;
-        border-radius: 4px;
+        background: #111827;
+        border: 1px solid #1a2a3a;
+        border-radius: 3px;
         position: relative;
         cursor: default;
         display: flex; align-items: center; justify-content: center;
         box-sizing: border-box;
+      }
+      .inventory-slot:hover, .equipment-slot:hover {
+        border-color: #2ecc71;
       }
       .inventory-slot.has-item, .equipment-slot.has-item { cursor: grab; }
       .inventory-slot.has-item:active, .equipment-slot.has-item:active { cursor: grabbing; }
 
       .slot-label {
         position: absolute; top: 2px; left: 3px;
-        font-size: 8px; color: #555; pointer-events: none;
+        font-size: 8px; color: #444; pointer-events: none;
       }
 
       .item-icon {

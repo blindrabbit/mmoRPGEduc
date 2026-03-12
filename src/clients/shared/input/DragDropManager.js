@@ -343,21 +343,30 @@ export class DragDropManager {
     const { source, slotIndex, equipSlot, worldItemId } = this._drag;
     const worldPos = this._screenToWorld(clientX, clientY);
 
-    if (source === 'inventory' && slotIndex != null) {
-      this._sendAction({ itemAction: 'drop', slotIndex });
-    } else if (source === 'equipment' && equipSlot) {
-      this._sendAction({ itemAction: 'unequip', equipSlot });
-    } else if (source === 'world' && worldItemId && worldPos) {
-      const isStackable = this._itemDataService?.isStackable(
-        this._drag.itemData?.tileId ?? this._drag.itemData?.id,
-      ) ?? !!this._drag.itemData?.stackable;
-      const totalQty = Number(this._drag.itemData?.quantity ?? this._drag.itemData?.count ?? 1);
+    if (source === "inventory" && slotIndex != null && worldPos) {
+      this._sendAction({
+        itemAction: "drop",
+        slotIndex,
+        toX: worldPos.x,
+        toY: worldPos.y,
+        toZ: worldPos.z ?? 7,
+      });
+    } else if (source === "equipment" && equipSlot) {
+      this._sendAction({ itemAction: "unequip", equipSlot });
+    } else if (source === "world" && worldItemId && worldPos) {
+      const isStackable =
+        this._itemDataService?.isStackable(
+          this._drag.itemData?.tileId ?? this._drag.itemData?.id,
+        ) ?? !!this._drag.itemData?.stackable;
+      const totalQty = Number(
+        this._drag.itemData?.quantity ?? this._drag.itemData?.count ?? 1,
+      );
       const doSplit = this._drag.shiftKey && isStackable && totalQty > 1;
 
       if (doSplit) {
         const splitQty = Math.max(1, Math.floor(totalQty / 2));
         this._sendAction({
-          itemAction: 'splitWorld',
+          itemAction: "splitWorld",
           worldItemId,
           splitQty,
           toX: worldPos.x,
@@ -366,7 +375,7 @@ export class DragDropManager {
         });
       } else {
         this._sendAction({
-          itemAction: 'moveWorld',
+          itemAction: "moveWorld",
           worldItemId,
           toX: worldPos.x,
           toY: worldPos.y,

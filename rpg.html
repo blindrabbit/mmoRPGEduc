@@ -1411,7 +1411,7 @@
         if (!grid) return;
 
         const buildDesc = (item) => {
-          const tileId = item?.tileId ?? item?.id;
+          const tileId = item?.tileId ?? item?.spriteId ?? item?.id;
           const entry = mapData?.[tileId] ?? mapData?.[String(tileId)] ?? null;
           const lines = [item.name ?? entry?.flags_raw?.item_name ?? `Item #${tileId ?? "?"}`];
           if (item.description) lines.push(item.description);
@@ -1442,7 +1442,7 @@
           slot.dataset.itemSource = "inventory";
           slot.dataset.itemSlot = String(i);
 
-          const tileId = Number(item?.tileId ?? item?.id);
+          const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
           const sprite = Number.isFinite(tileId) ? assets.getMapSprite(tileId) : null;
           if (sprite?.sheet) {
             const cvs = document.createElement("canvas");
@@ -2122,7 +2122,7 @@
             return null;
           },
           createGhostElement: (itemData) => {
-            const tileId = itemData?.tileId ?? itemData?.id;
+            const tileId = itemData?.tileId ?? itemData?.spriteId ?? itemData?.id;
             const sprite = tileId != null ? assets.getMapSprite(tileId) : null;
             if (!sprite?.sheet) return null;
 

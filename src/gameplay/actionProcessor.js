@@ -579,7 +579,14 @@ async function _processItem(action, player, now) {
       result = await pickUpItem(playerId, worldItemId);
       break;
     case "drop":
-      result = await dropItem(playerId, slotIndex, quantity ?? null);
+      result = await dropItem(
+        playerId,
+        slotIndex,
+        quantity ?? null,
+        action.toX,
+        action.toY,
+        action.toZ,
+      );
       break;
     case "moveWorld":
       result = await moveWorldItem(playerId, worldItemId, action.toX, action.toY, action.toZ);
