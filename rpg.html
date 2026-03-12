@@ -1268,6 +1268,7 @@
         formatDisplayName,
         registerPlayerDisconnect,
         dbTouchPresence,
+        dbWatch,
       } from "./src/core/db.js";
       import {
         initWorldStore,
@@ -1281,6 +1282,7 @@
       } from "./src/gameplay/combatEngine.js";
       import { worldEvents, EVENT_TYPES } from "./src/core/events.js";
       import { initCombatTextUI } from "./src/clients/shared/ui/combatText.js";
+      import { DragDropManager } from "./src/clients/shared/input/DragDropManager.js";
       import {
         calculateCombatResult,
         calculateNewHp,
@@ -1397,10 +1399,209 @@
         for (let i = 0; i < 20; i++) {
           const slot = document.createElement("div");
           slot.className = "inv-slot";
+          slot.dataset.dropZone = "inventory";
+          slot.dataset.dropSlot = String(i);
           slot.title = `Slot ${i + 1}`;
           grid.appendChild(slot);
         }
       })();
+
+      function _renderInventoryGrid(inventory = {}) {
+        const grid = document.getElementById("inv-grid");
+        if (!grid) return;
+
+        const buildDesc = (item) => {
+          const tileId = item?.tileId ?? item?.id;
+          const entry = mapData?.[tileId] ?? mapData?.[String(tileId)] ?? null;
+          const lines = [item.name ?? entry?.flags_raw?.item_name ?? `Item #${tileId ?? "?"}`];
+          if (item.description) lines.push(item.description);
+          const props = [];
+          if (entry?.game?.is_pickupable) props.push("Pegável");
+          if (entry?.game?.is_movable) props.push("Movível");
+          if (entry?.game?.is_usable) props.push("Usável");
+          if (entry?.game?.is_stackable) props.push("Empilhável");
+          if (props.length) lines.push(props.join(" • "));
+          if (tileId != null) lines.push(`TileId: ${tileId}`);
+          return lines.join("\n");
+        };
+
+        for (let i = 0; i < 20; i++) {
+          const slot = grid.children[i];
+          if (!slot) continue;
+
+          const item = inventory?.[i] ?? null;
+          slot.replaceChildren();
+
+          if (!item) {
+            delete slot.dataset.itemSource;
+            delete slot.dataset.itemSlot;
+            slot.title = `Slot ${i + 1}`;
+            continue;
+          }
+
+          slot.dataset.itemSource = "inventory";
+          slot.dataset.itemSlot = String(i);
+
+          const tileId = Number(item?.tileId ?? item?.id);
+          const sprite = Number.isFinite(tileId) ? assets.getMapSprite(tileId) : null;
+          if (sprite?.sheet) {
+            const cvs = document.createElement("canvas");
+            cvs.width = 24;
+            cvs.height = 24;
+            const ctx = cvs.getContext("2d");
+            ctx.imageSmoothingEnabled = false;
+            ctx.drawImage(
+              sprite.sheet,
+              sprite.x,
+              sprite.y,
+              sprite.w,
+              sprite.h,
+              0,
+              0,
+              24,
+              24,
+            );
+            slot.appendChild(cvs);
+          } else {
+            const fallback = document.createElement("span");
+            fallback.style.fontSize = "10px";
+            fallback.style.color = "#bbb";
+            fallback.textContent = "?";
+            slot.appendChild(fallback);
+          }
+
+          const qty = Number(item.quantity ?? 1);
+          if (qty > 1) {
+            const badge = document.createElement("span");
+            badge.textContent = String(qty);
+            badge.style.position = "absolute";
+            badge.style.right = "2px";
+            badge.style.bottom = "1px";
+            badge.style.fontSize = "10px";
+            badge.style.fontWeight = "bold";
+            badge.style.color = "#ffdf7a";
+            badge.style.textShadow = "0 0 2px #000";
+            slot.appendChild(badge);
+          }
+
+          slot.title = buildDesc(item);
+        }
+      }
+
+      function _removeTileFromLayer(coord, layerKey, predicate) {
+        const tile = map?.[coord];
+        if (!tile) return false;
+        const arr = tile?.[layerKey];
+        if (!Array.isArray(arr) || arr.length === 0) return false;
+
+        const idx = arr.findIndex(predicate);
+        if (idx < 0) return false;
+
+        arr.splice(idx, 1);
+        if (arr.length === 0) delete tile[layerKey];
+        if (Object.keys(tile).length === 0) delete map[coord];
+        return true;
+      }
+
+      function _removeRenderedWorldItem(worldItemId) {
+        const prev = _worldItemRenderById[worldItemId];
+        if (!prev) return false;
+
+        const removed = _removeTileFromLayer(
+          prev.coord,
+          String(prev.layer),
+          (t) => t?.__worldItemId === worldItemId,
+        );
+
+        delete _worldItemRenderById[worldItemId];
+        return removed;
+      }
+
+      function _applyRenderedWorldItem(worldItemId, item) {
+        const tileId = Number(item?.tileId ?? item?.id);
+        const x = Number(item?.x);
+        const y = Number(item?.y);
+        const z = Number(item?.z ?? 7);
+
+        if (!Number.isFinite(tileId) || !Number.isFinite(x) || !Number.isFinite(y)) {
+          return false;
+        }
+
+        const coord = `${x},${y},${z}`;
+        if (!map[coord] || typeof map[coord] !== "object" || Array.isArray(map[coord])) {
+          map[coord] = {};
+        }
+
+        const layerKey = String(WORLD_ITEM_LAYER);
+        if (!Array.isArray(map[coord][layerKey])) map[coord][layerKey] = [];
+
+        map[coord][layerKey].push({
+          id: tileId,
+          count: Number(item?.quantity ?? 1),
+          __worldItemId: worldItemId,
+        });
+
+        _worldItemRenderById[worldItemId] = {
+          coord,
+          layer: WORLD_ITEM_LAYER,
+          tileId,
+        };
+        return true;
+      }
+
+      function _applyWorldItemsSnapshot(items) {
+        const next = items && typeof items === "object" ? items : {};
+        let dirty = false;
+
+        for (const id of Object.keys(_worldItemsById)) delete _worldItemsById[id];
+        for (const coord of Object.keys(_worldItemsByCoord))
+          delete _worldItemsByCoord[coord];
+
+        for (const [id, rawItem] of Object.entries(next)) {
+          const item = { ...rawItem, id: rawItem?.id ?? id };
+          _worldItemsById[id] = item;
+          if (item.x != null && item.y != null) {
+            const coord = `${item.x},${item.y},${item.z ?? 7}`;
+            if (!_worldItemsByCoord[coord]) _worldItemsByCoord[coord] = [];
+            _worldItemsByCoord[coord].push(item);
+          }
+        }
+
+        for (const id of Object.keys(_worldItemRenderById)) {
+          if (!next[id]) {
+            dirty = _removeRenderedWorldItem(id) || dirty;
+          }
+        }
+
+        for (const [id, item] of Object.entries(next)) {
+          if (
+            item?.fromMap &&
+            item?.sourceCoord != null &&
+            item?.sourceLayer != null &&
+            item?.sourceTileId != null
+          ) {
+            const sourceKey = `${item.sourceCoord}|${item.sourceLayer}|${item.sourceTileId}`;
+            if (!_removedMapSourceKeys.has(sourceKey)) {
+              const removedSource = _removeTileFromLayer(
+                String(item.sourceCoord),
+                String(item.sourceLayer),
+                (t) => Number(t?.id) === Number(item.sourceTileId),
+              );
+              if (removedSource) {
+                _removedMapSourceKeys.add(sourceKey);
+                dirty = true;
+              }
+            }
+          }
+
+          dirty = _removeRenderedWorldItem(id) || dirty;
+          dirty = _applyRenderedWorldItem(id, item) || dirty;
+        }
+
+        if (dirty) {
+          floorIndex = buildFloorIndex(map);
+        }
+      }
 
       // ── Seções colapsáveis do painel lateral ───────────────────────────────
       document.querySelectorAll(".side-section-hdr").forEach((hdr) => {
@@ -1506,6 +1707,12 @@
       let serverOffset = 0;
       let _lastPlayerXp = null;
       let _lastPlayerTotalXp = null;
+      const WORLD_ITEM_LAYER = 99;
+      const _worldItemRenderById = {};
+      const _worldItemsById = {};
+      const _worldItemsByCoord = {};
+      const _removedMapSourceKeys = new Set();
+      let _dragDropManager = null;
 
       const BASIC_ATTACK_CD_KEY = "cdBasicAttack";
       const AUTO_ATTACK_TICK_MS = 2000;
@@ -1867,6 +2074,78 @@
         _lastPlayerXp = Number(myPos.stats?.xp ?? 0);
         _lastPlayerTotalXp = Number(myPos.stats?.totalXp);
         if (!Number.isFinite(_lastPlayerTotalXp)) _lastPlayerTotalXp = null;
+        myPos.inventory = playerData.inventory ?? {};
+        _renderInventoryGrid(myPos.inventory);
+
+        _dragDropManager?.unmount?.();
+        _dragDropManager = new DragDropManager({
+          worldEngine: {
+            sendAction: async (action) => {
+              if (!action?.type || !action?.payload) {
+                return { success: false, error: "Ação inválida" };
+              }
+              try {
+                await submitPlayerAction(uid, {
+                  type: action.type,
+                  ...action.payload,
+                });
+                return { success: true };
+              } catch (err) {
+                return {
+                  success: false,
+                  error: err?.message ?? "Falha ao enviar ação",
+                };
+              }
+            },
+          },
+          playerId: uid,
+          container: document,
+          canvas,
+          worldRenderer: {
+            screenToWorld: (clientX, clientY) => {
+              const rect = canvas.getBoundingClientRect();
+              return {
+                x: Math.floor((clientX - rect.left + cam.x) / TILE_SIZE),
+                y: Math.floor((clientY - rect.top + cam.y) / TILE_SIZE),
+                z: activeZ ?? myPos?.z ?? 7,
+              };
+            },
+          },
+          getItemData: (source, key) => {
+            if (source === "inventory") return myPos?.inventory?.[key] ?? null;
+            if (source === "world") {
+              const bucket = _worldItemsByCoord[key];
+              return Array.isArray(bucket) && bucket.length
+                ? bucket[bucket.length - 1]
+                : null;
+            }
+            return null;
+          },
+          createGhostElement: (itemData) => {
+            const tileId = itemData?.tileId ?? itemData?.id;
+            const sprite = tileId != null ? assets.getMapSprite(tileId) : null;
+            if (!sprite?.sheet) return null;
+
+            const cvs = document.createElement("canvas");
+            cvs.width = TILE_SIZE;
+            cvs.height = TILE_SIZE;
+            const g = cvs.getContext("2d");
+            g.imageSmoothingEnabled = false;
+            g.drawImage(
+              sprite.sheet,
+              sprite.x,
+              sprite.y,
+              sprite.w,
+              sprite.h,
+              0,
+              0,
+              TILE_SIZE,
+              TILE_SIZE,
+            );
+            return cvs;
+          },
+        });
+        _dragDropManager.mount();
 
         document.getElementById("game-wrapper").style.display = "flex";
         activeZ = myPos.z;
@@ -1910,14 +2189,20 @@
           myPos.x = _numOr(serverData.x, myPos.x);
           myPos.y = _numOr(serverData.y, myPos.y);
           myPos.z = _numOr(serverData.z, myPos.z);
+          myPos.inventory = serverData.inventory ?? myPos.inventory ?? {};
           myPos.status = serverData.status ?? null;
           myPos.lastAttack = serverData.lastAttack ?? myPos.lastAttack;
           myPos[BASIC_ATTACK_CD_KEY] =
             serverData[BASIC_ATTACK_CD_KEY] ?? myPos[BASIC_ATTACK_CD_KEY];
+          _renderInventoryGrid(myPos.inventory);
           handleStatsChanges("players", { [uid]: myPos });
           updateRegenPlayer(myPos);
           updateSpellHUDPlayer(myPos);
           updateUI(myPos);
+        });
+
+        dbWatch("world_items", (items) => {
+          _applyWorldItemsSnapshot(items);
         });
 
         // Outros jogadores online
@@ -2403,6 +2688,8 @@
 
       // ── Cleanup ────────────────────────────────────────────────────────────
       function _cleanup() {
+        _dragDropManager?.unmount?.();
+        _dragDropManager = null;
         stopRegen();
         if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
         if (myPos) removePlayer(myPos.id);

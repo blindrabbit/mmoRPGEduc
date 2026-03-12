@@ -7,7 +7,7 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { TILE_SIZE, ENTITY_RENDER, GROUND_Z } from "../core/config.js";
-import { renderMap } from "./mapRenderer.js";
+import { renderMap, getTileDrawElevation } from "./mapRenderer.js";
 import { getMonsters, getPlayers } from "../core/worldStore.js";
 import { getMonsterTemplates } from "../core/remoteTemplates.js";
 import {
@@ -128,6 +128,9 @@ function renderEntitiesFull(
   activeZ,
   ts,
   {
+    map = null,
+    floorIndex = null,
+    mapData = null,
     showHP = true,
     showName = true,
     renderMode = "high",
@@ -161,17 +164,31 @@ function renderEntitiesFull(
         ? anim.getVisualPos(safeEnt)
         : { x: ent.x * TILE_SIZE, y: ent.y * TILE_SIZE };
 
-    const drawX = Math.round(vPos.x - camX + TILE_SIZE / 2);
-    const drawY = Math.round(vPos.y - camY + TILE_SIZE / 2);
+    const tileElevation = getTileDrawElevation({
+      map,
+      floorIndex,
+      nexoData: mapData,
+      x: ent.x,
+      y: ent.y,
+      z: entZNum,
+    });
+
+    const elevatedVPos =
+      tileElevation > 0
+        ? { x: vPos.x - tileElevation, y: vPos.y - tileElevation }
+        : vPos;
+
+    const drawX = Math.round(elevatedVPos.x - camX + TILE_SIZE / 2);
+    const drawY = Math.round(elevatedVPos.y - camY + TILE_SIZE / 2);
     const labelX = Math.round(
-      vPos.x -
+      elevatedVPos.x -
         camX +
         TILE_SIZE / 2 +
         ENTITY_RENDER.offsetX +
         ENTITY_RENDER.labelOffsetX,
     );
     const spriteTopY = Math.round(
-      vPos.y -
+      elevatedVPos.y -
         camY +
         Math.round(TILE_SIZE * ENTITY_RENDER.footAnchorY) -
         TILE_SIZE +
@@ -238,8 +255,15 @@ function renderEntitiesFull(
         },
       };
       spriteDrawn =
-        anim.drawManual(ctx, assets, entForDraw, vPos.x, vPos.y, camX, camY) ===
-        true;
+        anim.drawManual(
+          ctx,
+          assets,
+          entForDraw,
+          elevatedVPos.x,
+          elevatedVPos.y,
+          camX,
+          camY,
+        ) === true;
     }
 
     if (!spriteDrawn) {
@@ -612,7 +636,16 @@ export function renderWorld({
         camYWorld,
         activeZ,
         ts,
-        { showHP, showName, renderMode, labelsSameFloorOnly, remoteTemplates },
+        {
+          map,
+          floorIndex,
+          mapData: assets?.mapData ?? null,
+          showHP,
+          showName,
+          renderMode,
+          labelsSameFloorOnly,
+          remoteTemplates,
+        },
       );
     });
   } else {
@@ -625,7 +658,16 @@ export function renderWorld({
       camYWorld,
       activeZ,
       ts,
-      { showHP, showName, renderMode, labelsSameFloorOnly, remoteTemplates },
+      {
+        map,
+        floorIndex,
+        mapData: assets?.mapData ?? null,
+        showHP,
+        showName,
+        renderMode,
+        labelsSameFloorOnly,
+        remoteTemplates,
+      },
     );
   }
 

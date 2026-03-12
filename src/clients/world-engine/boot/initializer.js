@@ -16,7 +16,12 @@ import { Tooltip } from "../ui/tooltip.js";
 import { HUDRenderer } from "../rendering/hudRenderer.js";
 import { MetricsHUD } from "../ui/metricsHUD.js";
 import { createProgressionUI } from "../../shared/ui/ProgressionUI.js";
+import { DragDropManager } from "../../shared/input/DragDropManager.js";
+import { InventoryUI } from "../../shared/ui/InventoryUI.js";
+import { dbWatch, dbSet, watchPlayerData, PATHS } from "../../../core/db.js";
+import { initItemDataService } from "../../../gameplay/items/ItemDataService.js";
 import { renderWorld } from "../../../render/worldRenderer.js";
+import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
 import { TILE_SIZE } from "../../../core/config.js";
@@ -47,6 +52,8 @@ export class Initializer {
     this.tooltip = null;
     this.hudRenderer = null;
     this.progressionUI = null;
+    this.dragDropManager = null;
+    this.inventoryUI = null;
 
     // Loop
     this.gameLoop = null;
@@ -82,6 +89,9 @@ export class Initializer {
 
     // 8. Inicializar Progression UI (FASE 4)
     this.initProgressionUI();
+
+    // 9. Inicializar Inventário + Drag & Drop
+    this.initInventoryUI();
   }
 
   async loadMapAssets() {
@@ -113,8 +123,6 @@ export class Initializer {
     );
 
     this.logger.info("Construindo floorIndex...");
-    // Import dinâmico para evitar circular dependency
-    const { buildFloorIndex } = await import("../../../render/mapRenderer.js");
     this.worldState.floorIndex = buildFloorIndex(this.worldState.map);
     this.logger.ok(`floorIndex: ${this.worldState.floorIndex.size} andares`);
 
@@ -314,6 +322,477 @@ export class Initializer {
     }
   }
 
+  initInventoryUI() {
+    try {
+      const container = document.getElementById("inventory-ui-container");
+      if (!container) {
+        this.logger.warn(
+          "⚠ #inventory-ui-container não encontrado — InventoryUI ignorado",
+        );
+        return;
+      }
+
+      const playerId = window.currentPlayerId ?? null;
+      if (!playerId) {
+        this.logger.warn(
+          "⚠ window.currentPlayerId não definido — InventoryUI ignorado",
+        );
+        return;
+      }
+
+      const ws = this.worldState;
+
+      // ── ItemDataService: fonte de verdade para canPickUp/canMove ─────────
+      const itemDataService = initItemDataService(ws.mapData ?? {});
+      this.logger.ok(
+        `✓ ItemDataService: ${itemDataService.getAllItemIds().length} itens indexados`,
+      );
+
+      // ── Cache local de world_items (Firebase) indexado por coordenada ──
+      // Chave primária: ID Firebase  Chave secundária: "x,y,z"
+      const WORLD_ITEM_LAYER = 99;
+      const _worldItemsById = {};
+      const _worldItemsByCoord = {};
+      const _renderedWorldItems = {};
+      const _removedMapSourceKeys = new Set();
+
+      const _removeTileFromLayer = (coord, layerKey, predicate) => {
+        const mapTile = ws.map?.[coord];
+        if (!mapTile) return false;
+
+        const tiles = mapTile?.[layerKey];
+        if (!Array.isArray(tiles) || tiles.length === 0) return false;
+
+        const idx = tiles.findIndex(predicate);
+        if (idx < 0) return false;
+
+        tiles.splice(idx, 1);
+        if (tiles.length === 0) delete mapTile[layerKey];
+        if (Object.keys(mapTile).length === 0) delete ws.map[coord];
+        return true;
+      };
+
+      const _removeMapTileAndRefreshFloorIndex = (coord, mapLayer, tileId) => {
+        const removed = _removeTileFromLayer(
+          coord,
+          String(mapLayer),
+          (t) => Number(t?.id) === Number(tileId),
+        );
+        if (removed) ws.floorIndex = buildFloorIndex(ws.map ?? {});
+      };
+
+      const _removeRenderedWorldItem = (worldItemId) => {
+        const prev = _renderedWorldItems[worldItemId];
+        if (!prev) return false;
+        const removed = _removeTileFromLayer(
+          prev.coord,
+          String(prev.layer),
+          (t) => t?.__worldItemId === worldItemId,
+        );
+        delete _renderedWorldItems[worldItemId];
+        return removed;
+      };
+
+      const _applyRenderedWorldItem = (worldItemId, item) => {
+        const tileId = Number(item?.tileId ?? item?.id);
+        const x = Number(item?.x);
+        const y = Number(item?.y);
+        const z = Number(item?.z ?? 7);
+        if (
+          !Number.isFinite(tileId) ||
+          !Number.isFinite(x) ||
+          !Number.isFinite(y)
+        ) {
+          return false;
+        }
+
+        const coord = `${x},${y},${z}`;
+        if (
+          !ws.map[coord] ||
+          typeof ws.map[coord] !== "object" ||
+          Array.isArray(ws.map[coord])
+        ) {
+          ws.map[coord] = {};
+        }
+
+        const layerKey = String(WORLD_ITEM_LAYER);
+        if (!Array.isArray(ws.map[coord][layerKey]))
+          ws.map[coord][layerKey] = [];
+
+        ws.map[coord][layerKey].push({
+          id: tileId,
+          count: Number(item?.quantity ?? 1),
+          __worldItemId: worldItemId,
+        });
+
+        _renderedWorldItems[worldItemId] = {
+          coord,
+          layer: WORLD_ITEM_LAYER,
+          tileId,
+        };
+
+        return true;
+      };
+
+      const _clearWorldItemLayer = () => {
+        const layerKey = String(WORLD_ITEM_LAYER);
+        for (const coord of Object.keys(ws.map ?? {})) {
+          if (ws.map[coord]?.[layerKey]) {
+            delete ws.map[coord][layerKey];
+            if (Object.keys(ws.map[coord]).length === 0) delete ws.map[coord];
+          }
+        }
+        for (const k of Object.keys(_renderedWorldItems))
+          delete _renderedWorldItems[k];
+      };
+
+      const _applyWorldItemsSnapshotToMap = (items) => {
+        const next = items && typeof items === "object" ? items : {};
+        let dirty = false;
+
+        // Limpa toda a camada 99 do mapa antes de re-aplicar, garantindo
+        // que chamadas repetidas de initInventoryUI não causem duplicatas.
+        const hadRendered = Object.keys(_renderedWorldItems).length > 0;
+        const hasLayer99 = Object.values(ws.map ?? {}).some(
+          (cell) => cell?.[String(WORLD_ITEM_LAYER)],
+        );
+        if (hadRendered || hasLayer99) {
+          _clearWorldItemLayer();
+          dirty = true;
+        }
+
+        for (const [id, item] of Object.entries(next)) {
+          if (
+            item?.fromMap &&
+            item?.sourceCoord != null &&
+            item?.sourceLayer != null &&
+            item?.sourceTileId != null
+          ) {
+            const sourceKey = `${item.sourceCoord}|${item.sourceLayer}|${item.sourceTileId}`;
+            if (!_removedMapSourceKeys.has(sourceKey)) {
+              const removedSource = _removeTileFromLayer(
+                String(item.sourceCoord),
+                String(item.sourceLayer),
+                (t) => Number(t?.id) === Number(item.sourceTileId),
+              );
+              if (removedSource) {
+                _removedMapSourceKeys.add(sourceKey);
+                dirty = true;
+              }
+            }
+          }
+
+          dirty = _applyRenderedWorldItem(id, item) || dirty;
+        }
+
+        if (dirty) {
+          ws.floorIndex = buildFloorIndex(ws.map ?? {});
+        }
+      };
+
+      function _rebuildWorldItemsCache(items) {
+        for (const k of Object.keys(_worldItemsById)) delete _worldItemsById[k];
+        for (const k of Object.keys(_worldItemsByCoord))
+          delete _worldItemsByCoord[k];
+
+        _applyWorldItemsSnapshotToMap(items);
+
+        if (items && typeof items === "object") {
+          for (const [id, item] of Object.entries(items)) {
+            _worldItemsById[id] = item;
+            if (item.x != null && item.y != null) {
+              const coord = `${item.x},${item.y},${item.z ?? 7}`;
+              if (!_worldItemsByCoord[coord]) _worldItemsByCoord[coord] = [];
+              _worldItemsByCoord[coord].push(item);
+            }
+          }
+        }
+      }
+
+      // ── Adapter: posição de tela → tile do mundo ──────────────────────
+      const worldRendererAdapter = {
+        screenToWorld: (clientX, clientY) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const scaleX = this.canvas.width / rect.width;
+          const scaleY = this.canvas.height / rect.height;
+          const px = (clientX - rect.left) * scaleX;
+          const py = (clientY - rect.top) * scaleY;
+          return {
+            x: Math.floor(px / TILE_SIZE) + (ws.camera?.x ?? 0),
+            y: Math.floor(py / TILE_SIZE) + (ws.camera?.y ?? 0),
+            z: ws.activeZ ?? 7,
+          };
+        },
+      };
+
+      // ── worldEngineShim: envia ações escrevendo em player_actions ─────
+      const worldEngineShim = {
+        sendAction: async (action) => {
+          if (!action?.payload?.playerId) {
+            return { success: false, error: "playerId ausente" };
+          }
+
+          let payload = action.payload;
+
+          // Tiles do mapa (map_compacto.json) ainda não existem no Firebase:
+          // criamos um world_item temporário e removemos o tile do mapa local.
+          // ID virtual: "map_{coord}_{layer}_{tileId}"  ex: "map_94,106,7_2_3349"
+          if (
+            (payload.itemAction === "pickUp" ||
+              payload.itemAction === "moveWorld") &&
+            payload.worldItemId?.startsWith("map_")
+          ) {
+            try {
+              const withoutPrefix = payload.worldItemId.slice(4); // "94,106,7_2_3349"
+              const parts = withoutPrefix.split("_");
+              const tileId = parseInt(parts.pop(), 10); // 3349
+              const mapLayer = parts.pop(); // "2"
+              const coord = parts.join("_"); // "94,106,7"
+              const [tx, ty, tz] = coord.split(",").map(Number);
+
+              const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${Date.now()}`;
+              await dbSet(`world_items/${tempId}`, {
+                id: tempId,
+                tileId,
+                name: itemDataService.getItemName(tileId) ?? `Item #${tileId}`,
+                x: tx,
+                y: ty,
+                z: tz,
+                type: "item",
+                quantity: 1,
+                stackable: itemDataService.isStackable(tileId),
+                fromMap: true,
+                sourceCoord: coord,
+                sourceLayer: Number(mapLayer),
+                sourceTileId: Number(tileId),
+                skipRangeCheck: true, // tile já está "no chão" do jogador
+                expiresAt: Date.now() + 60_000,
+              });
+
+              // Remove o tile do mapa local (visualização imediata; não persiste no .json)
+              _removeMapTileAndRefreshFloorIndex(coord, mapLayer, tileId);
+
+              payload = { ...payload, worldItemId: tempId };
+            } catch (err) {
+              console.error("[InventoryUI] map tile spawn failed:", err);
+              return { success: false, error: err?.message ?? "erro" };
+            }
+          }
+
+          const actionId = `${payload.playerId}_${action.type}_${Date.now()}`;
+          try {
+            await dbSet(`${PATHS.actions}/${actionId}`, {
+              ...payload,
+              type: action.type,
+              expiresAt: Date.now() + 10_000,
+            });
+            return { success: true };
+          } catch (err) {
+            console.error("[InventoryUI] sendAction failed:", err);
+            return { success: false, error: err?.message ?? "erro" };
+          }
+        },
+      };
+
+      // ── Ghost sprite: canvas element com o sprite do atlas ──────────────
+      const createGhostElement = (itemData) => {
+        const tileId = itemData?.tileId ?? itemData?.id;
+        const sprite =
+          tileId != null ? ws.assetsMgr.getMapSprite(tileId) : null;
+        if (sprite?.sheet) {
+          const cvs = document.createElement("canvas");
+          cvs.width = TILE_SIZE;
+          cvs.height = TILE_SIZE;
+          cvs
+            .getContext("2d")
+            .drawImage(
+              sprite.sheet,
+              sprite.x,
+              sprite.y,
+              sprite.w,
+              sprite.h,
+              0,
+              0,
+              TILE_SIZE,
+              TILE_SIZE,
+            );
+          return cvs;
+        }
+        // Fallback: div colorida
+        const div = document.createElement("div");
+        div.style.cssText = `width:${TILE_SIZE}px;height:${TILE_SIZE}px;background:#666;border:1px solid #aaa;border-radius:4px;`;
+        return div;
+      };
+
+      const createItemIconElement = (itemData) => {
+        const tileId = itemData?.tileId ?? itemData?.id;
+        if (tileId == null) return null;
+
+        const sprite = ws.assetsMgr.getMapSprite(tileId);
+        if (!sprite?.sheet) return null;
+
+        const cvs = document.createElement("canvas");
+        cvs.className = "item-icon";
+        cvs.width = TILE_SIZE - 6;
+        cvs.height = TILE_SIZE - 6;
+        const ctx = cvs.getContext("2d");
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(
+          sprite.sheet,
+          sprite.x,
+          sprite.y,
+          sprite.w,
+          sprite.h,
+          0,
+          0,
+          TILE_SIZE - 6,
+          TILE_SIZE - 6,
+        );
+        return cvs;
+      };
+
+      const getItemDescription = (itemData) => {
+        const tileId = itemData?.tileId ?? itemData?.id;
+        if (tileId == null) return null;
+        const parts = [];
+        if (itemDataService.canPickUp(tileId)) parts.push("Pegável");
+        if (itemDataService.canMove(tileId)) parts.push("Movível");
+        if (itemDataService.isUsable(tileId)) parts.push("Usável");
+        if (itemDataService.isStackable(tileId)) parts.push("Empilhável");
+        const equipSlot = itemDataService.getEquipmentSlotName(tileId);
+        if (equipSlot) parts.push(`Equip: ${equipSlot}`);
+        parts.push(`TileId: ${tileId}`);
+        return parts.join(" • ");
+      };
+
+      // ── InventoryUI (cria e monta seu DragDropManager internamente) ───
+      this.inventoryUI = new InventoryUI({
+        container,
+        worldEngine: worldEngineShim,
+        playerId,
+        canvas: this.canvas,
+        worldRenderer: worldRendererAdapter,
+        itemDataService,
+        createGhostElement,
+        createItemIconElement,
+        getItemDescription,
+      });
+
+      // Sobrepõe getItemData para detectar world_items E tiles do mapa
+      this.inventoryUI._dragDrop._getItemData = (source, key) => {
+        if (source === "inventory")
+          return this.inventoryUI._inventory[key] ?? null;
+        if (source === "equipment")
+          return this.inventoryUI._equipment[key] ?? null;
+        if (source === "world") {
+          // 1. Firebase world_items indexados por coordenada "x,y,z"
+          if (_worldItemsByCoord[key]?.length) {
+            const bucket = _worldItemsByCoord[key];
+            return bucket[bucket.length - 1] ?? null;
+          }
+
+          // 2. Tiles do mapa (map_compacto.json) com is_pickupable=true
+          //    Percorre layers do mais alto ao mais baixo — tile de cima tem prioridade
+          const mapTile = ws.map?.[key];
+          if (!mapTile) return null;
+          const layers = Object.keys(mapTile)
+            .map(Number)
+            .sort((a, b) => b - a);
+          for (const layer of layers) {
+            const tiles = mapTile[layer];
+            if (!Array.isArray(tiles)) continue;
+            for (const tile of tiles) {
+              if (itemDataService.canPickUp(tile.id)) {
+                const [x, y, z] = key.split(",").map(Number);
+                return {
+                  // ID virtual codifica coord + layer + tileId para o shim decodificar
+                  id: `map_${key}_${layer}_${tile.id}`,
+                  tileId: tile.id,
+                  name:
+                    itemDataService.getItemName(tile.id) ?? `Item #${tile.id}`,
+                  x,
+                  y,
+                  z,
+                  type: "item",
+                  quantity: tile.count ?? 1,
+                  stackable: itemDataService.isStackable(tile.id),
+                  fromMap: true,
+                };
+              }
+            }
+          }
+          return null;
+        }
+        return null;
+      };
+
+      this.inventoryUI.mount();
+
+      // ── Subscriptions Firebase ────────────────────────────────────────
+
+      // 1. Inventário e equipamento do jogador
+      const unsubPlayerData = watchPlayerData(playerId, (data) => {
+        if (!data) return;
+        this.inventoryUI.setInventory(data.inventory ?? {});
+        this.inventoryUI.setEquipment(data.equipment ?? {});
+      });
+      if (typeof unsubPlayerData === "function") {
+        this._workerUnsubscribers.push(unsubPlayerData);
+      }
+
+      // 2. Itens no chão (world_items) — popula caches por ID e por coordenada
+      const unsubWorldItems = dbWatch("world_items", (items) => {
+        _rebuildWorldItemsCache(items);
+      });
+      if (typeof unsubWorldItems === "function") {
+        this._workerUnsubscribers.push(unsubWorldItems);
+      }
+
+      // ── Tecla I → toggle inventário ───────────────────────────────────
+      const _onKey = (e) => {
+        if (
+          e.key.toLowerCase() === "i" &&
+          !e.repeat &&
+          !e.ctrlKey &&
+          !e.metaKey
+        ) {
+          e.preventDefault();
+          this.inventoryUI.toggle();
+        }
+      };
+      document.addEventListener("keydown", _onKey);
+      this._workerUnsubscribers.push(() =>
+        document.removeEventListener("keydown", _onKey),
+      );
+
+      this.logger.ok(
+        `✓ InventoryUI inicializado para ${playerId} (tecla I para abrir)`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `⚠ Falha ao inicializar InventoryUI: ${error?.message ?? error}`,
+      );
+    }
+  }
+
+  /**
+   * Seleciona um jogador como contexto ativo do InventoryUI.
+   * Chamado pelo GM panel ao clicar "Selecionar para Inventário".
+   * Desmonta o UI anterior, troca o playerId e reinicializa.
+   */
+  selectInventoryPlayer(playerId) {
+    if (!playerId) return;
+    // Limpa instância anterior
+    this.inventoryUI?.unmount();
+    this.inventoryUI = null;
+    // Remove subscriptions do inventoryUI (mantém worldTick, GC, etc.)
+    for (const unsub of this._workerUnsubscribers) unsub?.();
+    this._workerUnsubscribers = [];
+    window.currentPlayerId = playerId;
+    this.initInventoryUI();
+    this.inventoryUI?.show();
+  }
+
   /** Limpeza completa — chamar ao fechar/recarregar a aba do world-engine. */
   destroy() {
     if (this._rafId) cancelAnimationFrame(this._rafId);
@@ -321,5 +800,7 @@ export class Initializer {
     this._workerUnsubscribers = [];
     this.worldTick?.stop();
     this.transientGC?.stop();
+    this.inventoryUI?.unmount();
+    this.dragDropManager?.unmount();
   }
 }

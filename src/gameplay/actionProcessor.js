@@ -133,6 +133,8 @@ async function _dispatch(actionId, action, now) {
       return _processSpell(normalizedAction, player, now);
     case "allocateStat":
       return _processAllocateStat(normalizedAction, player, now);
+    case "item":
+      return _processItem(normalizedAction, player, now);
     default:
       console.warn("[actionProcessor] Tipo de ação desconhecido:", type);
   }
@@ -549,6 +551,60 @@ async function _processAllocateStat(action, player, now) {
       "error",
       `${player.name} falhou ao distribuir atributo: ${result.error}`,
     );
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// AÇÕES DE ITEM
+// ---------------------------------------------------------------------------
+async function _processItem(action, player, now) {
+  const { playerId, itemAction, slotIndex, toSlot, worldItemId, equipSlot, quantity } = action;
+
+  const {
+    pickUpItem,
+    dropItem,
+    moveWorldItem,
+    splitWorldItem,
+    equipItem,
+    unequipItem,
+    moveItem,
+    useItem,
+  } = await import("./items/itemActions.js");
+
+  let result;
+  switch (itemAction) {
+    case "pickUp":
+      result = await pickUpItem(playerId, worldItemId);
+      break;
+    case "drop":
+      result = await dropItem(playerId, slotIndex, quantity ?? null);
+      break;
+    case "moveWorld":
+      result = await moveWorldItem(playerId, worldItemId, action.toX, action.toY, action.toZ);
+      break;
+    case "splitWorld":
+      result = await splitWorldItem(playerId, worldItemId, action.splitQty ?? 1, action.toX, action.toY, action.toZ);
+      break;
+    case "equip":
+      result = await equipItem(playerId, slotIndex);
+      break;
+    case "unequip":
+      result = await unequipItem(playerId, equipSlot, slotIndex ?? null);
+      break;
+    case "move":
+      result = await moveItem(playerId, slotIndex, toSlot);
+      break;
+    case "use":
+      result = await useItem(playerId, slotIndex);
+      break;
+    default:
+      result = { success: false, error: `itemAction desconhecido: ${itemAction}` };
+  }
+
+  if (!result?.success) {
+    pushLog("error", `[${player.name}] item/${itemAction} falhou: ${result?.error ?? "erro"}`);
   }
 
   return result;

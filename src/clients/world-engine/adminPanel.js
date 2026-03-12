@@ -183,7 +183,10 @@ function _buildUI(container) {
           <option value="">— aguardando jogadores —</option>
         </select>
       </div>
-      <button id="btn-goto-player">📍 Ir Até o Jogador</button>
+      <div class="row" style="gap:4px">
+        <button id="btn-goto-player" style="flex:1">📍 Ir Até o Jogador</button>
+        <button id="btn-select-inventory-player" style="flex:1" title="Abre o inventário deste jogador (tecla I)">🎒 Inventário</button>
+      </div>
 
       <!-- CHAT GM -->
       <h3>💬 Chat (GM)</h3>
@@ -224,6 +227,9 @@ function _bindButtons() {
   document
     .getElementById("btn-goto-player")
     .addEventListener("click", _gotoPlayer);
+  document
+    .getElementById("btn-select-inventory-player")
+    .addEventListener("click", _selectInventoryPlayer);
 
   const chatInput = document.getElementById("chat-input");
   document.getElementById("chat-send").addEventListener("click", _sendChat);
@@ -396,7 +402,8 @@ function _gotoPlayer() {
   }
 
   try {
-    const [px, py] = val.split(",").map(Number);
+    const [idPart, coordPart] = val.split("|");
+    const [px, py] = (coordPart ?? idPart).split(",").map(Number);
     if (_camera) {
       _camera.x = px;
       _camera.y = py;
@@ -404,6 +411,19 @@ function _gotoPlayer() {
     }
   } catch {
     _logSystem("Erro ao mover câmera.");
+  }
+}
+
+function _selectInventoryPlayer() {
+  const sel = document.getElementById("player-select");
+  const val = sel.value;
+  if (!val) { _logSystem("Nenhum jogador selecionado."); return; }
+  const [playerId] = val.split("|");
+  if (typeof window._we_selectPlayer === "function") {
+    window._we_selectPlayer(playerId);
+    _logSystem(`🎒 Inventário: jogador ${playerId}`);
+  } else {
+    _logSystem("⚠ _we_selectPlayer não disponível.");
   }
 }
 
@@ -454,7 +474,7 @@ function _bindFirebase() {
               const name = p.name ?? id;
               const x = Math.round(p.x ?? 0);
               const y = Math.round(p.y ?? 0);
-              return `<option value="${x},${y}">${name} (${x},${y})</option>`;
+              return `<option value="${id}|${x},${y}">${name} (${x},${y})</option>`;
             })
             .join("");
     if (prev) {

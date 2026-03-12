@@ -430,6 +430,119 @@ export function normalizeEntity(raw, type = "unknown") {
   }
 }
 
+// ---------------------------------------------------------------------------
+// ITEM_SCHEMA — constantes e validação para itens do jogo
+// ---------------------------------------------------------------------------
+export const ITEM_SCHEMA = Object.freeze({
+  types: ['consumable', 'equipment', 'quest', 'material', 'currency'],
+  equipmentSlots: ['weapon', 'shield', 'helmet', 'armor', 'boots', 'ring', 'amulet', 'backpack'],
+  validStats: ['atk', 'def', 'agi', 'int', 'vit', 'hpBonus', 'mpBonus', 'critChance'],
+  validEffects: ['heal', 'mana', 'buff', 'teleport', 'reveal'],
+});
+
+/**
+ * Cria um item canônico com sanitização de tipos
+ * @param {Object} raw
+ * @returns {Object}
+ */
+export function makeItem({
+  id,
+  name,
+  type = 'material',
+  description = null,
+  spriteId = null,
+  weight = 0,
+  value = 0,
+  stackable = false,
+  maxStack = 1,
+  // equipamento
+  slot = null,
+  stats = null,
+  // consumível
+  effect = null,
+  cooldown = 0,
+  // posição no mundo (quando no chão)
+  x = null,
+  y = null,
+  z = null,
+  ownerId = null,
+  expiresAt = null,
+  schemaVersion = SCHEMA_VERSION,
+  ...extra
+} = {}) {
+  return {
+    ...extra,
+    schemaVersion: toNumber(schemaVersion, SCHEMA_VERSION),
+    id: toStringSafe(id, ''),
+    name: toStringSafe(name, 'Item'),
+    type: ITEM_SCHEMA.types.includes(type) ? type : 'material',
+    description: description ?? null,
+    spriteId: spriteId != null ? toNumber(spriteId, 0) : null,
+    weight: toNumber(weight, 0),
+    value: toNumber(value, 0),
+    stackable: Boolean(stackable),
+    maxStack: Math.max(1, toNumber(maxStack, 1)),
+    ...(slot != null ? { slot: ITEM_SCHEMA.equipmentSlots.includes(slot) ? slot : null } : {}),
+    ...(stats != null ? { stats: { ...stats } } : {}),
+    ...(effect != null ? { effect: { ...effect } } : {}),
+    ...(cooldown ? { cooldown: toNumber(cooldown, 0) } : {}),
+    ...(x != null ? { x: toNumber(x, 0) } : {}),
+    ...(y != null ? { y: toNumber(y, 0) } : {}),
+    ...(z != null ? { z: toNumber(z, 7) } : {}),
+    ...(ownerId != null ? { ownerId: toStringSafe(ownerId, '') } : {}),
+    ...(expiresAt != null ? { expiresAt: toNumber(expiresAt, 0) } : {}),
+  };
+}
+
+/**
+ * Valida um item conforme o schema canônico
+ * @param {Object} item
+ * @param {'inventory'|'world'|'equipment'} context
+ * @returns {{ valid: boolean, errors: string[] }}
+ */
+export function validateItem(item, context = 'inventory') {
+  const errors = [];
+  if (!item || typeof item !== 'object') return { valid: false, errors: ['Not an object'] };
+
+  if (!item.id) errors.push('Missing required: id');
+  if (!item.name) errors.push('Missing required: name');
+  if (!item.type) errors.push('Missing required: type');
+
+  if (item.type && !ITEM_SCHEMA.types.includes(item.type)) {
+    errors.push(`Invalid type: ${item.type}`);
+  }
+
+  if (item.type === 'equipment') {
+    if (!item.slot || !ITEM_SCHEMA.equipmentSlots.includes(item.slot)) {
+      errors.push(`Invalid equipment slot: ${item.slot}`);
+    }
+    if (item.stats) {
+      for (const stat of Object.keys(item.stats)) {
+        if (!ITEM_SCHEMA.validStats.includes(stat)) {
+          errors.push(`Invalid stat: ${stat}`);
+        }
+      }
+    }
+  }
+
+  if (item.type === 'consumable' && item.effect) {
+    if (!ITEM_SCHEMA.validEffects.includes(item.effect.type)) {
+      errors.push(`Invalid effect type: ${item.effect.type}`);
+    }
+  }
+
+  if (context === 'world' && (item.x == null || item.y == null)) {
+    errors.push('World items must have x/y coordinates');
+  }
+
+  if (context === 'equipment' && item.type !== 'equipment') {
+    errors.push('Only equipment type items can be equipped');
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+// ---------------------------------------------------------------------------
 export function normalizeCollection(rawCollection, type) {
   if (!rawCollection || typeof rawCollection !== "object") return {};
   const out = {};

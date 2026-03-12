@@ -71,6 +71,13 @@
          Canvas + elementos de jogo
     ═══════════════════════════════════════════════════════════ -->
     <canvas id="gameCanvas"></canvas>
+
+    <!-- ═══════════════════════════════════════════════════════
+         Inventário do jogador — montado por InventoryUI.js
+         Tecla I abre/fecha
+    ═══════════════════════════════════════════════════════════ -->
+    <div id="inventory-ui-container"></div>
+
     <div id="floor-hud"></div>
     <div id="tick-hud">world tick</div>
     <div id="tooltip">Mova o mouse sobre o mapa...</div>
@@ -115,6 +122,14 @@
           `Config: ${WORLDENGINE.canvasCols}x${WORLDENGINE.canvasRows} SQMs` +
             `  tick ${WORLDENGINE.worldTickMs}ms`,
         );
+
+        // Fallback: URL param ainda funciona para compatibilidade
+        const _p = new URLSearchParams(window.location.search);
+        const _urlPlayerId = _p.get("playerId") || _p.get("playerID") || _p.get("playerid") || null;
+        if (_urlPlayerId) {
+          window.currentPlayerId = _urlPlayerId;
+          logger.ok(`Player ID (URL): ${_urlPlayerId}`);
+        }
 
         const canvas = document.getElementById("gameCanvas");
         const canvasSetup = new CanvasSetup(
@@ -164,6 +179,12 @@
           };
           window.toggleDebug = () => {
             window.DEBUG_RENDER = !window.DEBUG_RENDER;
+          };
+
+          // Expõe seleção de jogador para o botão do GM panel
+          window._we_selectPlayer = (playerId) => {
+            initializer.selectInventoryPlayer(playerId);
+            logger.ok(`🎒 Inventário ativo: ${playerId}`);
           };
 
           logger.ok("Painel GM iniciado.");

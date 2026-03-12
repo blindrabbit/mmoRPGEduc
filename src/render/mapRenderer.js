@@ -135,6 +135,73 @@ export function buildFloorIndex(map) {
   return index;
 }
 
+export function getTileDrawElevation({
+  map = null,
+  floorIndex = null,
+  nexoData = null,
+  assets = null,
+  x,
+  y,
+  z,
+}) {
+  const tx = Number.isFinite(Number(x)) ? Math.floor(Number(x)) : null;
+  const ty = Number.isFinite(Number(y)) ? Math.floor(Number(y)) : null;
+  const tz = Number.isFinite(Number(z)) ? Math.floor(Number(z)) : null;
+  if (tx == null || ty == null || tz == null) return 0;
+
+  const metaIndex = nexoData ?? assets?.mapData ?? null;
+  if (!metaIndex || typeof metaIndex !== "object") return 0;
+
+  let items = null;
+  const coord = `${tx},${ty},${tz}`;
+  const fromIndex = floorIndex?.get?.(tz)?.get?.(coord);
+
+  if (fromIndex) {
+    items =
+      fromIndex.flatItems ??
+      (fromIndex.layers
+        ? _flattenTileItems(fromIndex.layers, fromIndex.layerKeys)
+        : (fromIndex.items ?? []));
+  } else {
+    const tileValue = map?.[coord];
+    if (!tileValue) return 0;
+    if (Array.isArray(tileValue)) {
+      items = tileValue;
+    } else if (Array.isArray(tileValue?.items)) {
+      items = tileValue.items;
+    } else if (tileValue && typeof tileValue === "object") {
+      const layerKeys = Object.keys(tileValue)
+        .map((k) => parseInt(k, 10))
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => a - b);
+      items = _flattenTileItems(tileValue, layerKeys);
+    }
+  }
+
+  if (!Array.isArray(items) || items.length === 0) return 0;
+
+  let elevation = 0;
+  for (const item of items) {
+    const spriteId = typeof item === "object" && item !== null ? item.id : item;
+    if (spriteId == null || spriteId === 0) continue;
+
+    const spriteMeta = metaIndex[String(spriteId)];
+    const category = classifyItemOT(spriteMeta);
+    if (
+      category === "ground" ||
+      category === "groundBorder" ||
+      category === "top"
+    ) {
+      continue;
+    }
+
+    const elev = _getSpriteElevation(spriteId, metaIndex);
+    elevation = Math.min(elevation + elev, MAX_DRAW_ELEVATION);
+  }
+
+  return elevation;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // CLASSIFICAÇÃO DE ITEMS (OTClient ThingAttr)
 // ═══════════════════════════════════════════════════════════════

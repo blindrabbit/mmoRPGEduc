@@ -243,20 +243,24 @@ export class WorldEngineInterface {
   _validateAction(action) {
     if (!action?.type) return false;
     
-    const validTypes = ['attack', 'spell', 'move', 'use', 'chat', 'interact'];
+    const validTypes = ['attack', 'spell', 'move', 'use', 'chat', 'interact', 'item'];
     if (!validTypes.includes(action.type)) return false;
-    
+
     // Validações específicas por tipo
     switch (action.type) {
       case 'attack':
       case 'spell':
         return !!action.payload?.targetId;
       case 'move':
-        return typeof action.payload?.x === 'number' && 
+        return typeof action.payload?.x === 'number' &&
                typeof action.payload?.y === 'number';
       case 'chat':
         return typeof action.payload?.message === 'string' &&
                action.payload.message.length <= 120;
+      case 'item': {
+        const validItemActions = ['pickUp', 'drop', 'equip', 'unequip', 'move', 'use'];
+        return validItemActions.includes(action.payload?.itemAction);
+      }
       default:
         return true;
     }
