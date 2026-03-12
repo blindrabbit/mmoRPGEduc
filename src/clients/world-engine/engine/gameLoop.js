@@ -15,7 +15,66 @@ export const GAME_CONFIG = {
   tickInterval: 100,
   enableWorker: true,
   fallbackToMain: true,
+  maxCatchupSteps: 4,
+  maxFrameDelta: 250,
 };
+
+export function createControlledLoop({
+  fixedStepMs = GAME_CONFIG.tickInterval,
+  maxCatchupSteps = GAME_CONFIG.maxCatchupSteps,
+  maxFrameDelta = GAME_CONFIG.maxFrameDelta,
+  onStep,
+  onFrame,
+} = {}) {
+  let running = false;
+  let rafId = null;
+  let lastTs = null;
+  let accumulator = 0;
+
+  const frame = (ts) => {
+    if (!running) return;
+
+    if (lastTs == null) {
+      lastTs = ts;
+      rafId = requestAnimationFrame(frame);
+      return;
+    }
+
+    const rawDelta = Math.max(0, ts - lastTs);
+    lastTs = ts;
+    accumulator = Math.min(accumulator + rawDelta, maxFrameDelta);
+
+    let steps = 0;
+    while (accumulator >= fixedStepMs && steps < maxCatchupSteps) {
+      onStep?.(fixedStepMs);
+      accumulator -= fixedStepMs;
+      steps += 1;
+    }
+
+    onFrame?.({ ts, rawDelta, steps, alpha: accumulator / fixedStepMs });
+    rafId = requestAnimationFrame(frame);
+  };
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      lastTs = null;
+      accumulator = 0;
+      rafId = requestAnimationFrame(frame);
+    },
+    stop() {
+      running = false;
+      if (rafId != null) {
+        cancelAnimationFrame(rafId);
+        rafId = null;
+      }
+    },
+    isRunning() {
+      return running;
+    },
+  };
+}
 
 // =============================================================================
 // INICIALIZAÇÃO

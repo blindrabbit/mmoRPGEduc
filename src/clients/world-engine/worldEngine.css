@@ -201,6 +201,33 @@
   z-index: 10;
 }
 
+/* ── Drag preview hint (inventário) ───────────────────────── */
+#we-drag-preview-hint {
+  position: fixed;
+  top: 44px;
+  right: 12px;
+  min-height: 16px;
+  max-width: 280px;
+  padding: 3px 8px;
+  border: 1px solid #333;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.82);
+  color: #6b7280;
+  font: 10px monospace;
+  z-index: 220;
+  pointer-events: none;
+}
+
+#we-drag-preview-hint.is-valid {
+  color: #2ecc71;
+  border-color: #2ecc71;
+}
+
+#we-drag-preview-hint.is-invalid {
+  color: #e74c3c;
+  border-color: #e74c3c;
+}
+
 /* ── Upload/sync panel — aparece acima do painel GM ──────────── */
 #upload-panel {
   position: fixed;

@@ -186,14 +186,10 @@ export async function pickUpItem(playerId, worldItemId) {
     _sameItemForStack(existingAtSlot, inventoryItem) &&
     inventoryItem.stackable
   ) {
-    const existingQty = Number(existingAtSlot.quantity ?? 1);
-    const pickupQty = Number(inventoryItem.quantity ?? 1);
-    const maxStack = Number(
-      existingAtSlot.maxStack ?? inventoryItem.maxStack ?? 99,
+    const { mergedQty, remainingQty } = _mergeStackableItem(
+      existingAtSlot,
+      inventoryItem,
     );
-    const total = existingQty + pickupQty;
-    const mergedQty = Math.min(total, maxStack);
-    const remainingQty = total - mergedQty;
 
     updates[P.inventorySlot(playerId, slotIndex)] = {
       ...existingAtSlot,
@@ -972,6 +968,22 @@ function _sameItemForStack(a, b) {
   const bId = _resolveItemTileId(b);
   if (aId != null && bId != null) return aId === bId;
   return a?.id === b?.id;
+}
+
+function _mergeStackableItem(existingItem, incomingItem) {
+  const existingQty = Number(
+    existingItem?.quantity ?? existingItem?.count ?? 1,
+  );
+  const incomingQty = Number(
+    incomingItem?.quantity ?? incomingItem?.count ?? 1,
+  );
+  const maxStack = Number(
+    existingItem?.maxStack ?? incomingItem?.maxStack ?? 99,
+  );
+  const total = existingQty + incomingQty;
+  const mergedQty = Math.min(total, maxStack);
+  const remainingQty = Math.max(0, total - mergedQty);
+  return { mergedQty, remainingQty, maxStack, total };
 }
 
 function _canEquipInSlot(player, item, slot, equipment) {

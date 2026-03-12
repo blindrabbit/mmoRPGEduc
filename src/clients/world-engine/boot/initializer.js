@@ -16,6 +16,10 @@ import { Tooltip } from "../ui/tooltip.js";
 import { HUDRenderer } from "../rendering/hudRenderer.js";
 import { MetricsHUD } from "../ui/metricsHUD.js";
 import { createProgressionUI } from "../../shared/ui/ProgressionUI.js";
+import {
+  buildDropPreviewMessage,
+  DRAG_PREVIEW_TEXT,
+} from "../../shared/ui/dragPreviewMessages.js";
 import { DragDropManager } from "../../shared/input/DragDropManager.js";
 import { InventoryUI } from "../../shared/ui/InventoryUI.js";
 import { dbWatch, dbSet, watchPlayerData, PATHS } from "../../../core/db.js";
@@ -25,6 +29,7 @@ import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
 import { TILE_SIZE } from "../../../core/config.js";
+import { createAnimationClock } from "../../../core/animationClock.js";
 
 export class Initializer {
   constructor({ logger, canvas, canvasSetup, worldState, config }) {
@@ -230,18 +235,38 @@ export class Initializer {
     const ctx = canvas.getContext("2d");
     const ws = this.worldState;
     const cs = this.canvasSetup;
+    const animationClock = createAnimationClock({ maxDeltaMs: 80 });
+    const FIXED_STEP_MS = 1000 / 60;
+    const MAX_CATCHUP_STEPS = 4;
+
+    let accumulatorMs = 0;
 
     const tick = (ts) => {
+      const frameTime = animationClock.tick(ts);
+      accumulatorMs = Math.min(
+        accumulatorMs + frameTime.delta,
+        FIXED_STEP_MS * MAX_CATCHUP_STEPS,
+      );
+
       this.hudRenderer.update();
 
       if (ws.isReady()) {
-        applyCameraMovement(ws.camera, 1.0);
+        let catchupSteps = 0;
+        while (
+          accumulatorMs >= FIXED_STEP_MS &&
+          catchupSteps < MAX_CATCHUP_STEPS
+        ) {
+          applyCameraMovement(ws.camera, 1.0);
+          accumulatorMs -= FIXED_STEP_MS;
+          catchupSteps += 1;
+        }
+
         renderWorld({
           ctx,
           camX: ws.camera.x * TILE_SIZE,
           camY: ws.camera.y * TILE_SIZE,
           activeZ: ws.activeZ,
-          animClock: ts,
+          animClock: animationClock.now,
           ts,
           canvasW: cs.canvasW,
           canvasH: cs.canvasH,
@@ -727,6 +752,50 @@ export class Initializer {
       };
 
       this.inventoryUI.mount();
+
+      // ── Preview visual de drag/drop (consistente com RPG client) ──────
+      const hintEl = document.getElementById("we-drag-preview-hint");
+      const setHint = (text = "", state = "") => {
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.toggle("is-valid", state === "valid");
+        hintEl.classList.toggle("is-invalid", state === "invalid");
+      };
+
+      setHint("");
+
+      this._workerUnsubscribers.push(
+        worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_START, () => {
+          setHint(DRAG_PREVIEW_TEXT.start, "");
+        }),
+      );
+      this._workerUnsubscribers.push(
+        worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_PREVIEW, (evt) => {
+          if (evt?.cleared || !evt?.zone) {
+            setHint("");
+            return;
+          }
+          setHint(
+            buildDropPreviewMessage(evt),
+            evt.isValid === true ? "valid" : "invalid",
+          );
+        }),
+      );
+      this._workerUnsubscribers.push(
+        worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_VALID, () => {
+          setHint(DRAG_PREVIEW_TEXT.sent, "valid");
+        }),
+      );
+      this._workerUnsubscribers.push(
+        worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, () => {
+          setHint(DRAG_PREVIEW_TEXT.invalid, "invalid");
+        }),
+      );
+      this._workerUnsubscribers.push(
+        worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_END, () => {
+          setTimeout(() => setHint(""), 350);
+        }),
+      );
 
       // ── Subscriptions Firebase ────────────────────────────────────────
 

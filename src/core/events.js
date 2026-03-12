@@ -45,19 +45,20 @@ export const EVENT_TYPES = {
   ENTITY_UPDATE: "entity:update",
 
   // === ITENS E INVENTÁRIO ===
-  ITEM_PICKED_UP: "item:pickedUp",           // Jogador pegou item do chão
-  ITEM_DROPPED: "item:dropped",             // Jogador soltou item no chão
-  ITEM_EQUIPPED: "item:equipped",           // Jogador equipou item
-  ITEM_UNEQUIPPED: "item:unequipped",       // Jogador desequipou item
-  ITEM_MOVED: "item:moved",                 // Item movido entre slots de inventário
-  ITEM_USED: "item:used",                   // Item consumível usado
-  INVENTORY_UPDATED: "inventory:updated",   // Inventário do jogador atualizado
+  ITEM_PICKED_UP: "item:pickedUp", // Jogador pegou item do chão
+  ITEM_DROPPED: "item:dropped", // Jogador soltou item no chão
+  ITEM_EQUIPPED: "item:equipped", // Jogador equipou item
+  ITEM_UNEQUIPPED: "item:unequipped", // Jogador desequipou item
+  ITEM_MOVED: "item:moved", // Item movido entre slots de inventário
+  ITEM_USED: "item:used", // Item consumível usado
+  INVENTORY_UPDATED: "inventory:updated", // Inventário do jogador atualizado
 
   // === DRAG & DROP UI ===
-  ITEM_DRAG_START: "item:dragStart",        // Iniciou drag de item (UI)
-  ITEM_DRAG_END: "item:dragEnd",            // Terminou drag de item (UI)
-  ITEM_DROP_VALID: "item:dropValid",        // Drop zone válida (feedback visual)
-  ITEM_DROP_INVALID: "item:dropInvalid",    // Drop zone inválida (feedback visual)
+  ITEM_DRAG_START: "item:dragStart", // Iniciou drag de item (UI)
+  ITEM_DRAG_END: "item:dragEnd", // Terminou drag de item (UI)
+  ITEM_DROP_VALID: "item:dropValid", // Drop zone válida (feedback visual)
+  ITEM_DROP_INVALID: "item:dropInvalid", // Drop zone inválida (feedback visual)
+  ITEM_DROP_PREVIEW: "item:dropPreview", // Preview da melhor zona durante drag
 
   // === SISTEMA ===
   WORLD_STATE_CHANGE: "world:stateChange",

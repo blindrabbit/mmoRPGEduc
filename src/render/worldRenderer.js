@@ -8,6 +8,9 @@
 
 import { TILE_SIZE, ENTITY_RENDER, GROUND_Z } from "../core/config.js";
 import { renderMap, getTileDrawElevation } from "./mapRenderer.js";
+import { sortEntitiesForRender } from "../core/renderOrder.js";
+import { STACK_POSITION } from "../core/stackPosition.js";
+import { ObjectPool } from "../core/objectPool.js";
 import { getMonsters, getPlayers } from "../core/worldStore.js";
 import { getMonsterTemplates } from "../core/remoteTemplates.js";
 import {
@@ -18,6 +21,26 @@ import {
 
 const PERF_WINDOW = 60;
 const SLOW_FRAME_MS = 24;
+const _visibleEntityPool = new ObjectPool(
+  () => ({
+    id: null,
+    ent: null,
+    drawX: 0,
+    drawY: 0,
+    labelX: 0,
+    spriteTopY: 0,
+    isMonster: false,
+  }),
+  (it) => {
+    it.id = null;
+    it.ent = null;
+    it.drawX = 0;
+    it.drawY = 0;
+    it.labelX = 0;
+    it.spriteTopY = 0;
+    it.isMonster = false;
+  },
+);
 
 function perfStep(perf, key, fn) {
   const t0 = performance.now();
@@ -138,10 +161,27 @@ function renderEntitiesFull(
   },
 ) {
   const visible = [];
+  const normalizedEntities = Object.entries(entities ?? {}).map(([id, ent]) => {
+    const isMonsterLike =
+      ent?.type === "monster" ||
+      typeof ent?.species === "string" ||
+      (typeof id === "string" && id.startsWith("mob"));
+    return {
+      ...(ent ?? {}),
+      _entityId: id,
+      category: "creature",
+      stackPosition: Number.isFinite(Number(ent?.stackPosition))
+        ? Number(ent.stackPosition)
+        : isMonsterLike
+          ? STACK_POSITION.CREATURE_FIRST + 2
+          : STACK_POSITION.CREATURE_FIRST + 1,
+    };
+  });
+  const sortedEntities = sortEntitiesForRender(normalizedEntities, activeZ);
 
   // ── Pass 1: Sprites/Corpos ───────────────────────────────────
-  for (const id in entities) {
-    const ent = entities[id];
+  for (const ent of sortedEntities) {
+    const id = ent?._entityId;
     if (!ent || ent.dead) continue;
 
     const activeZNum = Number(activeZ);
@@ -282,7 +322,15 @@ function renderEntitiesFull(
     }
 
     // Guarda dados para o pass 2 (labels)
-    visible.push({ id, ent, drawX, drawY, labelX, spriteTopY, isMonster });
+    const row = _visibleEntityPool.acquire();
+    row.id = id;
+    row.ent = ent;
+    row.drawX = drawX;
+    row.drawY = drawY;
+    row.labelX = labelX;
+    row.spriteTopY = spriteTopY;
+    row.isMonster = isMonster;
+    visible.push(row);
   }
 
   // ── Pass 2: HP bars + Nomes (sempre por cima) ─────────────────
@@ -343,6 +391,8 @@ function renderEntitiesFull(
       }
     }
   }
+
+  _visibleEntityPool.releaseMany(visible);
 }
 
 // ═══════════════════════════════════════════════════════════════

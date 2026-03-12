@@ -13,6 +13,8 @@ import {
   FLOOR_RANGE,
   WORLD_ENGINE,
 } from "../core/config.js";
+import { resolveStackPosition } from "../core/stackPosition.js";
+import { AtlasBatchRenderer } from "./batchRenderer.js";
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURAÇÕES
@@ -252,7 +254,8 @@ function _tileHasAnySprites(tileValue) {
 
 function _indexTileHasAnySprites(tileRecord) {
   if (!tileRecord) return false;
-  if (Array.isArray(tileRecord.flatItems)) return tileRecord.flatItems.length > 0;
+  if (Array.isArray(tileRecord.flatItems))
+    return tileRecord.flatItems.length > 0;
   if (Array.isArray(tileRecord.items)) return tileRecord.items.length > 0;
   if (tileRecord.layers) {
     for (const layer of tileRecord.layerKeys ??
@@ -541,6 +544,7 @@ function _drawSpriteFromAssets(
   alpha,
   elevation = 0,
   count = 1,
+  batchRenderer = null,
 ) {
   const data = nexoData?.[String(spriteId)];
   if (!data) return;
@@ -571,6 +575,22 @@ function _drawSpriteFromAssets(
     data,
     elevation,
   );
+
+  if (batchRenderer) {
+    batchRenderer.queue({
+      atlasImage,
+      sx: ax,
+      sy: ay,
+      sw: w,
+      sh: h,
+      dx: pos.x,
+      dy: pos.y,
+      dw: w,
+      dh: h,
+      alpha,
+    });
+    return;
+  }
 
   if (alpha < 1.0) {
     ctx.save();
@@ -739,6 +759,7 @@ export function renderMap(opts) {
   }
 
   const floorAlphas = _floorAlphaCache;
+  const groundBatch = opts.groundBatch ?? new AtlasBatchRenderer(ctx);
 
   // ═══════════════════════════════════════════════════════════
   // PASSO 1: DRAW GROUND (todos os tiles)
@@ -755,7 +776,10 @@ export function renderMap(opts) {
         z,
         dz,
         alpha: floorAlphas.get(dz) ?? 1.0,
+        groundBatch,
       });
+
+      groundBatch.flush();
     }
   }
 
@@ -798,6 +822,7 @@ function _renderGroundPass(opts) {
     cols = WORLD_ENGINE.canvasCols,
     rows = WORLD_ENGINE.canvasRows,
     alpha = 1.0,
+    groundBatch = null,
   } = opts;
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
@@ -851,6 +876,8 @@ function _renderGroundPass(opts) {
               animClock,
               alpha,
               0,
+              1,
+              groundBatch,
             );
           } else if (atlas && nexoData) {
             drawSprite(
@@ -931,6 +958,7 @@ function _renderMainPass(opts) {
             ? _flattenTileItems(tile.layers, tile.layerKeys)
             : (tile.items ?? []));
 
+        const sortable = [];
         for (const item of _allItems) {
           const spriteId =
             typeof item === "object" && item !== null ? item.id : item;
@@ -946,6 +974,7 @@ function _renderMainPass(opts) {
             spriteId,
             spriteMeta,
             category,
+            stackPosition: resolveStackPosition(spriteMeta, category),
             count:
               typeof item === "object" && item !== null ? (item.count ?? 1) : 1,
             tx,
@@ -962,9 +991,20 @@ function _renderMainPass(opts) {
             continue;
           }
 
-          if (category === "bottom") {
+          sortable.push(info);
+        }
+
+        sortable.sort((a, b) => {
+          const as = Number(a?.stackPosition ?? 5);
+          const bs = Number(b?.stackPosition ?? 5);
+          if (as !== bs) return as - bs;
+          return Number(a?.spriteId ?? 0) - Number(b?.spriteId ?? 0);
+        });
+
+        for (const info of sortable) {
+          if (info.category === "bottom") {
             items.bottom.push(info);
-          } else if (category === "top") {
+          } else if (info.category === "top") {
             items.top.push(info);
           } else {
             items.common.push(info);

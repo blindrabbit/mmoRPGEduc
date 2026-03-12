@@ -4,6 +4,9 @@
 // ✅ Suporta bounding_box, pattern, stack_position
 // ═══════════════════════════════════════════════════════════════
 
+import { AtlasManager } from "./atlasManager.js";
+import { SpriteCache } from "./spriteCache.js";
+
 export class AssetManager {
   constructor() {
     this.sprites = new Map(); // itemid → { sheet, x, y, w, h }
@@ -15,6 +18,8 @@ export class AssetManager {
     // ✅ NOVO: Atlas do pipeline Python
     this.mapAtlas = null; // { image, data }
     this.mapData = {}; // map_data.json completo
+    this.spriteCache = new SpriteCache(1200);
+    this.atlasManager = new AtlasManager({ basePath: "./assets/" });
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -22,6 +27,11 @@ export class AssetManager {
   // ═══════════════════════════════════════════════════════════════
   async loadMapAssets(basePath = "./assets/") {
     try {
+      const normalizedBasePath = String(basePath).endsWith("/")
+        ? String(basePath)
+        : `${basePath}/`;
+      this.atlasManager = new AtlasManager({ basePath: normalizedBasePath });
+
       // 1. Carregar map_data.json (metadata completa)
       const dataRes = await fetch(`${basePath}map_data.json`);
       if (!dataRes.ok) throw new Error("map_data.json não encontrado");
@@ -107,11 +117,16 @@ export class AssetManager {
   // ═══════════════════════════════════════════════════════════════
   getMapSprite(itemid, variantKey = "0") {
     const lookupKey = `${itemid}_${variantKey}`;
+    const cached = this.spriteCache.get(lookupKey);
+    if (cached) return cached;
+
     const lookup = this.mapAtlasLookup?.get(lookupKey);
 
     if (!lookup) {
       // Fallback para sprites legados
-      return this.sprites.get(Number(itemid)) ?? null;
+      const legacy = this.sprites.get(Number(itemid)) ?? null;
+      if (legacy) this.spriteCache.set(lookupKey, legacy);
+      return legacy;
     }
 
     const atlas = this.mapAtlases[lookup.atlasIndex];
@@ -119,7 +134,7 @@ export class AssetManager {
 
     const metadata = this.mapData[String(itemid)];
 
-    return {
+    const sprite = {
       sheet: atlas.image,
       x: lookup.variant.x,
       y: lookup.variant.y,
@@ -131,6 +146,25 @@ export class AssetManager {
       stackPosition: metadata?.game?.stack_position,
       renderLayer: metadata?.game?.render_layer,
     };
+    this.spriteCache.set(lookupKey, sprite);
+    return sprite;
+  }
+
+  async loadMapCategory(category, basePath = "./assets/") {
+    const normalizedBasePath = String(basePath).endsWith("/")
+      ? String(basePath)
+      : `${basePath}/`;
+    if (
+      !this.atlasManager ||
+      this.atlasManager.basePath !== normalizedBasePath
+    ) {
+      this.atlasManager = new AtlasManager({ basePath: normalizedBasePath });
+    }
+    return await this.atlasManager.loadCategory(category);
+  }
+
+  unloadUnusedMapCategories(usedCategories = new Set()) {
+    this.atlasManager?.unloadUnused?.(usedCategories);
   }
 
   getMapItemMetadata(itemid) {
@@ -636,6 +670,8 @@ export class AssetManager {
     this.mapData = {};
     this.mapAtlases = [];
     this.mapAtlasLookup?.clear();
+    this.spriteCache?.clear?.();
+    this.atlasManager?.clear?.();
   }
 
   get spriteCount() {

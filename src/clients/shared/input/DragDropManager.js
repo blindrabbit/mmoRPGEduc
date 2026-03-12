@@ -23,6 +23,7 @@
 
 import { worldEvents, EVENT_TYPES } from '../../../core/events.js';
 import { TILE_SIZE } from '../../../core/config.js';
+import { getPlayer } from "../../../core/worldStore.js";
 
 // =============================================================================
 // CONFIGURAÇÃO
@@ -43,11 +44,11 @@ export const DRAG_CONFIG = Object.freeze({
 
   // Classes CSS para feedback
   classes: {
-    dragging: 'item-dragging',
-    ghost: 'item-drag-ghost',
-    dropValid: 'drop-zone-valid',
-    dropInvalid: 'drop-zone-invalid',
-    originDragging: 'slot-origin-dragging',
+    dragging: "item-dragging",
+    ghost: "item-drag-ghost",
+    dropValid: "drop-zone-valid",
+    dropInvalid: "drop-zone-invalid",
+    originDragging: "slot-origin-dragging",
   },
 });
 
@@ -89,6 +90,7 @@ export class DragDropManager {
     /** @type {import('./DragDropManager.js').DragState} */
     this._drag = _emptyDrag();
     this._listeners = [];
+    this._dropZones = [];
     this._currentHighlight = null;
     this._lastActionSentAt = 0;
     this._lastActionSignature = null;
@@ -105,25 +107,35 @@ export class DragDropManager {
   // ---------------------------------------------------------------------------
 
   mount() {
-    this._container.addEventListener('pointerdown', this._onPointerDown);
-    document.addEventListener('pointermove', this._onPointerMove, { passive: true });
-    document.addEventListener('pointerup', this._onPointerUp);
-    document.addEventListener('keydown', this._onKeyDown);
+    this._container.addEventListener("pointerdown", this._onPointerDown);
+    document.addEventListener("pointermove", this._onPointerMove, {
+      passive: true,
+    });
+    document.addEventListener("pointerup", this._onPointerUp);
+    document.addEventListener("keydown", this._onKeyDown);
 
     // Suporte canvas: itens no mapa arrastáveis via worldRenderer
     if (this._canvas) {
-      this._canvas.addEventListener('pointerdown', this._onCanvasPointerDownBound);
+      this._canvas.addEventListener(
+        "pointerdown",
+        this._onCanvasPointerDownBound,
+      );
     }
+
+    this._refreshDropZones();
   }
 
   unmount() {
-    this._container.removeEventListener('pointerdown', this._onPointerDown);
-    document.removeEventListener('pointermove', this._onPointerMove);
-    document.removeEventListener('pointerup', this._onPointerUp);
-    document.removeEventListener('keydown', this._onKeyDown);
+    this._container.removeEventListener("pointerdown", this._onPointerDown);
+    document.removeEventListener("pointermove", this._onPointerMove);
+    document.removeEventListener("pointerup", this._onPointerUp);
+    document.removeEventListener("keydown", this._onKeyDown);
 
     if (this._canvas) {
-      this._canvas.removeEventListener('pointerdown', this._onCanvasPointerDownBound);
+      this._canvas.removeEventListener(
+        "pointerdown",
+        this._onCanvasPointerDownBound,
+      );
     }
 
     this._cancelDrag();
@@ -141,13 +153,20 @@ export class DragDropManager {
     if (!worldPos) return;
 
     // Verifica se há item do mundo na posição
-    const worldItem = this._getWorldItemAt(worldPos.x, worldPos.y, worldPos.z ?? 7);
+    const worldItem = this._getWorldItemAt(
+      worldPos.x,
+      worldPos.y,
+      worldPos.z ?? 7,
+    );
     if (!worldItem) return;
 
     // Valida via ItemDataService: só inicia drag se o item puder ser movido/pego
     if (this._itemDataService) {
       const tileId = worldItem.tileId ?? worldItem.id;
-      if (!this._itemDataService.canPickUp(tileId) && !this._itemDataService.canMove(tileId)) {
+      if (
+        !this._itemDataService.canPickUp(tileId) &&
+        !this._itemDataService.canMove(tileId)
+      ) {
         return; // item fixo — não pode ser arrastado
       }
     }
@@ -158,7 +177,7 @@ export class DragDropManager {
       ..._emptyDrag(),
       active: false, // ativa após threshold
       pending: true,
-      source: 'world',
+      source: "world",
       worldItemId: worldItem.id ?? worldItem.instanceId,
       itemData: worldItem,
       originEl: null,
@@ -178,15 +197,16 @@ export class DragDropManager {
     // Já tem drag pendente do canvas?
     if (this._drag.pending) return;
 
-    const itemEl = e.target.closest('[data-item-source]');
+    const itemEl = e.target.closest("[data-item-source]");
     if (!itemEl) return;
 
     e.preventDefault();
 
     const source = itemEl.dataset.itemSource;
-    const slotIndex = itemEl.dataset.itemSlot != null
-      ? parseInt(itemEl.dataset.itemSlot, 10)
-      : null;
+    const slotIndex =
+      itemEl.dataset.itemSlot != null
+        ? parseInt(itemEl.dataset.itemSlot, 10)
+        : null;
     const equipSlot = itemEl.dataset.itemEquipSlot ?? null;
     const worldItemId = itemEl.dataset.itemWorldId ?? null;
     const key = slotIndex ?? equipSlot ?? worldItemId;
@@ -196,9 +216,12 @@ export class DragDropManager {
 
     // Valida via ItemDataService: itens de inventário/equipamento sempre podem
     // ser arrastados; itens do mundo (source==='world') verificam canPickUp/canMove
-    if (source === 'world' && this._itemDataService) {
+    if (source === "world" && this._itemDataService) {
       const tileId = itemData.tileId ?? itemData.id;
-      if (!this._itemDataService.canPickUp(tileId) && !this._itemDataService.canMove(tileId)) {
+      if (
+        !this._itemDataService.canPickUp(tileId) &&
+        !this._itemDataService.canMove(tileId)
+      ) {
         return;
       }
     }
@@ -235,14 +258,16 @@ export class DragDropManager {
     }
 
     this._moveGhost(e.clientX, e.clientY);
-    this._updateDropHighlight(this._getDropZoneAt(e.clientX, e.clientY));
+    this._checkDropZones(e.clientX, e.clientY);
   }
 
   _onPointerUp(e) {
     if (!this._drag.active && !this._drag.pending) return;
 
     if (this._drag.active) {
-      const dropEl = this._getDropZoneAt(e.clientX, e.clientY);
+      const bestDrop =
+        this._drag.bestDropZone ?? this._checkDropZones(e.clientX, e.clientY);
+      const dropEl = bestDrop?.el ?? this._getDropZoneAt(e.clientX, e.clientY);
 
       if (dropEl) {
         this._executeDrop(dropEl);
@@ -253,7 +278,7 @@ export class DragDropManager {
         worldEvents.emit(EVENT_TYPES.ITEM_DROP_INVALID, {
           source: this._drag.source,
           slotIndex: this._drag.slotIndex,
-          reason: 'no-drop-zone',
+          reason: "no-drop-zone",
         });
       }
     }
@@ -262,10 +287,10 @@ export class DragDropManager {
   }
 
   _onKeyDown(e) {
-    if (e.key === 'Escape' && (this._drag.active || this._drag.pending)) {
+    if (e.key === "Escape" && (this._drag.active || this._drag.pending)) {
       worldEvents.emit(EVENT_TYPES.ITEM_DROP_INVALID, {
         source: this._drag.source,
-        reason: 'cancelled',
+        reason: "cancelled",
       });
       this._cancelDrag();
     }
@@ -276,7 +301,8 @@ export class DragDropManager {
   // ---------------------------------------------------------------------------
 
   _activateDrag() {
-    const { source, slotIndex, equipSlot, worldItemId, itemData, originEl } = this._drag;
+    const { source, slotIndex, equipSlot, worldItemId, itemData, originEl } =
+      this._drag;
 
     if (originEl) {
       originEl.classList.add(DRAG_CONFIG.classes.originDragging);
@@ -300,29 +326,30 @@ export class DragDropManager {
 
   _executeDrop(dropEl) {
     const dropZone = dropEl.dataset.dropZone;
-    const dropSlot = dropEl.dataset.dropSlot != null
-      ? parseInt(dropEl.dataset.dropSlot, 10)
-      : null;
+    const dropSlot =
+      dropEl.dataset.dropSlot != null
+        ? parseInt(dropEl.dataset.dropSlot, 10)
+        : null;
     const dropEquipSlot = dropEl.dataset.dropEquipSlot ?? null;
     const { source, slotIndex, equipSlot, worldItemId } = this._drag;
 
     let action = null;
 
-    if (source === 'inventory' && dropZone === 'inventory') {
+    if (source === "inventory" && dropZone === "inventory") {
       if (slotIndex !== dropSlot) {
-        action = { itemAction: 'move', slotIndex, toSlot: dropSlot };
+        action = { itemAction: "move", slotIndex, toSlot: dropSlot };
       }
-    } else if (source === 'inventory' && dropZone === 'equipment') {
-      action = { itemAction: 'equip', slotIndex };
-    } else if (source === 'equipment' && dropZone === 'inventory') {
-      action = { itemAction: 'unequip', equipSlot, slotIndex: dropSlot };
-    } else if (source === 'equipment' && dropZone === 'equipment') {
+    } else if (source === "inventory" && dropZone === "equipment") {
+      action = { itemAction: "equip", slotIndex };
+    } else if (source === "equipment" && dropZone === "inventory") {
+      action = { itemAction: "unequip", equipSlot, slotIndex: dropSlot };
+    } else if (source === "equipment" && dropZone === "equipment") {
       if (equipSlot !== dropEquipSlot) {
         // Desequipa — o servidor move para inventário; depois o cliente re-equipa
-        action = { itemAction: 'unequip', equipSlot };
+        action = { itemAction: "unequip", equipSlot };
       }
-    } else if (source === 'world' && dropZone === 'inventory') {
-      action = { itemAction: 'pickUp', worldItemId };
+    } else if (source === "world" && dropZone === "inventory") {
+      action = { itemAction: "pickUp", worldItemId };
     }
 
     if (action) {
@@ -409,10 +436,14 @@ export class DragDropManager {
     this._lastActionSignature = signature;
     this._lastActionSentAt = now;
 
-    this._engine.sendAction({
-      type: 'item',
-      payload: { ...payload, playerId: this._playerId },
-    }).catch((err) => console.error('[DragDropManager] sendAction failed:', err));
+    this._engine
+      .sendAction({
+        type: "item",
+        payload: { ...payload, playerId: this._playerId },
+      })
+      .catch((err) =>
+        console.error("[DragDropManager] sendAction failed:", err),
+      );
   }
 
   // ---------------------------------------------------------------------------
@@ -430,21 +461,21 @@ export class DragDropManager {
       ghost = this._createGhostElement(itemData);
     } else {
       // Fallback genérico
-      ghost = document.createElement('div');
+      ghost = document.createElement("div");
       ghost.style.width = `${TILE_SIZE}px`;
       ghost.style.height = `${TILE_SIZE}px`;
-      ghost.style.background = '#666';
-      ghost.style.border = '1px solid #aaa';
-      ghost.style.borderRadius = '4px';
+      ghost.style.background = "#666";
+      ghost.style.border = "1px solid #aaa";
+      ghost.style.borderRadius = "4px";
     }
 
     Object.assign(ghost.style, {
-      position: 'fixed',
-      pointerEvents: 'none',
-      zIndex: '9999',
+      position: "fixed",
+      pointerEvents: "none",
+      zIndex: "9999",
       opacity: DRAG_CONFIG.ghostAlpha,
-      transform: 'translate(-50%, -50%) scale(1.1)',
-      transition: 'none',
+      transform: "translate(-50%, -50%) scale(1.1)",
+      transition: "none",
       left: `${x}px`,
       top: `${y}px`,
     });
@@ -471,10 +502,147 @@ export class DragDropManager {
 
   _getDropZoneAt(x, y) {
     const g = this._drag.ghostEl;
-    if (g) g.style.visibility = 'hidden';
+    if (g) g.style.visibility = "hidden";
     const el = document.elementFromPoint(x, y);
-    if (g) g.style.visibility = '';
-    return el?.closest('[data-drop-zone]') ?? null;
+    if (g) g.style.visibility = "";
+    return el?.closest("[data-drop-zone]") ?? null;
+  }
+
+  _refreshDropZones() {
+    this._dropZones = Array.from(
+      this._container.querySelectorAll?.("[data-drop-zone]") ?? [],
+    );
+  }
+
+  _checkDropZones(x, y) {
+    if (!this._dropZones.length) this._refreshDropZones();
+
+    let best = null;
+    for (const zoneEl of this._dropZones) {
+      if (!zoneEl?.isConnected) continue;
+      const score = this._calculateDropScore(zoneEl, x, y);
+      if (!best || score > best.score) {
+        best = { el: zoneEl, score };
+      }
+    }
+
+    if (!best || best.score <= 0) {
+      this._drag.bestDropZone = null;
+      this._updateDropHighlight(null);
+      this._clearDropPreview();
+      return null;
+    }
+
+    this._drag.bestDropZone = best;
+    this._updateDropHighlight(best.el);
+    this._emitDropPreview(best.el, best.score);
+    return best;
+  }
+
+  _calculateDropScore(dropEl, pointerX, pointerY) {
+    const rect = dropEl.getBoundingClientRect();
+    if (!rect || rect.width <= 0 || rect.height <= 0) return -1000;
+
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const distance = Math.hypot(pointerX - centerX, pointerY - centerY);
+    const proximity = Math.max(0, 100 - distance);
+    const valid = this._isValidDropZone(dropEl);
+
+    let score = valid ? 100 + proximity : -50 + proximity * 0.1;
+    const zone = dropEl.dataset.dropZone;
+    const itemData = this._drag.itemData ?? {};
+
+    if (zone === "equipment" && itemData?.type === "equipment") {
+      score += 30;
+      const targetSlot = dropEl.dataset.dropEquipSlot;
+      if (itemData?.slot === targetSlot) score += 20;
+    }
+
+    if (zone === "inventory") score += 10;
+
+    if (this._drag.source === "world" && zone === "inventory") {
+      score += 15;
+      const player = getPlayer(this._playerId);
+      const currentWeight = Number(
+        player?.stats?.inventoryWeight ?? player?.inventoryWeight ?? 0,
+      );
+      const maxWeight = Number(player?.stats?.maxInventoryWeight ?? 500);
+      if (maxWeight > 0 && currentWeight / maxWeight >= 0.9) {
+        score -= 15;
+      }
+    }
+
+    return score;
+  }
+
+  _emitDropPreview(dropEl, score) {
+    const payload = this._generateDropPreview(dropEl, score);
+    if (!payload) return;
+
+    worldEvents.emit(EVENT_TYPES.ITEM_DROP_PREVIEW, payload);
+  }
+
+  _generateDropPreview(dropEl, score) {
+    if (!dropEl) return null;
+
+    const zone = dropEl.dataset.dropZone;
+    const base = {
+      source: this._drag.source,
+      worldItemId: this._drag.worldItemId,
+      slotIndex: this._drag.slotIndex,
+      equipSlot: this._drag.equipSlot,
+      zone,
+      score,
+      isValid: this._isValidDropZone(dropEl),
+      itemData: this._drag.itemData,
+    };
+
+    if (zone === "equipment") {
+      return this._showEquipPreview(base, dropEl.dataset.dropEquipSlot ?? null);
+    }
+
+    if (zone === "inventory") {
+      return {
+        ...base,
+        dropSlot:
+          dropEl.dataset.dropSlot != null
+            ? parseInt(dropEl.dataset.dropSlot, 10)
+            : null,
+        previewAction: this._drag.source === "world" ? "pickUp" : "move",
+      };
+    }
+
+    if (zone === "ground") {
+      return {
+        ...base,
+        previewAction: this._drag.source === "world" ? "moveWorld" : "drop",
+      };
+    }
+
+    return base;
+  }
+
+  _showEquipPreview(base, targetSlot) {
+    const canEquip =
+      base?.itemData?.type === "equipment" &&
+      base?.itemData?.slot === targetSlot;
+    return {
+      ...base,
+      dropEquipSlot: targetSlot,
+      canEquip,
+      previewAction: canEquip ? "equip" : "none",
+    };
+  }
+
+  _clearDropPreview() {
+    worldEvents.emit(EVENT_TYPES.ITEM_DROP_PREVIEW, {
+      source: this._drag.source,
+      zone: null,
+      score: 0,
+      isValid: false,
+      cleared: true,
+    });
   }
 
   _updateDropHighlight(dropEl) {
@@ -499,16 +667,16 @@ export class DragDropManager {
     const { source, itemData } = this._drag;
     const zone = dropEl.dataset.dropZone;
 
-    if (zone === 'equipment') {
+    if (zone === "equipment") {
       // Só equipamentos com slot correto
       const targetSlot = dropEl.dataset.dropEquipSlot;
-      return itemData?.type === 'equipment' && itemData?.slot === targetSlot;
+      return itemData?.type === "equipment" && itemData?.slot === targetSlot;
     }
-    if (zone === 'inventory') {
+    if (zone === "inventory") {
       return true; // Qualquer item vai para inventário
     }
-    if (zone === 'ground') {
-      return source !== 'world'; // Não pode dropar no chão o que já está no chão
+    if (zone === "ground") {
+      return source !== "world"; // Não pode dropar no chão o que já está no chão
     }
     return false;
   }
@@ -536,15 +704,17 @@ export class DragDropManager {
     if (!this._canvas) return false;
     const rect = this._canvas.getBoundingClientRect();
     return (
-      clientX >= rect.left && clientX <= rect.right &&
-      clientY >= rect.top && clientY <= rect.bottom
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
     );
   }
 
   _getWorldItemAt(x, y, z) {
     // Delegate para callback externo se disponível
-    if (typeof this._getItemData === 'function') {
-      return this._getItemData('world', `${x},${y},${z}`);
+    if (typeof this._getItemData === "function") {
+      return this._getItemData("world", `${x},${y},${z}`);
     }
     return null;
   }
@@ -560,6 +730,8 @@ export class DragDropManager {
       DRAG_CONFIG.classes.dropInvalid,
     );
     this._currentHighlight = null;
+
+    this._clearDropPreview();
 
     this._removeGhost();
     document.body.classList.remove(DRAG_CONFIG.classes.dragging);
@@ -593,5 +765,6 @@ function _emptyDrag() {
     startX: 0,
     startY: 0,
     shiftKey: false,
+    bestDropZone: null,
   };
 }

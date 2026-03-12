@@ -561,6 +561,28 @@
         border-color: #555;
         color: #888;
       }
+      .equip-slot.drop-zone-valid,
+      .inv-slot.drop-zone-valid {
+        border-color: #2ecc71 !important;
+        box-shadow: inset 0 0 0 1px rgba(46, 204, 113, 0.65);
+      }
+      .equip-slot.drop-zone-invalid,
+      .inv-slot.drop-zone-invalid {
+        border-color: #e74c3c !important;
+        box-shadow: inset 0 0 0 1px rgba(231, 76, 60, 0.55);
+      }
+      #drag-preview-hint {
+        margin: 4px 6px 2px;
+        min-height: 14px;
+        font: 10px monospace;
+        color: #6b7280;
+      }
+      #drag-preview-hint.is-valid {
+        color: #2ecc71;
+      }
+      #drag-preview-hint.is-invalid {
+        color: #e74c3c;
+      }
       .equip-head {
         grid-area: head;
       }
@@ -1106,14 +1128,14 @@
             </div>
             <div class="side-section-body" id="sec-equip">
               <div id="equip-grid">
-                <div class="equip-slot equip-head" title="Cabeça">Cab</div>
-                <div class="equip-slot equip-body" title="Corpo">Corp</div>
-                <div class="equip-slot equip-weapon" title="Arma">Arma</div>
-                <div class="equip-slot equip-shield" title="Escudo">Esc</div>
-                <div class="equip-slot equip-legs" title="Pernas">Pern</div>
-                <div class="equip-slot equip-feet" title="Botas">Bot</div>
-                <div class="equip-slot equip-ring" title="Anel">Anel</div>
-                <div class="equip-slot equip-amulet" title="Amuleto">Amu</div>
+                <div class="equip-slot equip-head" data-drop-zone="equipment" data-drop-equip-slot="head" title="Cabeça">Cab</div>
+                <div class="equip-slot equip-body" data-drop-zone="equipment" data-drop-equip-slot="body" title="Corpo">Corp</div>
+                <div class="equip-slot equip-weapon" data-drop-zone="equipment" data-drop-equip-slot="weapon" title="Arma">Arma</div>
+                <div class="equip-slot equip-shield" data-drop-zone="equipment" data-drop-equip-slot="shield" title="Escudo">Esc</div>
+                <div class="equip-slot equip-legs" data-drop-zone="equipment" data-drop-equip-slot="legs" title="Pernas">Pern</div>
+                <div class="equip-slot equip-feet" data-drop-zone="equipment" data-drop-equip-slot="feet" title="Botas">Bot</div>
+                <div class="equip-slot equip-ring" data-drop-zone="equipment" data-drop-equip-slot="ring" title="Anel">Anel</div>
+                <div class="equip-slot equip-amulet" data-drop-zone="equipment" data-drop-equip-slot="amulet" title="Amuleto">Amu</div>
               </div>
             </div>
 
@@ -1121,6 +1143,7 @@
               <span>◈ INVENTÁRIO</span><span class="sec-arrow">▼</span>
             </div>
             <div class="side-section-body" id="sec-inv">
+              <div id="drag-preview-hint" aria-live="polite"></div>
               <div id="inv-grid"></div>
             </div>
           </div>
@@ -1238,6 +1261,7 @@
         setupCanvas,
       } from "./src/render/mapRenderer.js";
       import { renderWorld } from "./src/render/worldRenderer.js";
+      import { createAnimationClock } from "./src/core/animationClock.js";
       import {
         RPG_ENGINE,
         TILE_SIZE,
@@ -1282,6 +1306,10 @@
       } from "./src/gameplay/combatEngine.js";
       import { worldEvents, EVENT_TYPES } from "./src/core/events.js";
       import { initCombatTextUI } from "./src/clients/shared/ui/combatText.js";
+      import {
+        buildDropPreviewMessage,
+        DRAG_PREVIEW_TEXT,
+      } from "./src/clients/shared/ui/dragPreviewMessages.js";
       import { DragDropManager } from "./src/clients/shared/input/DragDropManager.js";
       import {
         calculateCombatResult,
@@ -1713,6 +1741,7 @@
       const _worldItemsByCoord = {};
       const _removedMapSourceKeys = new Set();
       let _dragDropManager = null;
+      const _dragUiUnsubs = [];
 
       const BASIC_ATTACK_CD_KEY = "cdBasicAttack";
       const AUTO_ATTACK_TICK_MS = 2000;
@@ -1757,6 +1786,64 @@
           outfitId: app.outfitId ?? fallbackId,
           outfitPack: app.outfitPack ?? "outfits_01",
         };
+      }
+
+      function _setDragPreviewHint(text = "", state = "") {
+        const hintEl = document.getElementById("drag-preview-hint");
+        if (!hintEl) return;
+        hintEl.textContent = text;
+        hintEl.classList.toggle("is-valid", state === "valid");
+        hintEl.classList.toggle("is-invalid", state === "invalid");
+      }
+
+      function _bindDragPreviewUI() {
+        _clearDragPreviewUI();
+
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_START, () => {
+            _setDragPreviewHint(DRAG_PREVIEW_TEXT.start, "");
+          }),
+        );
+
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_PREVIEW, (evt) => {
+            if (evt?.cleared || !evt?.zone) {
+              _setDragPreviewHint("");
+              return;
+            }
+            const message = buildDropPreviewMessage(evt);
+            const isValid = evt.isValid === true;
+            _setDragPreviewHint(message, isValid ? "valid" : "invalid");
+          }),
+        );
+
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_VALID, () => {
+            _setDragPreviewHint(DRAG_PREVIEW_TEXT.sent, "valid");
+          }),
+        );
+
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, () => {
+            _setDragPreviewHint(DRAG_PREVIEW_TEXT.invalid, "invalid");
+          }),
+        );
+
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_END, () => {
+            setTimeout(() => _setDragPreviewHint(""), 350);
+          }),
+        );
+      }
+
+      function _clearDragPreviewUI() {
+        while (_dragUiUnsubs.length) {
+          const un = _dragUiUnsubs.pop();
+          try {
+            un?.();
+          } catch (_) {}
+        }
+        _setDragPreviewHint("");
       }
 
       watchServerTime((offset) => {
@@ -2146,6 +2233,7 @@
           },
         });
         _dragDropManager.mount();
+        _bindDragPreviewUI();
 
         document.getElementById("game-wrapper").style.display = "flex";
         activeZ = myPos.z;
@@ -2631,6 +2719,7 @@
       }
 
       // ── Render loop ────────────────────────────────────────────────────────
+      const animationClock = createAnimationClock({ maxDeltaMs: 80 });
       let _lastTs;
       function renderLoop(ts) {
         if (!myPos) {
@@ -2640,6 +2729,7 @@
         if (_lastTs === undefined) _lastTs = ts;
         const delta = ts - _lastTs;
         _lastTs = ts;
+        animationClock.tick(ts);
 
         const myVisual = anim.getVisualPos(myPos);
         cam.x = Math.round(myVisual.x - canvasW / 2 + TILE_SIZE / 2);
@@ -2653,7 +2743,7 @@
           camX: cam.x,
           camY: cam.y,
           activeZ: _numOr(myPos.z, GROUND_Z),
-          animClock: ts,
+          animClock: animationClock.now,
           ts,
           canvasW,
           canvasH,
@@ -2690,6 +2780,7 @@
       function _cleanup() {
         _dragDropManager?.unmount?.();
         _dragDropManager = null;
+        _clearDragPreviewUI();
         stopRegen();
         if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
         if (myPos) removePlayer(myPos.id);
