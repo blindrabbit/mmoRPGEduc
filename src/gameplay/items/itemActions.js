@@ -57,6 +57,7 @@ export const ITEM_CONFIG = Object.freeze({
 
 const P = {
   worldItem: (id) => `world_items/${id}`,
+  worldMapClaim: (id) => `world_map_claims/${id}`,
   inventory: (pid) => `players_data/${pid}/inventory`,
   inventorySlot: (pid, slot) => `players_data/${pid}/inventory/${slot}`,
   equipment: (pid) => `players_data/${pid}/equipment`,
@@ -140,6 +141,31 @@ function _toSlotIndex(slotLike) {
   return Number.isInteger(n) ? n : null;
 }
 
+function _isMapOriginWorldItem(item) {
+  if (!item || typeof item !== "object") return false;
+  return (
+    item.sourceCoord != null &&
+    item.sourceLayer != null &&
+    item.sourceTileId != null
+  );
+}
+
+function _buildMapClaimIdFromWorldItem(item) {
+  if (!_isMapOriginWorldItem(item)) return null;
+  return `${String(item.sourceCoord).replace(/,/g, "_")}_${Number(item.sourceLayer)}_${Number(item.sourceTileId)}`;
+}
+
+function _buildMapClaimPayload(item, playerId) {
+  if (!_isMapOriginWorldItem(item)) return null;
+  return {
+    sourceCoord: String(item.sourceCoord),
+    sourceLayer: Number(item.sourceLayer),
+    sourceTileId: Number(item.sourceTileId),
+    ts: Date.now(),
+    by: String(playerId),
+  };
+}
+
 function _sameItemIdentity(a, b) {
   if (!a || !b) return false;
   const aTile = _resolveItemTileId(a);
@@ -188,7 +214,7 @@ export async function pickUpItem(playerId, worldItemId) {
       error: "Item inválido: tileId ausente para pickup",
     };
   }
-  if (ids && worldItem.fromMap) {
+  if (ids && _isMapOriginWorldItem(worldItem)) {
     if (!ids.canPickUp(tileId) && !ids.canMove(tileId)) {
       return { success: false, error: "Este item não pode ser pego" };
     }
@@ -271,6 +297,10 @@ export async function pickUpItem(playerId, worldItemId) {
 
   const updates = {};
   const existingAtSlot = inventory?.[slotIndex] ?? null;
+  const isMapOrigin = _isMapOriginWorldItem(worldItem);
+  const mapClaimId = isMapOrigin
+    ? _buildMapClaimIdFromWorldItem(worldItem)
+    : null;
 
   if (
     existingAtSlot &&
@@ -296,10 +326,22 @@ export async function pickUpItem(playerId, worldItemId) {
       };
     } else {
       updates[P.worldItem(worldItemId)] = null;
+      if (mapClaimId) {
+        updates[P.worldMapClaim(mapClaimId)] = _buildMapClaimPayload(
+          worldItem,
+          playerId,
+        );
+      }
     }
   } else {
     updates[P.inventorySlot(playerId, slotIndex)] = inventoryItem;
     updates[P.worldItem(worldItemId)] = null;
+    if (mapClaimId) {
+      updates[P.worldMapClaim(mapClaimId)] = _buildMapClaimPayload(
+        worldItem,
+        playerId,
+      );
+    }
   }
   await batchWrite(updates);
 
@@ -490,6 +532,8 @@ export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
   const currX = Number(worldItem.x ?? 0);
   const currY = Number(worldItem.y ?? 0);
   const currZ = Number(worldItem.z ?? 7);
+  const mapClaimId = _buildMapClaimIdFromWorldItem(worldItem);
+  const mapClaimPayload = _buildMapClaimPayload(worldItem, playerId);
 
   if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
     return { success: false, error: "Só é possível mover itens a até 2 SQM" };
@@ -543,6 +587,9 @@ export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
           },
           // Remove o item arrastado
           [P.worldItem(worldItemId)]: null,
+          ...(mapClaimId && mapClaimPayload
+            ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
+            : {}),
         });
 
         return { success: true, merged: true, targetId, quantity: mergedQty };
@@ -560,6 +607,9 @@ export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
       movedBy: playerId,
       movedAt: Date.now(),
     },
+    ...(mapClaimId && mapClaimPayload
+      ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
+      : {}),
   });
 
   return { success: true };
@@ -636,6 +686,8 @@ export async function splitWorldItem(
 
   const remainingQty = totalQty - qty;
   const newItemId = `item_${playerId}_${Date.now()}`;
+  const mapClaimId = _buildMapClaimIdFromWorldItem(worldItem);
+  const mapClaimPayload = _buildMapClaimPayload(worldItem, playerId);
 
   const newWorldItem = {
     ...worldItem,
@@ -661,6 +713,9 @@ export async function splitWorldItem(
       count: remainingQty,
     },
     [P.worldItem(newItemId)]: newWorldItem,
+    ...(mapClaimId && mapClaimPayload
+      ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
+      : {}),
   });
 
   return { success: true, newItemId, quantity: qty, remaining: remainingQty };

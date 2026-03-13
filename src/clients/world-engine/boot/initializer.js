@@ -22,7 +22,13 @@ import {
 } from "../../shared/ui/dragPreviewMessages.js";
 import { DragDropManager } from "../../shared/input/DragDropManager.js";
 import { InventoryUI } from "../../shared/ui/InventoryUI.js";
-import { dbWatch, dbSet, watchPlayerData, PATHS } from "../../../core/db.js";
+import {
+  dbWatch,
+  dbSet,
+  dbGet,
+  watchPlayerData,
+  PATHS,
+} from "../../../core/db.js";
 import { initItemDataService } from "../../../gameplay/items/ItemDataService.js";
 import { renderWorld } from "../../../render/worldRenderer.js";
 import { buildFloorIndex } from "../../../render/mapRenderer.js";
@@ -118,11 +124,12 @@ export class Initializer {
       `Mapa carregado: ${Object.keys(this.worldState.map).length} tiles`,
     );
 
-    this.logger.info("[2/4] map_data.json");
-    const dataRes = await fetch(NEW_ASSETS.dataFile);
-    if (!dataRes.ok)
-      throw new Error(`HTTP ${dataRes.status} — ${NEW_ASSETS.dataFile}`);
-    this.worldState.mapData = await dataRes.json();
+    this.logger.info("[2/4] tilesData (Firebase)");
+    const remoteTilesData = await dbGet(PATHS.tilesData);
+    if (!remoteTilesData || typeof remoteTilesData !== "object") {
+      throw new Error("tilesData indisponível no Firebase");
+    }
+    this.worldState.mapData = remoteTilesData;
     this.logger.ok(
       `Metadata carregada: ${Object.keys(this.worldState.mapData).length} itens`,
     );
@@ -431,12 +438,11 @@ export class Initializer {
         return;
       }
 
-      const playerId = window.currentPlayerId ?? null;
-      if (!playerId) {
+      const playerId = window.currentPlayerId ?? "worldengine";
+      if (!window.currentPlayerId) {
         this.logger.warn(
-          "⚠ window.currentPlayerId não definido — InventoryUI ignorado",
+          "⚠ window.currentPlayerId não definido — usando contexto worldengine para drag global",
         );
-        return;
       }
 
       const ws = this.worldState;
@@ -454,6 +460,10 @@ export class Initializer {
       const _worldItemsByCoord = {};
       const _renderedWorldItems = {};
       const _removedMapSourceKeys = new Set();
+      const _claimedMapSourceKeys = new Set();
+
+      const _buildMapSourceKey = (coord, layer, tileId) =>
+        `${String(coord)}|${Number(layer)}|${Number(tileId)}`;
 
       const _removeTileFromLayer = (coord, layerKey, predicate) => {
         const mapTile = ws.map?.[coord];
@@ -478,6 +488,35 @@ export class Initializer {
           (t) => Number(t?.id) === Number(tileId),
         );
         if (removed) ws.floorIndex = buildFloorIndex(ws.map ?? {});
+      };
+
+      const _applyMapClaimsSnapshot = (claims) => {
+        const all = claims && typeof claims === "object" ? claims : {};
+        let dirty = false;
+        for (const claim of Object.values(all)) {
+          if (!claim || typeof claim !== "object") continue;
+          const coord = String(claim.sourceCoord ?? "");
+          const layer = Number(claim.sourceLayer);
+          const tileId = Number(claim.sourceTileId);
+          if (!coord || !Number.isFinite(layer) || !Number.isFinite(tileId))
+            continue;
+
+          const sourceKey = _buildMapSourceKey(coord, layer, tileId);
+          if (_claimedMapSourceKeys.has(sourceKey)) continue;
+
+          _claimedMapSourceKeys.add(sourceKey);
+          _removedMapSourceKeys.add(sourceKey);
+          const removed = _removeTileFromLayer(
+            coord,
+            String(layer),
+            (t) => Number(t?.id) === tileId,
+          );
+          dirty = removed || dirty;
+        }
+
+        if (dirty) {
+          ws.floorIndex = buildFloorIndex(ws.map ?? {});
+        }
       };
 
       const _removeRenderedWorldItem = (worldItemId) => {
@@ -642,6 +681,7 @@ export class Initializer {
             payload.worldItemId?.startsWith("map_")
           ) {
             try {
+              const MAP_SYNC_GRACE_MS = 120;
               const withoutPrefix = payload.worldItemId.slice(4); // "94,106,7_2_3349"
               const parts = withoutPrefix.split("_");
               const tileId = parseInt(parts.pop(), 10); // 3349
@@ -660,7 +700,7 @@ export class Initializer {
                 type: "item",
                 quantity: 1,
                 stackable: itemDataService.isStackable(tileId),
-                fromMap: true,
+                fromMap: false,
                 sourceCoord: coord,
                 sourceLayer: Number(mapLayer),
                 sourceTileId: Number(tileId),
@@ -668,8 +708,11 @@ export class Initializer {
                 expiresAt: Date.now() + 60_000,
               });
 
-              // Remove o tile do mapa local (visualização imediata; não persiste no .json)
-              _removeMapTileAndRefreshFloorIndex(coord, mapLayer, tileId);
+              // Não remove localmente aqui. A remoção precisa ser dirigida pelo
+              // watcher de world_items para manter sincronia entre clientes.
+              await new Promise((resolve) =>
+                setTimeout(resolve, MAP_SYNC_GRACE_MS),
+              );
 
               payload = { ...payload, worldItemId: tempId };
             } catch (err) {
@@ -812,6 +855,14 @@ export class Initializer {
             const tiles = mapTile[layer];
             if (!Array.isArray(tiles)) continue;
             for (const tile of tiles) {
+              const sourceKey = _buildMapSourceKey(key, layer, tile.id);
+              if (
+                _claimedMapSourceKeys.has(sourceKey) ||
+                _removedMapSourceKeys.has(sourceKey)
+              ) {
+                continue;
+              }
+
               if (
                 itemDataService.canPickUp(tile.id) ||
                 itemDataService.canMove(tile.id)
@@ -903,6 +954,13 @@ export class Initializer {
       });
       if (typeof unsubWorldItems === "function") {
         this._inventoryUnsubscribers.push(unsubWorldItems);
+      }
+
+      const unsubWorldMapClaims = dbWatch("world_map_claims", (claims) => {
+        _applyMapClaimsSnapshot(claims);
+      });
+      if (typeof unsubWorldMapClaims === "function") {
+        this._inventoryUnsubscribers.push(unsubWorldMapClaims);
       }
 
       // ── Tecla I → toggle inventário ───────────────────────────────────

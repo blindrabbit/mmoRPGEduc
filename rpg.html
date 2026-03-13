@@ -620,6 +620,11 @@
         background: #111827;
         border: 1px solid #1a2a3a;
         border-radius: 3px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
       }
       .inv-slot:hover {
         border-color: #2ecc71;
@@ -1064,7 +1069,9 @@
                   "
                 >
                   💪 + FOR
-                  <span id="stat-val-for" style="float: right; color: #aaa">0</span>
+                  <span id="stat-val-for" style="float: right; color: #aaa"
+                    >0</span
+                  >
                 </button>
                 <button
                   id="btn-alloc-int"
@@ -1082,7 +1089,9 @@
                   "
                 >
                   ✨ + INT
-                  <span id="stat-val-int" style="float: right; color: #aaa">0</span>
+                  <span id="stat-val-int" style="float: right; color: #aaa"
+                    >0</span
+                  >
                 </button>
                 <button
                   id="btn-alloc-agi"
@@ -1100,7 +1109,9 @@
                   "
                 >
                   👟 + AGI
-                  <span id="stat-val-agi" style="float: right; color: #aaa">0</span>
+                  <span id="stat-val-agi" style="float: right; color: #aaa"
+                    >0</span
+                  >
                 </button>
                 <button
                   id="btn-alloc-vit"
@@ -1118,7 +1129,9 @@
                   "
                 >
                   🛡 + VIT
-                  <span id="stat-val-vit" style="float: right; color: #aaa">0</span>
+                  <span id="stat-val-vit" style="float: right; color: #aaa"
+                    >0</span
+                  >
                 </button>
               </div>
             </div>
@@ -1128,14 +1141,70 @@
             </div>
             <div class="side-section-body" id="sec-equip">
               <div id="equip-grid">
-                <div class="equip-slot equip-head" data-drop-zone="equipment" data-drop-equip-slot="head" title="Cabeça">Cab</div>
-                <div class="equip-slot equip-body" data-drop-zone="equipment" data-drop-equip-slot="body" title="Corpo">Corp</div>
-                <div class="equip-slot equip-weapon" data-drop-zone="equipment" data-drop-equip-slot="weapon" title="Arma">Arma</div>
-                <div class="equip-slot equip-shield" data-drop-zone="equipment" data-drop-equip-slot="shield" title="Escudo">Esc</div>
-                <div class="equip-slot equip-legs" data-drop-zone="equipment" data-drop-equip-slot="legs" title="Pernas">Pern</div>
-                <div class="equip-slot equip-feet" data-drop-zone="equipment" data-drop-equip-slot="feet" title="Botas">Bot</div>
-                <div class="equip-slot equip-ring" data-drop-zone="equipment" data-drop-equip-slot="ring" title="Anel">Anel</div>
-                <div class="equip-slot equip-amulet" data-drop-zone="equipment" data-drop-equip-slot="amulet" title="Amuleto">Amu</div>
+                <div
+                  class="equip-slot equip-head"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="head"
+                  title="Cabeça"
+                >
+                  Cab
+                </div>
+                <div
+                  class="equip-slot equip-body"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="body"
+                  title="Corpo"
+                >
+                  Corp
+                </div>
+                <div
+                  class="equip-slot equip-weapon"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="weapon"
+                  title="Arma"
+                >
+                  Arma
+                </div>
+                <div
+                  class="equip-slot equip-shield"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="shield"
+                  title="Escudo"
+                >
+                  Esc
+                </div>
+                <div
+                  class="equip-slot equip-legs"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="legs"
+                  title="Pernas"
+                >
+                  Pern
+                </div>
+                <div
+                  class="equip-slot equip-feet"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="feet"
+                  title="Botas"
+                >
+                  Bot
+                </div>
+                <div
+                  class="equip-slot equip-ring"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="ring"
+                  title="Anel"
+                >
+                  Anel
+                </div>
+                <div
+                  class="equip-slot equip-amulet"
+                  data-drop-zone="equipment"
+                  data-drop-equip-slot="amulet"
+                  title="Amuleto"
+                >
+                  Amu
+                </div>
               </div>
             </div>
 
@@ -1293,6 +1362,9 @@
         registerPlayerDisconnect,
         dbTouchPresence,
         dbWatch,
+        dbGet,
+        dbSet,
+        PATHS,
       } from "./src/core/db.js";
       import {
         initWorldStore,
@@ -1311,6 +1383,7 @@
         DRAG_PREVIEW_TEXT,
       } from "./src/clients/shared/ui/dragPreviewMessages.js";
       import { DragDropManager } from "./src/clients/shared/input/DragDropManager.js";
+      import { initItemDataService } from "./src/gameplay/items/ItemDataService.js";
       import {
         calculateCombatResult,
         calculateNewHp,
@@ -1438,10 +1511,38 @@
         const grid = document.getElementById("inv-grid");
         if (!grid) return;
 
+        const _drawSpriteFit = (ctx, sprite, targetW, targetH) => {
+          const srcW = Math.max(1, Number(sprite?.w ?? targetW));
+          const srcH = Math.max(1, Number(sprite?.h ?? targetH));
+          const scale = Math.min(targetW / srcW, targetH / srcH);
+          const drawW = Math.max(1, Math.floor(srcW * scale));
+          const drawH = Math.max(1, Math.floor(srcH * scale));
+          const dx = Math.floor((targetW - drawW) / 2);
+          const dy = Math.floor((targetH - drawH) / 2);
+
+          ctx.clearRect(0, 0, targetW, targetH);
+          ctx.imageSmoothingEnabled = false;
+          ctx.drawImage(
+            sprite.sheet,
+            sprite.x,
+            sprite.y,
+            srcW,
+            srcH,
+            dx,
+            dy,
+            drawW,
+            drawH,
+          );
+        };
+
         const buildDesc = (item) => {
           const tileId = item?.tileId ?? item?.spriteId ?? item?.id;
           const entry = mapData?.[tileId] ?? mapData?.[String(tileId)] ?? null;
-          const lines = [item.name ?? entry?.flags_raw?.item_name ?? `Item #${tileId ?? "?"}`];
+          const lines = [
+            item.name ??
+              entry?.flags_raw?.item_name ??
+              `Item #${tileId ?? "?"}`,
+          ];
           if (item.description) lines.push(item.description);
           const props = [];
           if (entry?.game?.is_pickupable) props.push("Pegável");
@@ -1471,24 +1572,18 @@
           slot.dataset.itemSlot = String(i);
 
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
-          const sprite = Number.isFinite(tileId) ? assets.getMapSprite(tileId) : null;
+          const sprite = Number.isFinite(tileId)
+            ? assets.getMapSprite(tileId)
+            : null;
           if (sprite?.sheet) {
             const cvs = document.createElement("canvas");
-            cvs.width = 24;
-            cvs.height = 24;
+            cvs.width = TILE_SIZE;
+            cvs.height = TILE_SIZE;
+            cvs.style.width = `${TILE_SIZE}px`;
+            cvs.style.height = `${TILE_SIZE}px`;
+            cvs.style.imageRendering = "pixelated";
             const ctx = cvs.getContext("2d");
-            ctx.imageSmoothingEnabled = false;
-            ctx.drawImage(
-              sprite.sheet,
-              sprite.x,
-              sprite.y,
-              sprite.w,
-              sprite.h,
-              0,
-              0,
-              24,
-              24,
-            );
+            _drawSpriteFit(ctx, sprite, TILE_SIZE, TILE_SIZE);
             slot.appendChild(cvs);
           } else {
             const fallback = document.createElement("span");
@@ -1551,12 +1646,20 @@
         const y = Number(item?.y);
         const z = Number(item?.z ?? 7);
 
-        if (!Number.isFinite(tileId) || !Number.isFinite(x) || !Number.isFinite(y)) {
+        if (
+          !Number.isFinite(tileId) ||
+          !Number.isFinite(x) ||
+          !Number.isFinite(y)
+        ) {
           return false;
         }
 
         const coord = `${x},${y},${z}`;
-        if (!map[coord] || typeof map[coord] !== "object" || Array.isArray(map[coord])) {
+        if (
+          !map[coord] ||
+          typeof map[coord] !== "object" ||
+          Array.isArray(map[coord])
+        ) {
           map[coord] = {};
         }
 
@@ -1581,7 +1684,8 @@
         const next = items && typeof items === "object" ? items : {};
         let dirty = false;
 
-        for (const id of Object.keys(_worldItemsById)) delete _worldItemsById[id];
+        for (const id of Object.keys(_worldItemsById))
+          delete _worldItemsById[id];
         for (const coord of Object.keys(_worldItemsByCoord))
           delete _worldItemsByCoord[coord];
 
@@ -1624,6 +1728,36 @@
 
           dirty = _removeRenderedWorldItem(id) || dirty;
           dirty = _applyRenderedWorldItem(id, item) || dirty;
+        }
+
+        if (dirty) {
+          floorIndex = buildFloorIndex(map);
+        }
+      }
+
+      function _applyMapClaimsSnapshot(claims) {
+        const all = claims && typeof claims === "object" ? claims : {};
+        let dirty = false;
+
+        for (const claim of Object.values(all)) {
+          if (!claim || typeof claim !== "object") continue;
+          const coord = String(claim.sourceCoord ?? "");
+          const layer = Number(claim.sourceLayer);
+          const tileId = Number(claim.sourceTileId);
+          if (!coord || !Number.isFinite(layer) || !Number.isFinite(tileId))
+            continue;
+
+          const sourceKey = _buildMapSourceKey(coord, layer, tileId);
+          if (_claimedMapSourceKeys.has(sourceKey)) continue;
+
+          _claimedMapSourceKeys.add(sourceKey);
+          _removedMapSourceKeys.add(sourceKey);
+          const removed = _removeTileFromLayer(
+            coord,
+            String(layer),
+            (t) => Number(t?.id) === tileId,
+          );
+          dirty = removed || dirty;
         }
 
         if (dirty) {
@@ -1719,6 +1853,7 @@
       const anim = new AnimationController();
       let map = {};
       let mapData = {}; // map_data.json — metadados dos sprites (is_walkable, etc.)
+      let itemDataService = null;
       let floorIndex = null;
       let cam = { x: 0, y: 0 };
       let canvasW, canvasH, cols, rows;
@@ -1740,8 +1875,12 @@
       const _worldItemsById = {};
       const _worldItemsByCoord = {};
       const _removedMapSourceKeys = new Set();
+      const _claimedMapSourceKeys = new Set();
       let _dragDropManager = null;
       const _dragUiUnsubs = [];
+
+      const _buildMapSourceKey = (coord, layer, tileId) =>
+        `${String(coord)}|${Number(layer)}|${Number(tileId)}`;
 
       const BASIC_ATTACK_CD_KEY = "cdBasicAttack";
       const AUTO_ATTACK_TICK_MS = 2000;
@@ -2078,18 +2217,27 @@
         }
 
         // Metadados dos sprites (colisão, walkable, etc.)
-        blog("Carregando map_data...", "info");
+        blog("Carregando tilesData do Firebase...", "info");
         try {
-          let res = await fetch("./assets/map_data.json");
-          if (!res.ok) res = await fetch("./assets_novo/map_data.json");
-          if (res.ok) {
-            mapData = await res.json();
-            blog(`map_data: ${Object.keys(mapData).length} sprites`, "ok");
+          const remoteTilesData = await dbGet(PATHS.tilesData);
+          mapData =
+            remoteTilesData && typeof remoteTilesData === "object"
+              ? remoteTilesData
+              : {};
+          itemDataService = initItemDataService(mapData ?? {});
+
+          if (Object.keys(mapData).length > 0) {
+            blog(
+              `tilesData(Firebase): ${Object.keys(mapData).length} sprites`,
+              "ok",
+            );
           } else {
-            blog("map_data não encontrado — colisão desativada", "warn");
+            blog("tilesData vazio no Firebase", "warn");
           }
         } catch (e) {
-          blog(`Falha ao carregar map_data: ${e.message}`, "warn");
+          mapData = {};
+          itemDataService = initItemDataService({});
+          blog(`Falha ao carregar tilesData do Firebase: ${e.message}`, "err");
         }
 
         // Assets
@@ -2172,9 +2320,54 @@
                 return { success: false, error: "Ação inválida" };
               }
               try {
+                let payload = action.payload;
+
+                if (
+                  (payload.itemAction === "pickUp" ||
+                    payload.itemAction === "moveWorld") &&
+                  payload.worldItemId?.startsWith("map_")
+                ) {
+                  const MAP_SYNC_GRACE_MS = 120;
+                  const withoutPrefix = payload.worldItemId.slice(4);
+                  const parts = withoutPrefix.split("_");
+                  const tileId = parseInt(parts.pop(), 10);
+                  const mapLayer = parts.pop();
+                  const coord = parts.join("_");
+                  const [tx, ty, tz] = coord.split(",").map(Number);
+
+                  const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${Date.now()}`;
+                  await dbSet(`world_items/${tempId}`, {
+                    id: tempId,
+                    tileId,
+                    name:
+                      itemDataService?.getItemName?.(tileId) ??
+                      `Item #${tileId}`,
+                    x: tx,
+                    y: ty,
+                    z: tz,
+                    type: "item",
+                    quantity: 1,
+                    stackable: itemDataService?.isStackable?.(tileId) ?? false,
+                    fromMap: false,
+                    sourceCoord: coord,
+                    sourceLayer: Number(mapLayer),
+                    sourceTileId: Number(tileId),
+                    skipRangeCheck: true,
+                    expiresAt: Date.now() + 60_000,
+                  });
+
+                  // Não remove localmente aqui. A remoção do tile do mapa deve
+                  // acontecer via snapshot de world_items em TODOS os clientes.
+                  await new Promise((resolve) =>
+                    setTimeout(resolve, MAP_SYNC_GRACE_MS),
+                  );
+
+                  payload = { ...payload, worldItemId: tempId };
+                }
+
                 await submitPlayerAction(uid, {
                   type: action.type,
-                  ...action.payload,
+                  ...payload,
                 });
                 return { success: true };
               } catch (err) {
@@ -2202,14 +2395,58 @@
             if (source === "inventory") return myPos?.inventory?.[key] ?? null;
             if (source === "world") {
               const bucket = _worldItemsByCoord[key];
-              return Array.isArray(bucket) && bucket.length
-                ? bucket[bucket.length - 1]
-                : null;
+              if (Array.isArray(bucket) && bucket.length) {
+                return bucket[bucket.length - 1];
+              }
+
+              const mapTile = map?.[key];
+              if (!mapTile) return null;
+              const layers = Object.keys(mapTile)
+                .map(Number)
+                .sort((a, b) => b - a);
+              for (const layer of layers) {
+                const tiles = mapTile[layer];
+                if (!Array.isArray(tiles)) continue;
+                for (const tile of tiles) {
+                  const sourceKey = _buildMapSourceKey(key, layer, tile.id);
+                  if (
+                    _claimedMapSourceKeys.has(sourceKey) ||
+                    _removedMapSourceKeys.has(sourceKey)
+                  ) {
+                    continue;
+                  }
+
+                  if (
+                    itemDataService?.canPickUp?.(tile.id) ||
+                    itemDataService?.canMove?.(tile.id)
+                  ) {
+                    const [x, y, z] = key.split(",").map(Number);
+                    return {
+                      id: `map_${key}_${layer}_${tile.id}`,
+                      tileId: tile.id,
+                      name:
+                        itemDataService?.getItemName?.(tile.id) ??
+                        `Item #${tile.id}`,
+                      x,
+                      y,
+                      z,
+                      type: "item",
+                      quantity: tile.count ?? 1,
+                      stackable:
+                        itemDataService?.isStackable?.(tile.id) ?? false,
+                      fromMap: true,
+                    };
+                  }
+                }
+              }
+              return null;
             }
             return null;
           },
+          itemDataService,
           createGhostElement: (itemData) => {
-            const tileId = itemData?.tileId ?? itemData?.spriteId ?? itemData?.id;
+            const tileId =
+              itemData?.tileId ?? itemData?.spriteId ?? itemData?.id;
             const sprite = tileId != null ? assets.getMapSprite(tileId) : null;
             if (!sprite?.sheet) return null;
 
@@ -2291,6 +2528,10 @@
 
         dbWatch("world_items", (items) => {
           _applyWorldItemsSnapshot(items);
+        });
+
+        dbWatch("world_map_claims", (claims) => {
+          _applyMapClaimsSnapshot(claims);
         });
 
         // Outros jogadores online
@@ -2385,7 +2626,11 @@
                   amount: 1,
                 });
               } catch (err) {
-                pushLog("rpg", "error", `Erro ao distribuir ${statName}: ${err?.message}`);
+                pushLog(
+                  "rpg",
+                  "error",
+                  `Erro ao distribuir ${statName}: ${err?.message}`,
+                );
               }
             });
           }
@@ -2625,14 +2870,16 @@
         if (xpTextEl) xpTextEl.textContent = `${xp} / ${xpToNext} XP`;
         const availPts = Number(data.stats?.availableStatPoints ?? 0) || 0;
         if (pointsEl) {
-          pointsEl.textContent = availPts > 0
-            ? `✦ ${availPts} ponto${availPts !== 1 ? "s" : ""} disponível${availPts !== 1 ? "s" : ""}`
-            : "";
+          pointsEl.textContent =
+            availPts > 0
+              ? `✦ ${availPts} ponto${availPts !== 1 ? "s" : ""} disponível${availPts !== 1 ? "s" : ""}`
+              : "";
         }
 
         // Mostrar painel de alocação somente quando há pontos disponíveis
         const allocPanel = document.getElementById("stat-allocation-panel");
-        if (allocPanel) allocPanel.style.display = availPts > 0 ? "flex" : "none";
+        if (allocPanel)
+          allocPanel.style.display = availPts > 0 ? "flex" : "none";
         // Valores dos botões são atualizados em _updateSideStats (via calculateTotalStats)
 
         const sc = document.getElementById("side-status-container");
@@ -2656,21 +2903,23 @@
         const s = player.stats ?? {};
         const calculated = calculateTotalStats(player);
         const total = calculated.totalStats ?? {};
-        const auto  = calculated.autoStats ?? {};
+        const auto = calculated.autoStats ?? {};
         const manual = calculated.effectiveManual ?? {};
         const attackPower = Math.round(getAttackPower(player));
         const defensePower = Math.round(getDefense(player, 0));
         const spellPower = Math.round(calculated.spellPower ?? 0);
-        const healPower  = Math.round(calculated.healPower ?? 0);
+        const healPower = Math.round(calculated.healPower ?? 0);
 
         // Linha de atributo com tooltip mostrando origem dos pontos
         function _sRow(icon, label, stat) {
-          const tot  = Math.round(total[stat]  ?? 0);
-          const lvl  = Math.round(auto[stat]   ?? 0);
-          const man  = Math.round(manual[stat] ?? 0);
-          const tip  = `De nível: ${lvl}  |  Distribuído: ${man}`;
-          return `<div class="stat-row" title="${tip}" style="cursor:help">` +
-                 `<span>${icon} ${label}</span><span>${tot}</span></div>`;
+          const tot = Math.round(total[stat] ?? 0);
+          const lvl = Math.round(auto[stat] ?? 0);
+          const man = Math.round(manual[stat] ?? 0);
+          const tip = `De nível: ${lvl}  |  Distribuído: ${man}`;
+          return (
+            `<div class="stat-row" title="${tip}" style="cursor:help">` +
+            `<span>${icon} ${label}</span><span>${tot}</span></div>`
+          );
         }
 
         el.innerHTML =
@@ -2698,7 +2947,7 @@
           const val = document.getElementById(valId);
           if (val) val.textContent = Math.round(total[stat] ?? 0);
           if (btn) {
-            const lvl = Math.round(auto[stat]   ?? 0);
+            const lvl = Math.round(auto[stat] ?? 0);
             const man = Math.round(manual[stat] ?? 0);
             btn.title = `De nível: ${lvl}  |  Distribuído: ${man}`;
             // Atualiza o texto do botão preservando o span interno
@@ -2706,7 +2955,10 @@
             if (firstChild && firstChild.nodeType === Node.TEXT_NODE) {
               firstChild.textContent = `${label}  `;
             } else {
-              btn.insertBefore(document.createTextNode(`${label}  `), btn.firstChild);
+              btn.insertBefore(
+                document.createTextNode(`${label}  `),
+                btn.firstChild,
+              );
             }
           }
         }
@@ -2782,7 +3034,10 @@
         _dragDropManager = null;
         _clearDragPreviewUI();
         stopRegen();
-        if (_heartbeatInterval) { clearInterval(_heartbeatInterval); _heartbeatInterval = null; }
+        if (_heartbeatInterval) {
+          clearInterval(_heartbeatInterval);
+          _heartbeatInterval = null;
+        }
         if (myPos) removePlayer(myPos.id);
         if (combatInterval) {
           clearInterval(combatInterval);

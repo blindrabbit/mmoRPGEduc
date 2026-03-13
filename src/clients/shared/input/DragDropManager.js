@@ -21,8 +21,8 @@
 // Dependências: events.js, config.js
 // =============================================================================
 
-import { worldEvents, EVENT_TYPES } from '../../../core/events.js';
-import { TILE_SIZE } from '../../../core/config.js';
+import { worldEvents, EVENT_TYPES } from "../../../core/events.js";
+import { TILE_SIZE } from "../../../core/config.js";
 import { getPlayer } from "../../../core/worldStore.js";
 
 // =============================================================================
@@ -256,7 +256,8 @@ export class DragDropManager {
     if (!this._drag.active && !this._drag.pending) return;
 
     if (this._drag.active) {
-      const isOverCanvas = this._canvas && this._isOverCanvas(e.clientX, e.clientY);
+      const isOverCanvas =
+        this._canvas && this._isOverCanvas(e.clientX, e.clientY);
       const directDropEl = this._getDropZoneAt(e.clientX, e.clientY);
       const scoredDropEl =
         !isOverCanvas && this._drag.bestDropZone?.score > 0
@@ -449,11 +450,11 @@ export class DragDropManager {
     const { originEl, itemData } = this._drag;
 
     let ghost;
-    if (originEl) {
-      ghost = originEl.cloneNode(true);
-    } else if (this._createGhostElement) {
+    if (this._createGhostElement) {
       // Sprite do canvas — usa callback externo para renderizar o sprite correto
       ghost = this._createGhostElement(itemData);
+    } else if (originEl) {
+      ghost = originEl.cloneNode(true);
     } else {
       // Fallback genérico: canvas semi-transparente sem borda
       ghost = document.createElement("canvas");
@@ -473,6 +474,10 @@ export class DragDropManager {
       transition: "none",
       left: `${x}px`,
       top: `${y}px`,
+      boxShadow: "none",
+      filter: "none",
+      border: "none",
+      background: "transparent",
     });
     ghost.classList.add(DRAG_CONFIG.classes.ghost);
     document.body.appendChild(ghost);
