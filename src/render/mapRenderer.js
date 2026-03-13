@@ -833,10 +833,10 @@ function _renderGroundPass(opts) {
     const tiles = floorIndex.get(z);
     if (!tiles) return;
 
-    const x0 = Math.floor(camera.x) - 2;
-    const y0 = Math.floor(camera.y) - 2;
-    const x1 = x0 + cols + 4;
-    const y1 = y0 + rows + 4;
+    const x0 = Math.floor(camera.x) - 3;
+    const y0 = Math.floor(camera.y) - 3;
+    const x1 = x0 + cols + 6;
+    const y1 = y0 + rows + 6;
 
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {
@@ -932,10 +932,10 @@ function _renderMainPass(opts) {
     const tiles = floorIndex.get(z);
     if (!tiles) return;
 
-    const x0 = Math.floor(camera.x) - 2;
-    const y0 = Math.floor(camera.y) - 2;
-    const x1 = x0 + cols + 4;
-    const y1 = y0 + rows + 4;
+    const x0 = Math.floor(camera.x) - 3;
+    const y0 = Math.floor(camera.y) - 3;
+    const x1 = x0 + cols + 6;
+    const y1 = y0 + rows + 6;
 
     for (let ty = y0; ty <= y1; ty++) {
       for (let tx = x0; tx <= x1; tx++) {

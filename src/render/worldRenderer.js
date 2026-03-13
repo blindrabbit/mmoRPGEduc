@@ -10,6 +10,7 @@ import { TILE_SIZE, ENTITY_RENDER, GROUND_Z } from "../core/config.js";
 import { renderMap, getTileDrawElevation } from "./mapRenderer.js";
 import { sortEntitiesForRender } from "../core/renderOrder.js";
 import { STACK_POSITION } from "../core/stackPosition.js";
+import { isEntityInViewport, VIEW_CONFIG } from "./viewCulling.js";
 import { ObjectPool } from "../core/objectPool.js";
 import { getMonsters, getPlayers } from "../core/worldStore.js";
 import { getMonsterTemplates } from "../core/remoteTemplates.js";
@@ -161,7 +162,24 @@ function renderEntitiesFull(
   },
 ) {
   const visible = [];
-  const normalizedEntities = Object.entries(entities ?? {}).map(([id, ent]) => {
+  // Single timestamp for the whole frame — all entities animate consistently.
+  const frameNow = Date.now();
+
+  // View-radius pre-filter: skip entities clearly outside the visible area.
+  // Uses canvas center as observer and expands by VIEW_CONFIG.radius beyond the canvas edge.
+  const _halfW = ctx.canvas.width / (2 * TILE_SIZE);
+  const _halfH = ctx.canvas.height / (2 * TILE_SIZE);
+  const _observer = {
+    x: camX / TILE_SIZE + _halfW,
+    y: camY / TILE_SIZE + _halfH,
+    z: activeZ,
+  };
+  const _viewRadius = Math.ceil(Math.max(_halfW, _halfH)) + VIEW_CONFIG.radius;
+  const _cullConfig = { radius: _viewRadius };
+
+  const normalizedEntities = Object.entries(entities ?? {})
+    .filter(([, ent]) => ent && isEntityInViewport(ent, _observer, _cullConfig))
+    .map(([id, ent]) => {
     const isMonsterLike =
       ent?.type === "monster" ||
       typeof ent?.species === "string" ||
@@ -201,7 +219,7 @@ function renderEntitiesFull(
 
     const vPos =
       assets && anim
-        ? anim.getVisualPos(safeEnt)
+        ? anim.getVisualPos(safeEnt, frameNow)
         : { x: ent.x * TILE_SIZE, y: ent.y * TILE_SIZE };
 
     const tileElevation = getTileDrawElevation({
@@ -303,6 +321,7 @@ function renderEntitiesFull(
           elevatedVPos.y,
           camX,
           camY,
+          frameNow,
         ) === true;
     }
 

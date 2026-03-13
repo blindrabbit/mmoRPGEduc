@@ -34,8 +34,7 @@ export class AnimationController {
    * @param {object} entity
    * @returns {{ x: number, y: number }}
    */
-  getVisualPos(entity) {
-    const now = Date.now();
+  getVisualPos(entity, now = Date.now()) {
     const duration = calculateStepDuration(
       entity.speed ?? entity.appearance?.speed ?? 100,
     );
@@ -74,7 +73,7 @@ export class AnimationController {
    * Não faz inferência de pack ou species — essa responsabilidade
    * pertence ao worldRenderer.
    */
-  drawManual(ctx, assets, entity, visualX, visualY, camX, camY) {
+  drawManual(ctx, assets, entity, visualX, visualY, camX, camY, now = Date.now()) {
     // ── Guard 1: não renderiza cadáveres via sprite ───────────────
     if (entity.dead || entity.type === "corpse") {
       if (entity.type === "player" && entity.dead) {
@@ -177,17 +176,17 @@ export class AnimationController {
       oldY: entity.oldY ?? entity.y,
     };
 
-    return this._render(ctx, assets, entForRender, visualX, visualY, camX, camY) === true;
+    return this._render(ctx, assets, entForRender, visualX, visualY, camX, camY, now) === true;
   }
 
   // ═══════════════════════════════════════════════════════════════
   // RENDER INTERNO
   // ═══════════════════════════════════════════════════════════════
 
-  _render(ctx, assets, entity, vX, vY, camX, camY) {
+  _render(ctx, assets, entity, vX, vY, camX, camY, now = Date.now()) {
     const app = entity.appearance;
     const duration = calculateStepDuration(entity.speed ?? app?.speed ?? 100);
-    const elapsed = Date.now() - (entity.lastMoveTime || 0);
+    const elapsed = now - (entity.lastMoveTime || 0);
 
     // oldX/oldY já são garantidos por drawManual (fallback para x/y)
     const oldX = entity.oldX ?? entity.x;

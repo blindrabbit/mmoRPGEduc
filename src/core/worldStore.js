@@ -106,7 +106,9 @@ export function initWorldStore() {
   watchEffectsChildren({
     onAdd: (id, data) => {
       if (!data) return;
-      const normalized = normalizeEntity({ id, ...data }, "effect");
+      // Override startTime with client receive time so every client sees the
+      // full animation duration regardless of network latency.
+      const normalized = normalizeEntity({ id, ...data, startTime: Date.now() }, "effect");
       if (normalized) {
         state.effects[id] = normalized;
         notify("effects", state.effects);
@@ -120,7 +122,12 @@ export function initWorldStore() {
       if (!data) {
         delete state.effects[id];
       } else {
-        const normalized = normalizeEntity({ id, ...data }, "effect");
+        // Preserve existing startTime so animation isn't reset on partial updates.
+        const existing = state.effects[id];
+        const effectData = existing?.startTime
+          ? { ...data, startTime: existing.startTime }
+          : { ...data, startTime: Date.now() };
+        const normalized = normalizeEntity({ id, ...effectData }, "effect");
         if (normalized) state.effects[id] = normalized;
       }
       notify("effects", state.effects);
