@@ -17,12 +17,12 @@
 // Dependências: db.js, schema.js, events.js, worldStore.js, progressionSystem.js
 // =============================================================================
 
-import { batchWrite, dbGet, dbRemove, PATHS } from '../../core/db.js';
-import { makeItem, validateItem, ITEM_SCHEMA } from '../../core/schema.js';
-import { worldEvents, EVENT_TYPES } from '../../core/events.js';
-import { getPlayer, applyPlayersLocal } from '../../core/worldStore.js';
-import { getItemDataService } from './ItemDataService.js';
-import { isTileWalkable } from "../../core/collision.js";
+import { batchWrite, dbGet, dbRemove, PATHS } from "../../core/db.js";
+import { makeItem, validateItem, ITEM_SCHEMA } from "../../core/schema.js";
+import { worldEvents, EVENT_TYPES } from "../../core/events.js";
+import { getPlayer, applyPlayersLocal } from "../../core/worldStore.js";
+import { getItemDataService } from "./ItemDataService.js";
+import { isTileBlockedByWall } from "../../core/collision.js";
 
 // =============================================================================
 // CONFIGURAÇÃO
@@ -30,7 +30,7 @@ import { isTileWalkable } from "../../core/collision.js";
 
 export const ITEM_CONFIG = Object.freeze({
   // Distância máxima para pegar item do chão (em tiles)
-  pickupRange: 1,
+  pickupRange: 2,
 
   // Distância máxima para arremessar/largar item no chão
   dropRange: 15,
@@ -69,6 +69,91 @@ const P = {
 
 export const INVENTORY_SIZE = 20;
 
+const PRIVILEGED_ITEM_ACTOR_IDS = new Set([
+  "worldengine",
+  "gm",
+  "gm_admin",
+  "gmadmin",
+  "game_master",
+  "gamemaster",
+]);
+
+async function _resolvePlayerForItemAction(playerId) {
+  return (
+    getPlayer(playerId) ?? (await dbGet(`players_data/${playerId}`)) ?? null
+  );
+}
+
+function _canBypassItemRestrictions(playerId, player) {
+  const pid = String(playerId ?? "")
+    .trim()
+    .toLowerCase();
+  if (!pid) return false;
+  if (PRIVILEGED_ITEM_ACTOR_IDS.has(pid)) return true;
+  if (pid.startsWith("gm_")) return true;
+  if (pid.includes("worldengine")) return true;
+
+  return (
+    player?.isAdmin === true ||
+    player?.isGM === true ||
+    player?.role === "gm" ||
+    player?.appearance?.isAdmin === true
+  );
+}
+
+async function _isBlockedByWallAt(x, y, z) {
+  const mapTiles = await dbGet(PATHS.tiles);
+  const mapData = await dbGet(PATHS.tilesData);
+  const hasTilesSnapshot =
+    mapTiles &&
+    typeof mapTiles === "object" &&
+    Object.keys(mapTiles).length > 0;
+  const hasTilesMetadata =
+    mapData && typeof mapData === "object" && Object.keys(mapData).length > 0;
+  if (!hasTilesSnapshot || !hasTilesMetadata) return false;
+
+  return isTileBlockedByWall(x, y, z, mapTiles ?? {}, mapData ?? {});
+}
+
+function _normalizeInventory(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const out = {};
+  for (const [key, value] of Object.entries(src)) {
+    const idx = Number(key);
+    if (!Number.isInteger(idx) || idx < 0 || idx >= INVENTORY_SIZE) continue;
+    if (!value || typeof value !== "object") continue;
+    out[idx] = value;
+  }
+  return out;
+}
+
+async function _getAuthoritativeInventory(playerId, player) {
+  const remoteRaw = await dbGet(P.inventory(playerId));
+  if (remoteRaw && typeof remoteRaw === "object") {
+    return _normalizeInventory(remoteRaw);
+  }
+  return _normalizeInventory(player?.inventory ?? {});
+}
+
+function _toSlotIndex(slotLike) {
+  const n = Number(slotLike);
+  return Number.isInteger(n) ? n : null;
+}
+
+function _sameItemIdentity(a, b) {
+  if (!a || !b) return false;
+  const aTile = _resolveItemTileId(a);
+  const bTile = _resolveItemTileId(b);
+  if (aTile != null && bTile != null) return aTile === bTile;
+  return String(a.id ?? "") === String(b.id ?? "");
+}
+
+async function _assertSlotStillHasItem(playerId, slotIndex, expectedItem) {
+  const current = await dbGet(P.inventorySlot(playerId, slotIndex));
+  if (!current || typeof current !== "object") return false;
+  return _sameItemIdentity(current, expectedItem);
+}
+
 // =============================================================================
 // PEGAR ITEM DO CHÃO → INVENTÁRIO
 // =============================================================================
@@ -79,8 +164,9 @@ export const INVENTORY_SIZE = 20;
  * @returns {Promise<{success:boolean, error?:string, slotIndex?:number}>}
  */
 export async function pickUpItem(playerId, worldItemId) {
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
+  const bypassRestrictions = _canBypassItemRestrictions(playerId, player);
 
   const worldItem = await dbGet(P.worldItem(worldItemId));
   if (!worldItem)
@@ -89,7 +175,12 @@ export async function pickUpItem(playerId, worldItemId) {
   // Verificar se o item pode ser pego (map_data.json: is_pickupable)
   const ids = getItemDataService();
   const parsedId = Number(worldItem.id);
-  const tileIdRaw = worldItem.tileId ?? worldItem.spriteId ?? parsedId;
+  const tileIdRaw =
+    worldItem.tileId ??
+    worldItem.spriteId ??
+    worldItem.sourceTileId ??
+    worldItem.originalItemId ??
+    parsedId;
   const tileId = Number(tileIdRaw);
   if (!Number.isFinite(tileId) || tileId <= 0) {
     return {
@@ -97,14 +188,18 @@ export async function pickUpItem(playerId, worldItemId) {
       error: "Item inválido: tileId ausente para pickup",
     };
   }
-  if (ids) {
-    if (!ids.canPickUp(tileId)) {
+  if (ids && worldItem.fromMap) {
+    if (!ids.canPickUp(tileId) && !ids.canMove(tileId)) {
       return { success: false, error: "Este item não pode ser pego" };
     }
   }
 
   // Verificar posse
-  if (worldItem.ownerId && worldItem.ownerId !== playerId) {
+  if (
+    !bypassRestrictions &&
+    worldItem.ownerId &&
+    worldItem.ownerId !== playerId
+  ) {
     return { success: false, error: "Item pertence a outro jogador" };
   }
 
@@ -115,7 +210,7 @@ export async function pickUpItem(playerId, worldItemId) {
   }
 
   // Verificar distância (pulado para tiles do mapa — já estão "no chão" do tile)
-  if (!worldItem.skipRangeCheck) {
+  if (!bypassRestrictions && !worldItem.skipRangeCheck) {
     if (
       !_isWithinRange(
         player,
@@ -129,11 +224,7 @@ export async function pickUpItem(playerId, worldItemId) {
   }
 
   // Buscar inventário atual (do cache local ou Firebase)
-  const localInventory = player.inventory ?? {};
-  const inventory =
-    Object.keys(localInventory).length > 0
-      ? localInventory
-      : ((await dbGet(P.inventory(playerId))) ?? {});
+  const inventory = await _getAuthoritativeInventory(playerId, player);
 
   const itemForSlot = {
     ...worldItem,
@@ -262,13 +353,24 @@ export async function dropItem(
   toY = null,
   toZ = null,
 ) {
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
+  const bypassRestrictions = _canBypassItemRestrictions(playerId, player);
 
-  const inventory =
-    player.inventory ?? (await dbGet(P.inventory(playerId))) ?? {};
-  const item = inventory[slotIndex];
+  const fromSlot = _toSlotIndex(slotIndex);
+  if (fromSlot == null || fromSlot < 0 || fromSlot >= INVENTORY_SIZE) {
+    return { success: false, error: `Slot inválido: ${slotIndex}` };
+  }
+
+  const inventory = await _getAuthoritativeInventory(playerId, player);
+  const item = inventory[fromSlot];
   if (!item) return { success: false, error: "Slot vazio" };
+  if (!(await _assertSlotStillHasItem(playerId, fromSlot, item))) {
+    return {
+      success: false,
+      error: "Inventário desatualizado. Reabra o inventário e tente novamente.",
+    };
+  }
 
   const dropQty = quantity ?? item.quantity ?? 1;
   const remaining = (item.quantity ?? 1) - dropQty;
@@ -283,31 +385,30 @@ export async function dropItem(
     ? Math.round(Number(toZ))
     : (player.z ?? 7);
 
-  if (!_isWithinRange(player, targetX, targetY, ITEM_CONFIG.dropRange)) {
+  if (
+    !bypassRestrictions &&
+    !_isWithinRange(player, targetX, targetY, ITEM_CONFIG.dropRange)
+  ) {
     return {
       success: false,
       error: `DROP fora do alcance (${ITEM_CONFIG.dropRange} SQM)`,
     };
   }
 
-  const mapTiles = await dbGet(PATHS.tiles);
-  const mapData = await dbGet(PATHS.tilesData);
-  const hasTilesSnapshot =
-    mapTiles && typeof mapTiles === "object" && Object.keys(mapTiles).length > 0;
-  const hasTilesMetadata =
-    mapData && typeof mapData === "object" && Object.keys(mapData).length > 0;
-  const shouldValidateTileCollision = hasTilesSnapshot && hasTilesMetadata;
   if (
-    shouldValidateTileCollision &&
-    !isTileWalkable(targetX, targetY, targetZ, mapTiles ?? {}, mapData ?? {})
+    !bypassRestrictions &&
+    (await _isBlockedByWallAt(targetX, targetY, targetZ))
   ) {
     return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
   }
 
   const worldItemId = `item_${playerId}_${Date.now()}`;
+  const inferredTileId = _resolveItemTileId(item);
   const worldItem = makeItem({
     ...item,
     id: worldItemId,
+    ...(inferredTileId != null ? { tileId: inferredTileId } : {}),
+    originalItemId: item.id ?? null,
     x: targetX,
     y: targetY,
     z: targetZ,
@@ -323,16 +424,16 @@ export async function dropItem(
 
   const updates = {
     [P.worldItem(worldItemId)]: worldItem,
-    [P.inventorySlot(playerId, slotIndex)]:
+    [P.inventorySlot(playerId, fromSlot)]:
       remaining > 0 && item.stackable ? { ...item, quantity: remaining } : null,
   };
   await batchWrite(updates);
 
   const newInventory = { ...inventory };
   if (remaining > 0 && item.stackable) {
-    newInventory[slotIndex] = { ...item, quantity: remaining };
+    newInventory[fromSlot] = { ...item, quantity: remaining };
   } else {
-    delete newInventory[slotIndex];
+    delete newInventory[fromSlot];
   }
   applyPlayersLocal(playerId, { inventory: newInventory });
 
@@ -366,8 +467,9 @@ export async function dropItem(
  * @returns {Promise<{success:boolean, error?:string}>}
  */
 export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
+  const bypassRestrictions = _canBypassItemRestrictions(playerId, player);
   if (!worldItemId) return { success: false, error: "worldItemId ausente" };
 
   const worldItem = await dbGet(P.worldItem(worldItemId));
@@ -389,11 +491,15 @@ export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
   const currY = Number(worldItem.y ?? 0);
   const currZ = Number(worldItem.z ?? 7);
 
-  if (!_isWithinRange(player, currX, currY, 1)) {
-    return { success: false, error: "Só é possível mover itens a até 1 SQM" };
+  if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
+    return { success: false, error: "Só é possível mover itens a até 2 SQM" };
   }
-  if (!_isWithinRange(player, nextX, nextY, 1)) {
-    return { success: false, error: "Destino fora do alcance de 1 SQM" };
+  if (!bypassRestrictions && !_isWithinRange(player, nextX, nextY, 2)) {
+    return { success: false, error: "Destino fora do alcance de 2 SQM" };
+  }
+
+  if (!bypassRestrictions && (await _isBlockedByWallAt(nextX, nextY, nextZ))) {
+    return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
   }
 
   if (currX === nextX && currY === nextY && currZ === nextZ) {
@@ -486,8 +592,9 @@ export async function splitWorldItem(
   toY,
   toZ = 7,
 ) {
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
+  const bypassRestrictions = _canBypassItemRestrictions(playerId, player);
   if (!worldItemId) return { success: false, error: "worldItemId ausente" };
 
   const worldItem = await dbGet(P.worldItem(worldItemId));
@@ -511,11 +618,15 @@ export async function splitWorldItem(
 
   const currX = Number(worldItem.x ?? 0);
   const currY = Number(worldItem.y ?? 0);
-  if (!_isWithinRange(player, currX, currY, 1)) {
-    return { success: false, error: "Só é possível mover itens a até 1 SQM" };
+  if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
+    return { success: false, error: "Só é possível mover itens a até 2 SQM" };
   }
-  if (!_isWithinRange(player, nextX, nextY, 1)) {
-    return { success: false, error: "Destino fora do alcance de 1 SQM" };
+  if (!bypassRestrictions && !_isWithinRange(player, nextX, nextY, 2)) {
+    return { success: false, error: "Destino fora do alcance de 2 SQM" };
+  }
+
+  if (!bypassRestrictions && (await _isBlockedByWallAt(nextX, nextY, nextZ))) {
+    return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
   }
 
   // Se pede toda a pilha, apenas mover (delega ao moveWorldItem)
@@ -565,13 +676,23 @@ export async function splitWorldItem(
  * @returns {Promise<{success:boolean, error?:string, slot?:string}>}
  */
 export async function equipItem(playerId, inventorySlot) {
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
-  const inventory =
-    player.inventory ?? (await dbGet(P.inventory(playerId))) ?? {};
-  const item = inventory[inventorySlot];
+  const fromSlot = _toSlotIndex(inventorySlot);
+  if (fromSlot == null || fromSlot < 0 || fromSlot >= INVENTORY_SIZE) {
+    return { success: false, error: `Slot inválido: ${inventorySlot}` };
+  }
+
+  const inventory = await _getAuthoritativeInventory(playerId, player);
+  const item = inventory[fromSlot];
   if (!item) return { success: false, error: "Slot de inventário vazio" };
+  if (!(await _assertSlotStillHasItem(playerId, fromSlot, item))) {
+    return {
+      success: false,
+      error: "Inventário desatualizado. Reabra o inventário e tente novamente.",
+    };
+  }
 
   const { valid, errors } = validateItem(item, "equipment");
   if (!valid) return { success: false, error: errors.join("; ") };
@@ -602,9 +723,9 @@ export async function equipItem(playerId, inventorySlot) {
   const newEquipment = { ...equipment, [equipSlot]: item };
   const newInventory = { ...inventory };
   if (previouslyEquipped) {
-    newInventory[inventorySlot] = previouslyEquipped; // troca
+    newInventory[fromSlot] = previouslyEquipped; // troca
   } else {
-    delete newInventory[inventorySlot];
+    delete newInventory[fromSlot];
   }
 
   // Recalcular stats com novo equipamento
@@ -615,7 +736,7 @@ export async function equipItem(playerId, inventorySlot) {
 
   const updates = {
     [P.equipmentSlot(playerId, equipSlot)]: item,
-    [P.inventorySlot(playerId, inventorySlot)]: previouslyEquipped ?? null,
+    [P.inventorySlot(playerId, fromSlot)]: previouslyEquipped ?? null,
     [P.statsMaxHp(playerId)]: maxHp,
     [P.statsMaxMp(playerId)]: maxMp,
     [`players_data/${playerId}/stats/atk`]: atk,
@@ -686,7 +807,7 @@ export async function unequipItem(
     return { success: false, error: `Slot inválido: ${equipSlot}` };
   }
 
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
   const equipment =
@@ -695,9 +816,16 @@ export async function unequipItem(
   if (!item)
     return { success: false, error: `Nenhum item no slot ${equipSlot}` };
 
-  const inventory =
-    player.inventory ?? (await dbGet(P.inventory(playerId))) ?? {};
-  const slotIndex = targetInventorySlot ?? _findFreeSlot(inventory, item);
+  const inventory = await _getAuthoritativeInventory(playerId, player);
+  const forcedSlot =
+    targetInventorySlot == null ? null : _toSlotIndex(targetInventorySlot);
+  if (
+    targetInventorySlot != null &&
+    (forcedSlot == null || forcedSlot < 0 || forcedSlot >= INVENTORY_SIZE)
+  ) {
+    return { success: false, error: `Slot inválido: ${targetInventorySlot}` };
+  }
+  const slotIndex = forcedSlot ?? _findFreeSlot(inventory, item);
   if (slotIndex === -1) return { success: false, error: "Inventário cheio" };
 
   const newEquipment = { ...equipment };
@@ -753,20 +881,30 @@ export async function unequipItem(
  * @returns {Promise<{success:boolean, error?:string}>}
  */
 export async function moveItem(playerId, fromSlot, toSlot) {
-  if (fromSlot === toSlot) return { success: true };
-  if (toSlot < 0 || toSlot >= INVENTORY_SIZE) {
+  const srcSlot = _toSlotIndex(fromSlot);
+  const dstSlot = _toSlotIndex(toSlot);
+  if (srcSlot == null || srcSlot < 0 || srcSlot >= INVENTORY_SIZE) {
+    return { success: false, error: `Slot de origem inválido: ${fromSlot}` };
+  }
+  if (dstSlot == null || dstSlot < 0 || dstSlot >= INVENTORY_SIZE) {
     return { success: false, error: `Slot inválido: ${toSlot}` };
   }
+  if (srcSlot === dstSlot) return { success: true };
 
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
-  const inventory =
-    player.inventory ?? (await dbGet(P.inventory(playerId))) ?? {};
-  const itemFrom = inventory[fromSlot];
-  const itemTo = inventory[toSlot] ?? null;
+  const inventory = await _getAuthoritativeInventory(playerId, player);
+  const itemFrom = inventory[srcSlot];
+  const itemTo = inventory[dstSlot] ?? null;
 
   if (!itemFrom) return { success: false, error: "Slot de origem vazio" };
+  if (!(await _assertSlotStillHasItem(playerId, srcSlot, itemFrom))) {
+    return {
+      success: false,
+      error: "Inventário desatualizado. Reabra o inventário e tente novamente.",
+    };
+  }
 
   let updates;
 
@@ -776,30 +914,34 @@ export async function moveItem(playerId, fromSlot, toSlot) {
     const newQtyTo = Math.min(total, itemFrom.maxStack ?? 99);
     const overflow = total - newQtyTo;
     updates = {
-      [P.inventorySlot(playerId, toSlot)]: { ...itemTo, quantity: newQtyTo },
-      [P.inventorySlot(playerId, fromSlot)]:
+      [P.inventorySlot(playerId, dstSlot)]: { ...itemTo, quantity: newQtyTo },
+      [P.inventorySlot(playerId, srcSlot)]:
         overflow > 0 ? { ...itemFrom, quantity: overflow } : null,
     };
   } else {
     // Swap simples
     updates = {
-      [P.inventorySlot(playerId, fromSlot)]: itemTo ?? null,
-      [P.inventorySlot(playerId, toSlot)]: itemFrom,
+      [P.inventorySlot(playerId, srcSlot)]: itemTo ?? null,
+      [P.inventorySlot(playerId, dstSlot)]: itemFrom,
     };
   }
 
   await batchWrite(updates);
 
   const newInventory = { ...inventory };
-  if (updates[P.inventorySlot(playerId, fromSlot)] === null) {
-    delete newInventory[fromSlot];
+  if (updates[P.inventorySlot(playerId, srcSlot)] === null) {
+    delete newInventory[srcSlot];
   } else {
-    newInventory[fromSlot] = updates[P.inventorySlot(playerId, fromSlot)];
+    newInventory[srcSlot] = updates[P.inventorySlot(playerId, srcSlot)];
   }
-  newInventory[toSlot] = updates[P.inventorySlot(playerId, toSlot)];
+  newInventory[dstSlot] = updates[P.inventorySlot(playerId, dstSlot)];
   applyPlayersLocal(playerId, { inventory: newInventory });
 
-  worldEvents.emit(EVENT_TYPES.ITEM_MOVED, { playerId, fromSlot, toSlot });
+  worldEvents.emit(EVENT_TYPES.ITEM_MOVED, {
+    playerId,
+    fromSlot: srcSlot,
+    toSlot: dstSlot,
+  });
   worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
     playerId,
     inventory: newInventory,
@@ -818,13 +960,23 @@ export async function moveItem(playerId, fromSlot, toSlot) {
  * @returns {Promise<{success:boolean, error?:string, effect?:Object}>}
  */
 export async function useItem(playerId, slotIndex) {
-  const player = getPlayer(playerId);
+  const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
-  const inventory =
-    player.inventory ?? (await dbGet(P.inventory(playerId))) ?? {};
-  const item = inventory[slotIndex];
+  const useSlot = _toSlotIndex(slotIndex);
+  if (useSlot == null || useSlot < 0 || useSlot >= INVENTORY_SIZE) {
+    return { success: false, error: `Slot inválido: ${slotIndex}` };
+  }
+
+  const inventory = await _getAuthoritativeInventory(playerId, player);
+  const item = inventory[useSlot];
   if (!item) return { success: false, error: "Slot vazio" };
+  if (!(await _assertSlotStillHasItem(playerId, useSlot, item))) {
+    return {
+      success: false,
+      error: "Inventário desatualizado. Reabra o inventário e tente novamente.",
+    };
+  }
   if (item.type !== "consumable")
     return { success: false, error: "Item não é consumível" };
   if (!item.effect) return { success: false, error: "Item sem efeito" };
@@ -867,7 +1019,7 @@ export async function useItem(playerId, slotIndex) {
 
   // Consumir item (stack ou remover)
   const newQty = (item.quantity ?? 1) - 1;
-  updates[P.inventorySlot(playerId, slotIndex)] =
+  updates[P.inventorySlot(playerId, useSlot)] =
     newQty > 0 ? { ...item, quantity: newQty } : null;
 
   // Registrar cooldown
@@ -877,9 +1029,9 @@ export async function useItem(playerId, slotIndex) {
 
   const newInventory = { ...inventory };
   if (newQty > 0) {
-    newInventory[slotIndex] = { ...item, quantity: newQty };
+    newInventory[useSlot] = { ...item, quantity: newQty };
   } else {
-    delete newInventory[slotIndex];
+    delete newInventory[useSlot];
   }
 
   applyPlayersLocal(playerId, {
@@ -900,7 +1052,7 @@ export async function useItem(playerId, slotIndex) {
     itemId: item.id,
     itemName: item.name,
     effect: item.effect,
-    slotIndex,
+    slotIndex: useSlot,
   });
   worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
     playerId,
@@ -1000,21 +1152,26 @@ function _canEquipInSlot(player, item, slot, equipment) {
     const conflicting = equipment[conflictSlot];
     if (!conflicting) continue;
     // Só conflita se a arma for twoHanded ou se for escudo
-    if (slot === 'shield' && conflicting.twoHanded) return false;
-    if (slot === 'weapon' && item.twoHanded && equipment.shield) return false;
+    if (slot === "shield" && conflicting.twoHanded) return false;
+    if (slot === "weapon" && item.twoHanded && equipment.shield) return false;
   }
   return true;
 }
 
 async function _recalcStats(player, newEquipment) {
   // Import dinâmico para evitar dependência circular
-  const { calculateTotalStats } = await import('../progression/progressionSystem.js');
+  const { calculateTotalStats } =
+    await import("../progression/progressionSystem.js");
 
   const fakePlayer = { ...player, equipment: newEquipment };
   const base = calculateTotalStats(fakePlayer);
 
   // Somar bônus de stats de equipamentos
-  let hpBonus = 0, mpBonus = 0, atkBonus = 0, defBonus = 0, agiBonus = 0;
+  let hpBonus = 0,
+    mpBonus = 0,
+    atkBonus = 0,
+    defBonus = 0,
+    agiBonus = 0;
   for (const item of Object.values(newEquipment)) {
     if (!item?.stats) continue;
     hpBonus += item.stats.hpBonus ?? 0;

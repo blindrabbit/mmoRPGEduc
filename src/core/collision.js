@@ -136,6 +136,23 @@ export function isPassableForMob(x, y, z, worldTiles, nexoData) {
 }
 
 /**
+ * Verifica se um tile tem bloqueio EXPLÍCITO de movimento (parede real).
+ * Diferente de isTileWalkable, esta função retorna true SOMENTE quando
+ * há pelo menos um item com game.is_walkable === false.
+ * Tiles sem dados ou sem flag explícita são considerados NÃO bloqueados.
+ * Usado por dropItem para não bloquear drops em tiles sem metadados.
+ */
+export function isTileBlockedByWall(x, y, z, worldTiles, nexoData) {
+  const raw = worldTiles?.[`${x},${y},${z}`];
+  if (!raw || !nexoData) return false; // sem dados = não é parede
+  for (const itemId of _extractItemIds(raw)) {
+    const meta = nexoData[String(itemId)];
+    if (meta?.game?.is_walkable === false) return true;
+  }
+  return false;
+}
+
+/**
  * Verifica se um tile bloqueia projéteis e magias.
  * Apenas itens com blocks_missiles === true bloqueiam.
  * Obstáculos (árvores, pedras) NÃO bloqueiam — magias passam por eles.

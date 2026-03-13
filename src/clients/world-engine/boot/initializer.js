@@ -66,6 +66,12 @@ export class Initializer {
 
     // Worker sync — armazena unsubscribers para limpeza posterior
     this._workerUnsubscribers = [];
+    this._inventoryUnsubscribers = [];
+  }
+
+  _clearInventorySubscriptions() {
+    for (const unsub of this._inventoryUnsubscribers) unsub?.();
+    this._inventoryUnsubscribers = [];
   }
 
   async init() {
@@ -95,7 +101,10 @@ export class Initializer {
     // 8. Inicializar Progression UI (FASE 4)
     this.initProgressionUI();
 
-    // 9. Inicializar Inventário + Drag & Drop
+    // 9. Watcher de world_items para renderização no canvas (independente de player)
+    this.initWorldItemsRendering();
+
+    // 10. Inicializar Inventário + Drag & Drop
     this.initInventoryUI();
   }
 
@@ -156,6 +165,69 @@ export class Initializer {
     const { loadAllSprites } = await import("../../../render/assetLoader.js");
     const totalPacks = await loadAllSprites(this.worldState.assetsMgr);
     this.logger.ok(`${totalPacks} packs carregados`);
+  }
+
+  /**
+   * Escuta world_items no Firebase e injeta na layer 99 do mapa para renderização.
+   * Roda SEMPRE, independente de currentPlayerId ou InventoryUI ativo.
+   * Separa responsabilidade de renderização do drag-drop cache (initInventoryUI).
+   */
+  initWorldItemsRendering() {
+    const ws = this.worldState;
+    const LAYER = "99";
+
+    const clearLayer = () => {
+      for (const coord of Object.keys(ws.map ?? {})) {
+        if (ws.map[coord]?.[LAYER]) {
+          delete ws.map[coord][LAYER];
+          if (Object.keys(ws.map[coord]).length === 0) delete ws.map[coord];
+        }
+      }
+    };
+
+    const unsubWorldItems = dbWatch("world_items", (items) => {
+      clearLayer();
+      let dirty = false;
+
+      if (items && typeof items === "object") {
+        for (const [itemId, item] of Object.entries(items)) {
+          if (!item) continue;
+          const tileId = Number(item.tileId ?? item.id);
+          const x = Number(item.x);
+          const y = Number(item.y);
+          const z = Number(item.z ?? 7);
+          if (
+            !Number.isFinite(tileId) ||
+            tileId <= 0 ||
+            !Number.isFinite(x) ||
+            !Number.isFinite(y)
+          )
+            continue;
+
+          const coord = `${x},${y},${z}`;
+          if (
+            !ws.map[coord] ||
+            typeof ws.map[coord] !== "object" ||
+            Array.isArray(ws.map[coord])
+          ) {
+            ws.map[coord] = {};
+          }
+          if (!Array.isArray(ws.map[coord][LAYER])) ws.map[coord][LAYER] = [];
+          ws.map[coord][LAYER].push({
+            id: tileId,
+            count: Number(item.quantity ?? item.count ?? 1),
+            __worldItemId: itemId,
+          });
+          dirty = true;
+        }
+      }
+
+      ws.floorIndex = buildFloorIndex(ws.map ?? {});
+    });
+
+    if (typeof unsubWorldItems === "function") {
+      this._workerUnsubscribers.push(unsubWorldItems);
+    }
   }
 
   initServices() {
@@ -349,6 +421,8 @@ export class Initializer {
 
   initInventoryUI() {
     try {
+      this._clearInventorySubscriptions();
+
       const container = document.getElementById("inventory-ui-container");
       if (!container) {
         this.logger.warn(
@@ -619,7 +693,7 @@ export class Initializer {
         },
       };
 
-      // ── Ghost sprite: canvas element com o sprite do atlas ──────────────
+      // ── Ghost sprite: apenas o sprite do item, sem borda ou fundo ──────
       const createGhostElement = (itemData) => {
         const tileId = itemData?.tileId ?? itemData?.id;
         const sprite =
@@ -628,25 +702,35 @@ export class Initializer {
           const cvs = document.createElement("canvas");
           cvs.width = TILE_SIZE;
           cvs.height = TILE_SIZE;
-          cvs
-            .getContext("2d")
-            .drawImage(
-              sprite.sheet,
-              sprite.x,
-              sprite.y,
-              sprite.w,
-              sprite.h,
-              0,
-              0,
-              TILE_SIZE,
-              TILE_SIZE,
-            );
+          // canvas tem fundo transparente por padrão — sem borda/fundo
+          const ctx2d = cvs.getContext("2d");
+          ctx2d.imageSmoothingEnabled = false;
+          ctx2d.drawImage(
+            sprite.sheet,
+            sprite.x,
+            sprite.y,
+            sprite.w,
+            sprite.h,
+            0,
+            0,
+            TILE_SIZE,
+            TILE_SIZE,
+          );
           return cvs;
         }
-        // Fallback: div colorida
-        const div = document.createElement("div");
-        div.style.cssText = `width:${TILE_SIZE}px;height:${TILE_SIZE}px;background:#666;border:1px solid #aaa;border-radius:4px;`;
-        return div;
+        // Fallback: canvas semi-transparente com "?" (sem fundo opaco)
+        const cvs = document.createElement("canvas");
+        cvs.width = TILE_SIZE;
+        cvs.height = TILE_SIZE;
+        const ctx2d = cvs.getContext("2d");
+        ctx2d.fillStyle = "rgba(100,100,100,0.5)";
+        ctx2d.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+        ctx2d.fillStyle = "#fff";
+        ctx2d.font = `${TILE_SIZE * 0.5}px monospace`;
+        ctx2d.textAlign = "center";
+        ctx2d.textBaseline = "middle";
+        ctx2d.fillText("?", TILE_SIZE / 2, TILE_SIZE / 2);
+        return cvs;
       };
 
       const createItemIconElement = (itemData) => {
@@ -717,6 +801,7 @@ export class Initializer {
           }
 
           // 2. Tiles do mapa (map_compacto.json) com is_pickupable=true
+          //    ou is_movable=true
           //    Percorre layers do mais alto ao mais baixo — tile de cima tem prioridade
           const mapTile = ws.map?.[key];
           if (!mapTile) return null;
@@ -727,7 +812,10 @@ export class Initializer {
             const tiles = mapTile[layer];
             if (!Array.isArray(tiles)) continue;
             for (const tile of tiles) {
-              if (itemDataService.canPickUp(tile.id)) {
+              if (
+                itemDataService.canPickUp(tile.id) ||
+                itemDataService.canMove(tile.id)
+              ) {
                 const [x, y, z] = key.split(",").map(Number);
                 return {
                   // ID virtual codifica coord + layer + tileId para o shim decodificar
@@ -764,12 +852,12 @@ export class Initializer {
 
       setHint("");
 
-      this._workerUnsubscribers.push(
+      this._inventoryUnsubscribers.push(
         worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_START, () => {
           setHint(DRAG_PREVIEW_TEXT.start, "");
         }),
       );
-      this._workerUnsubscribers.push(
+      this._inventoryUnsubscribers.push(
         worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_PREVIEW, (evt) => {
           if (evt?.cleared || !evt?.zone) {
             setHint("");
@@ -781,17 +869,17 @@ export class Initializer {
           );
         }),
       );
-      this._workerUnsubscribers.push(
+      this._inventoryUnsubscribers.push(
         worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_VALID, () => {
           setHint(DRAG_PREVIEW_TEXT.sent, "valid");
         }),
       );
-      this._workerUnsubscribers.push(
+      this._inventoryUnsubscribers.push(
         worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, () => {
           setHint(DRAG_PREVIEW_TEXT.invalid, "invalid");
         }),
       );
-      this._workerUnsubscribers.push(
+      this._inventoryUnsubscribers.push(
         worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_END, () => {
           setTimeout(() => setHint(""), 350);
         }),
@@ -806,7 +894,7 @@ export class Initializer {
         this.inventoryUI.setEquipment(data.equipment ?? {});
       });
       if (typeof unsubPlayerData === "function") {
-        this._workerUnsubscribers.push(unsubPlayerData);
+        this._inventoryUnsubscribers.push(unsubPlayerData);
       }
 
       // 2. Itens no chão (world_items) — popula caches por ID e por coordenada
@@ -814,7 +902,7 @@ export class Initializer {
         _rebuildWorldItemsCache(items);
       });
       if (typeof unsubWorldItems === "function") {
-        this._workerUnsubscribers.push(unsubWorldItems);
+        this._inventoryUnsubscribers.push(unsubWorldItems);
       }
 
       // ── Tecla I → toggle inventário ───────────────────────────────────
@@ -830,7 +918,7 @@ export class Initializer {
         }
       };
       document.addEventListener("keydown", _onKey);
-      this._workerUnsubscribers.push(() =>
+      this._inventoryUnsubscribers.push(() =>
         document.removeEventListener("keydown", _onKey),
       );
 
@@ -855,8 +943,7 @@ export class Initializer {
     this.inventoryUI?.unmount();
     this.inventoryUI = null;
     // Remove subscriptions do inventoryUI (mantém worldTick, GC, etc.)
-    for (const unsub of this._workerUnsubscribers) unsub?.();
-    this._workerUnsubscribers = [];
+    this._clearInventorySubscriptions();
     window.currentPlayerId = playerId;
     this.initInventoryUI();
     this.inventoryUI?.show();
@@ -865,6 +952,7 @@ export class Initializer {
   /** Limpeza completa — chamar ao fechar/recarregar a aba do world-engine. */
   destroy() {
     if (this._rafId) cancelAnimationFrame(this._rafId);
+    this._clearInventorySubscriptions();
     for (const unsub of this._workerUnsubscribers) unsub?.();
     this._workerUnsubscribers = [];
     this.worldTick?.stop();

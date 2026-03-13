@@ -152,24 +152,15 @@ export class DragDropManager {
     const worldPos = this._screenToWorld(e.clientX, e.clientY);
     if (!worldPos) return;
 
-    // Verifica se há item do mundo na posição
+    // Verifica se há item do mundo na posição.
+    // Nota: _getItemData já filtra por canPickUp para tiles do mapa;
+    // Firebase world_items são sempre arrastáveis (foram colocados intencionalmente).
     const worldItem = this._getWorldItemAt(
       worldPos.x,
       worldPos.y,
       worldPos.z ?? 7,
     );
     if (!worldItem) return;
-
-    // Valida via ItemDataService: só inicia drag se o item puder ser movido/pego
-    if (this._itemDataService) {
-      const tileId = worldItem.tileId ?? worldItem.id;
-      if (
-        !this._itemDataService.canPickUp(tileId) &&
-        !this._itemDataService.canMove(tileId)
-      ) {
-        return; // item fixo — não pode ser arrastado
-      }
-    }
 
     e.stopPropagation(); // não propaga para o handler DOM abaixo
 
@@ -464,13 +455,13 @@ export class DragDropManager {
       // Sprite do canvas — usa callback externo para renderizar o sprite correto
       ghost = this._createGhostElement(itemData);
     } else {
-      // Fallback genérico
-      ghost = document.createElement("div");
-      ghost.style.width = `${TILE_SIZE}px`;
-      ghost.style.height = `${TILE_SIZE}px`;
-      ghost.style.background = "#666";
-      ghost.style.border = "1px solid #aaa";
-      ghost.style.borderRadius = "4px";
+      // Fallback genérico: canvas semi-transparente sem borda
+      ghost = document.createElement("canvas");
+      ghost.width = TILE_SIZE;
+      ghost.height = TILE_SIZE;
+      const gCtx = ghost.getContext("2d");
+      gCtx.fillStyle = "rgba(150,150,150,0.5)";
+      gCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
     }
 
     Object.assign(ghost.style, {

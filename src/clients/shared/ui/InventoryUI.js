@@ -14,10 +14,10 @@
 // Dependências: events.js, DragDropManager.js, schema.js, config.js
 // =============================================================================
 
-import { worldEvents, EVENT_TYPES } from '../../../core/events.js';
-import { DragDropManager } from '../input/DragDropManager.js';
-import { ITEM_SCHEMA } from '../../../core/schema.js';
-import { TILE_SIZE } from '../../../core/config.js';
+import { worldEvents, EVENT_TYPES } from "../../../core/events.js";
+import { DragDropManager } from "../input/DragDropManager.js";
+import { ITEM_SCHEMA } from "../../../core/schema.js";
+import { TILE_SIZE } from "../../../core/config.js";
 
 // =============================================================================
 // CONFIGURAÇÃO
@@ -553,7 +553,6 @@ export class InventoryUI {
       /* Ghost item */
       .item-drag-ghost {
         border-radius: 4px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.5);
       }
 
       .inventory-feedback {
@@ -566,4 +565,3 @@ export class InventoryUI {
     document.head.appendChild(style);
   }
 }
-
