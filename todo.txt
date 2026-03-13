@@ -16,7 +16,7 @@ Resultado esperado
 
 Queda forte da latência percebida de cast (principalmente picos), com menos round-trips e menos contenção por tick.
 Melhor estabilidade para cenário de 20 players + 100 monstros sem mudar seu modelo de validação canônica.
-Quer que eu faça a próxima etapa de escala (instrumentação de métricas de latência por ação + contadores de fila) para você medir TPS real em teste de carga?a?
+Quer que voce faça a próxima etapa de escala (instrumentação de métricas de latência por ação + contadores de fila) para você medir TPS real em teste de carga?
 
 Implementado. Resumo das mudanças:
 

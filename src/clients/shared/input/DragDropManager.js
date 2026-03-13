@@ -265,11 +265,17 @@ export class DragDropManager {
     if (!this._drag.active && !this._drag.pending) return;
 
     if (this._drag.active) {
-      const dropEl = this._getDropZoneAt(e.clientX, e.clientY);
+      const isOverCanvas = this._canvas && this._isOverCanvas(e.clientX, e.clientY);
+      const directDropEl = this._getDropZoneAt(e.clientX, e.clientY);
+      const scoredDropEl =
+        !isOverCanvas && this._drag.bestDropZone?.score > 0
+          ? this._drag.bestDropZone.el
+          : null;
+      const dropEl = directDropEl ?? scoredDropEl;
 
       if (dropEl) {
         this._executeDrop(dropEl);
-      } else if (this._canvas && this._isOverCanvas(e.clientX, e.clientY)) {
+      } else if (isOverCanvas) {
         // Drop no chão do mapa (canvas)
         this._executeDropOnGround(e.clientX, e.clientY);
       } else {

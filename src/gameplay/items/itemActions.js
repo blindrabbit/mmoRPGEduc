@@ -292,7 +292,13 @@ export async function dropItem(
 
   const mapTiles = await dbGet(PATHS.tiles);
   const mapData = await dbGet(PATHS.tilesData);
+  const hasTilesSnapshot =
+    mapTiles && typeof mapTiles === "object" && Object.keys(mapTiles).length > 0;
+  const hasTilesMetadata =
+    mapData && typeof mapData === "object" && Object.keys(mapData).length > 0;
+  const shouldValidateTileCollision = hasTilesSnapshot && hasTilesMetadata;
   if (
+    shouldValidateTileCollision &&
     !isTileWalkable(targetX, targetY, targetZ, mapTiles ?? {}, mapData ?? {})
   ) {
     return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
