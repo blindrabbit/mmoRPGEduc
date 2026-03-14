@@ -95,6 +95,9 @@ export class DragDropManager {
     this._lastActionSentAt = 0;
     this._lastActionSignature = null;
 
+    this._pendingActions = new Map(); // actionId → rollback snapshot
+    this._actionCounter = 0;
+
     this._onPointerDown = this._onPointerDown.bind(this);
     this._onPointerMove = this._onPointerMove.bind(this);
     this._onPointerUp = this._onPointerUp.bind(this);
@@ -432,14 +435,79 @@ export class DragDropManager {
     this._lastActionSignature = signature;
     this._lastActionSentAt = now;
 
+    const actionId = `dd_${++this._actionCounter}_${now}`;
+
+    // Salva snapshot mínimo para rollback
+    this._pendingActions.set(actionId, {
+      source: this._drag.source,
+      slotIndex: this._drag.slotIndex,
+      equipSlot: this._drag.equipSlot,
+      worldItemId: this._drag.worldItemId,
+      itemData: this._drag.itemData,
+    });
+
+    this._waitForActionResult(actionId);
+
     this._engine
       .sendAction({
         type: "item",
-        payload: { ...payload, playerId: this._playerId },
+        payload: { ...payload, playerId: this._playerId, actionId },
       })
-      .catch((err) =>
-        console.error("[DragDropManager] sendAction failed:", err),
-      );
+      .catch((err) => {
+        console.error("[DragDropManager] sendAction failed:", err);
+        this._rollbackAction(actionId);
+      });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Confirmação / Rollback
+  // ---------------------------------------------------------------------------
+
+  _waitForActionResult(actionId, timeoutMs = 5000) {
+    const timer = setTimeout(() => {
+      if (this._pendingActions.has(actionId)) {
+        this._rollbackAction(actionId);
+      }
+    }, timeoutMs);
+
+    const cleanup = () => {
+      clearTimeout(timer);
+      unsubConfirm();
+      unsubReject();
+    };
+
+    const unsubConfirm = worldEvents.subscribe(
+      EVENT_TYPES.ACTION_CONFIRMED,
+      (event) => {
+        if (event.actionId !== actionId) return;
+        cleanup();
+        this._pendingActions.delete(actionId);
+      },
+    );
+
+    const unsubReject = worldEvents.subscribe(
+      EVENT_TYPES.ACTION_REJECTED,
+      (event) => {
+        if (event.actionId !== actionId) return;
+        cleanup();
+        this._rollbackAction(actionId);
+      },
+    );
+  }
+
+  _rollbackAction(actionId) {
+    const snapshot = this._pendingActions.get(actionId);
+    if (!snapshot) return;
+    this._pendingActions.delete(actionId);
+
+    worldEvents.emit(EVENT_TYPES.ITEM_ACTION_ROLLBACK, {
+      actionId,
+      source: snapshot.source,
+      slotIndex: snapshot.slotIndex,
+      equipSlot: snapshot.equipSlot,
+      worldItemId: snapshot.worldItemId,
+      itemData: snapshot.itemData,
+    });
   }
 
   // ---------------------------------------------------------------------------

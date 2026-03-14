@@ -59,3 +59,22 @@ export class AnimationClock {
 export function createAnimationClock(options = {}) {
   return new AnimationClock(options);
 }
+
+/**
+ * Calcula o índice de frame de outfit a partir do elapsed global (animClock.now).
+ * Sincronizado com o clock global — todas as entidades com o mesmo outfit
+ * animam em fase.
+ *
+ * @param {{ animation?: { phases?: Array<{ d_min: number, d_max: number }> } }} outfitData
+ * @param {number} elapsedMs - animationClock.now (ms acumulados desde o start)
+ * @returns {number} índice de frame (0-based)
+ */
+export function getOutfitFrame(outfitData, elapsedMs) {
+  const phases = outfitData?.animation?.phases;
+  if (!phases?.length) return 0;
+
+  const duration = (phases[0].d_min + phases[0].d_max) / 2;
+  if (!duration || duration <= 0) return 0;
+
+  return Math.floor(elapsedMs / duration) % phases.length;
+}

@@ -59,6 +59,11 @@ export const EVENT_TYPES = {
   ITEM_DROP_VALID: "item:dropValid", // Drop zone válida (feedback visual)
   ITEM_DROP_INVALID: "item:dropInvalid", // Drop zone inválida (feedback visual)
   ITEM_DROP_PREVIEW: "item:dropPreview", // Preview da melhor zona durante drag
+  ITEM_ACTION_ROLLBACK: "item:actionRollback", // Server rejeitou ação — reverter UI
+
+  // === AÇÕES SERVER-CLIENT ===
+  ACTION_CONFIRMED: "action:confirmed", // Server confirmou ação de item
+  ACTION_REJECTED: "action:rejected", // Server rejeitou ação de item
 
   // === SISTEMA ===
   WORLD_STATE_CHANGE: "world:stateChange",
