@@ -16,17 +16,23 @@
 //     chamar setRegenMod() para alterar a taxa dinamicamente.
 // =============================================================================
 
-import { REGEN_RATES, REGEN_TICK_MS } from '../core/config.js';
-import { applyHpToPlayer, applyMpToPlayer, batchWrite, PATHS } from '../core/db.js';
-import { worldEvents, EVENT_TYPES } from '../core/events.js';
+import { REGEN_RATES, REGEN_TICK_MS } from "../core/config.js";
+import { RuntimeConfig } from "../core/runtimeConfig.js";
+import {
+  applyHpToPlayer,
+  applyMpToPlayer,
+  batchWrite,
+  PATHS,
+} from "../core/db.js";
+import { worldEvents, EVENT_TYPES } from "../core/events.js";
 
 // ---------------------------------------------------------------------------
 // ESTADO INTERNO
 // ---------------------------------------------------------------------------
-let _player      = null;   // ref mutável do rpg.html (myPos)
-let _playerId    = null;
-let _timerId     = null;   // handle do setInterval
-let _onRegen     = null;   // callback opcional pós-tick
+let _player = null; // ref mutável do rpg.html (myPos)
+let _playerId = null;
+let _timerId = null; // handle do setInterval
+let _onRegen = null; // callback opcional pós-tick
 
 /** Modificador ativo (buff/item). null = sem modificador */
 let _mod = null;
@@ -53,9 +59,9 @@ let _mod = null;
 export function startRegen({ player, playerId, onRegen = null }) {
   if (_timerId) stopRegen(); // limpa timer anterior se houver
 
-  _player   = player;
+  _player = player;
   _playerId = playerId;
-  _onRegen  = onRegen;
+  _onRegen = onRegen;
 
   _scheduleNextTick();
 }
@@ -87,7 +93,12 @@ export function updateRegenPlayer(player) {
  * @param {number} [mod.tickMs]       — novo intervalo (substitui REGEN_TICK_MS)
  * @param {number} [mod.durationMs=0] — 0 = permanente até clearRegenMod()
  */
-export function setRegenMod({ hpBonus = 0, mpBonus = 0, tickMs, durationMs = 0 }) {
+export function setRegenMod({
+  hpBonus = 0,
+  mpBonus = 0,
+  tickMs,
+  durationMs = 0,
+}) {
   _mod = {
     hpBonus,
     mpBonus,
@@ -115,9 +126,10 @@ export function clearRegenMod() {
 export function getCurrentRegenRates() {
   const base = _getBaseRates();
   return {
-    hp    : base.hp + (_mod?.hpBonus ?? 0),
-    mp    : base.mp + (_mod?.mpBonus ?? 0),
-    tickMs: _mod?.tickMs ?? REGEN_TICK_MS,
+    hp: base.hp + (_mod?.hpBonus ?? 0),
+    mp: base.mp + (_mod?.mpBonus ?? 0),
+    tickMs:
+      _mod?.tickMs ?? RuntimeConfig.get("tick.regenTickMs", REGEN_TICK_MS),
   };
 }
 
@@ -126,13 +138,15 @@ export function getCurrentRegenRates() {
 // ---------------------------------------------------------------------------
 
 function _getBaseRates() {
-  const cls = _player?.class ?? 'default';
-  return REGEN_RATES[cls] ?? REGEN_RATES.default;
+  const cls = _player?.class ?? "default";
+  // Hot-reload: lê taxas do Firebase (RuntimeConfig) com fallback para config.js
+  const liveRates = RuntimeConfig.get(`regen.rates.${cls}`);
+  return liveRates ?? REGEN_RATES[cls] ?? REGEN_RATES.default;
 }
 
 function _getTickMs() {
   if (_mod?.tickMs) return _mod.tickMs;
-  return REGEN_TICK_MS;
+  return RuntimeConfig.get("tick.regenTickMs", REGEN_TICK_MS);
 }
 
 function _scheduleNextTick() {
@@ -153,15 +167,15 @@ async function _tick() {
     _mod = null;
   }
 
-  const base   = _getBaseRates();
+  const base = _getBaseRates();
   const hpGain = base.hp + (_mod?.hpBonus ?? 0);
   const mpGain = base.mp + (_mod?.mpBonus ?? 0);
 
-  const stats  = _player.stats ?? {};
-  const hp     = stats.hp    ?? 0;
-  const maxHp  = stats.maxHp ?? 100;
-  const mp     = stats.mp    ?? 0;
-  const maxMp  = stats.maxMp ?? 50;
+  const stats = _player.stats ?? {};
+  const hp = stats.hp ?? 0;
+  const maxHp = stats.maxHp ?? 100;
+  const mp = stats.mp ?? 0;
+  const maxMp = stats.maxMp ?? 50;
 
   // Calcula ganhos reais (sem ultrapassar o máximo)
   const actualHp = Math.min(hpGain, maxHp - hp);
@@ -179,8 +193,13 @@ async function _tick() {
   // Texto flutuante de cura de HP (apenas se ganhar >= 1)
   if (actualHp >= 1) {
     worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
-      defenderId: _playerId, defenderType: 'players', damage: -actualHp, isHeal: true,
-      defenderX: _player.x, defenderY: _player.y, defenderZ: _player.z ?? 7,
+      defenderId: _playerId,
+      defenderType: "players",
+      damage: -actualHp,
+      isHeal: true,
+      defenderX: _player.x,
+      defenderY: _player.y,
+      defenderZ: _player.z ?? 7,
     });
   }
 
@@ -188,17 +207,17 @@ async function _tick() {
   const updates = {};
   if (actualHp > 0) {
     updates[`${PATHS.playerDataStats(_playerId)}/hp`] = _player.stats.hp;
-    updates[`${PATHS.playerStats(_playerId)}/hp`]     = _player.stats.hp;
+    updates[`${PATHS.playerStats(_playerId)}/hp`] = _player.stats.hp;
   }
   if (actualMp > 0) {
     updates[`${PATHS.playerDataStats(_playerId)}/mp`] = _player.stats.mp;
-    updates[`${PATHS.playerStats(_playerId)}/mp`]     = _player.stats.mp;
+    updates[`${PATHS.playerStats(_playerId)}/mp`] = _player.stats.mp;
   }
 
   try {
     await batchWrite(updates);
   } catch (err) {
-    console.warn('[regenSystem] Falha ao persistir regen:', err);
+    console.warn("[regenSystem] Falha ao persistir regen:", err);
   }
 
   if (_onRegen) _onRegen({ hp: actualHp, mp: actualMp });

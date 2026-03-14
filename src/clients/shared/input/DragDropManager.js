@@ -465,6 +465,13 @@ export class DragDropManager {
       gCtx.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
     }
 
+    // Garante que canvas ghosts renderizem com tamanho fixo e sem distorção
+    if (ghost instanceof HTMLCanvasElement) {
+      ghost.style.width = `${TILE_SIZE}px`;
+      ghost.style.height = `${TILE_SIZE}px`;
+      ghost.style.imageRendering = "pixelated";
+    }
+
     Object.assign(ghost.style, {
       position: "fixed",
       pointerEvents: "none",
@@ -489,11 +496,139 @@ export class DragDropManager {
     if (!g) return;
     g.style.left = `${x}px`;
     g.style.top = `${y}px`;
+
+    // Atualiza o indicador de destino no canvas quando o cursor estiver sobre ele
+    if (this._canvas && this._isOverCanvas(x, y)) {
+      const worldPos = this._screenToWorld(x, y);
+      if (worldPos) this._showTileTarget(worldPos, x, y);
+    } else {
+      this._hideTileTarget();
+    }
   }
 
   _removeGhost() {
     this._drag.ghostEl?.remove();
     this._drag.ghostEl = null;
+    this._hideTileTarget();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tile-target indicator (quadrado de destino no canvas)
+  // ---------------------------------------------------------------------------
+
+  _showTileTarget(worldPos, clientX, clientY) {
+    const canvas = this._canvas;
+    if (!canvas) return;
+
+    // Usa worldToScreen (câmera-aware) se disponível; senão fallback simples
+    let tileScreenX, tileScreenY, tilePxW, tilePxH;
+    if (this._worldRenderer?.worldToScreen) {
+      const sp = this._worldRenderer.worldToScreen(worldPos.x, worldPos.y);
+      tileScreenX = sp.x;
+      tileScreenY = sp.y;
+      tilePxW = sp.tilePxW;
+      tilePxH = sp.tilePxH;
+    } else {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      tilePxW = TILE_SIZE / scaleX;
+      tilePxH = TILE_SIZE / scaleY;
+      tileScreenX =
+        rect.left +
+        (Math.floor(((clientX - rect.left) * scaleX) / TILE_SIZE) * TILE_SIZE) /
+          scaleX;
+      tileScreenY =
+        rect.top +
+        (Math.floor(((clientY - rect.top) * scaleY) / TILE_SIZE) * TILE_SIZE) /
+          scaleY;
+    }
+
+    if (!this._tileTargetEl) {
+      const el = document.createElement("canvas");
+      el.style.position = "fixed";
+      el.style.pointerEvents = "none";
+      el.style.zIndex = "9998";
+      el.style.imageRendering = "pixelated";
+      document.body.appendChild(el);
+      this._tileTargetEl = el;
+    }
+
+    const el = this._tileTargetEl;
+    const dpr = window.devicePixelRatio || 1;
+    const pxW = Math.ceil(tilePxW * dpr);
+    const pxH = Math.ceil(tilePxH * dpr);
+
+    el.width = pxW;
+    el.height = pxH;
+    el.style.width = `${tilePxW}px`;
+    el.style.height = `${tilePxH}px`;
+    el.style.left = `${tileScreenX}px`;
+    el.style.top = `${tileScreenY}px`;
+
+    const ctx = el.getContext("2d");
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // reseta transform acumulado
+    ctx.clearRect(0, 0, pxW, pxH);
+    ctx.scale(dpr, dpr);
+
+    const w = tilePxW;
+    const h = tilePxH;
+    const b = 1; // espessura da borda em px lógicos
+    const pad = 3;
+
+    // Borda sutil branca
+    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    ctx.lineWidth = b;
+    ctx.strokeRect(b / 2, b / 2, w - b, h - b);
+
+    // Cruz discreta no centro
+    const cx = w / 2;
+    const cy = h / 2;
+    const arm = Math.min(w, h) * 0.18;
+    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(cx - arm, cy);
+    ctx.lineTo(cx + arm, cy);
+    ctx.moveTo(cx, cy - arm);
+    ctx.lineTo(cx, cy + arm);
+    ctx.stroke();
+
+    // Cantos (réticos)
+    const cr = Math.min(w, h) * 0.18;
+    ctx.strokeStyle = "rgba(255,255,255,0.75)";
+    ctx.lineWidth = 1.5;
+    // ┌
+    ctx.beginPath();
+    ctx.moveTo(pad, pad + cr);
+    ctx.lineTo(pad, pad);
+    ctx.lineTo(pad + cr, pad);
+    ctx.stroke();
+    // ┐
+    ctx.beginPath();
+    ctx.moveTo(w - pad - cr, pad);
+    ctx.lineTo(w - pad, pad);
+    ctx.lineTo(w - pad, pad + cr);
+    ctx.stroke();
+    // └
+    ctx.beginPath();
+    ctx.moveTo(pad, h - pad - cr);
+    ctx.lineTo(pad, h - pad);
+    ctx.lineTo(pad + cr, h - pad);
+    ctx.stroke();
+    // ┘
+    ctx.beginPath();
+    ctx.moveTo(w - pad - cr, h - pad);
+    ctx.lineTo(w - pad, h - pad);
+    ctx.lineTo(w - pad, h - pad - cr);
+    ctx.stroke();
+  }
+
+  _hideTileTarget() {
+    if (this._tileTargetEl) {
+      this._tileTargetEl.remove();
+      this._tileTargetEl = null;
+    }
   }
 
   // ---------------------------------------------------------------------------

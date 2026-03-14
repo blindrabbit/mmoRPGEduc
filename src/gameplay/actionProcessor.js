@@ -52,7 +52,10 @@ import {
 import { createField } from "./magic/fieldSystem.js";
 import { pushLog } from "./eventLog.js";
 import { registerDamage, registerLastHit } from "./progression/xpManager.js";
-import { getSpellPower, getHealPower } from "./progression/progressionSystem.js";
+import {
+  getSpellPower,
+  getHealPower,
+} from "./progression/progressionSystem.js";
 
 // ---------------------------------------------------------------------------
 // COOLDOWNS — gerenciados aqui, não no cliente
@@ -112,9 +115,37 @@ function resolvePlayerKey(players, playerIdRaw) {
   return null;
 }
 
+// IDs de atores privilegiados que podem executar item actions sem estar em online_players
+const _PRIVILEGED_ACTOR_IDS = new Set([
+  "worldengine",
+  "gm",
+  "gm_admin",
+  "gmadmin",
+  "game_master",
+  "gamemaster",
+]);
+
+function _isPrivilegedActor(playerId) {
+  const pid = String(playerId ?? "")
+    .trim()
+    .toLowerCase();
+  return (
+    _PRIVILEGED_ACTOR_IDS.has(pid) ||
+    pid.startsWith("gm_") ||
+    pid.includes("worldengine")
+  );
+}
+
 async function _dispatch(actionId, action, now) {
   const { type, playerId } = action;
   if (!playerId) return;
+
+  // Atores privilegiados (WorldEngine, GM) não existem em online_players.
+  // Para ações de item, passam direto com objeto player sintético;
+  // itemActions.js trata o bypass de restrições internamente.
+  if (type === "item" && _isPrivilegedActor(playerId)) {
+    return _processItem(action, { id: playerId, name: "WorldEngine" }, now);
+  }
 
   const players = getPlayers();
   const playerKey = resolvePlayerKey(players, playerId);
@@ -293,9 +324,10 @@ async function _processSpell(action, player, now) {
 
     const baseResult = calcSpellResult(spell, player.stats, target.stats);
     const spellPower = getSpellPower(player);
-    const damage = spellPower > 0
-      ? Math.floor(baseResult.damage * (1 + spellPower / 100))
-      : baseResult.damage;
+    const damage =
+      spellPower > 0
+        ? Math.floor(baseResult.damage * (1 + spellPower / 100))
+        : baseResult.damage;
     const newHp = calculateNewHp(target.stats.hp, -damage, target.stats.maxHp);
 
     // Emitir evento via combatService (não UI direta)
@@ -354,9 +386,10 @@ async function _processSpell(action, player, now) {
   if (spell.type === SPELL_TYPE.SELF) {
     const baseHealResult = calcSpellResult(spell, player.stats);
     const healPower = getHealPower(player);
-    const heal = healPower > 0
-      ? Math.floor(baseHealResult.heal * (1 + healPower / 100))
-      : baseHealResult.heal;
+    const heal =
+      healPower > 0
+        ? Math.floor(baseHealResult.heal * (1 + healPower / 100))
+        : baseHealResult.heal;
     const newHp = Math.min(
       player.stats?.maxHp ?? 100,
       (player.stats?.hp ?? 100) + heal,
@@ -398,9 +431,10 @@ async function _processSpell(action, player, now) {
         continue;
 
       const aoeBase = calcSpellResult(spell, player.stats, mob.stats);
-      const damage = aoeSpellPower > 0
-        ? Math.floor(aoeBase.damage * (1 + aoeSpellPower / 100))
-        : aoeBase.damage;
+      const damage =
+        aoeSpellPower > 0
+          ? Math.floor(aoeBase.damage * (1 + aoeSpellPower / 100))
+          : aoeBase.damage;
       const newHp = calculateNewHp(mob.stats.hp, -damage, mob.stats.maxHp);
 
       emitDamage(mid, "monsters", damage, mob, {
@@ -560,7 +594,15 @@ async function _processAllocateStat(action, player, now) {
 // AÇÕES DE ITEM
 // ---------------------------------------------------------------------------
 async function _processItem(action, player, now) {
-  const { playerId, itemAction, slotIndex, toSlot, worldItemId, equipSlot, quantity } = action;
+  const {
+    playerId,
+    itemAction,
+    slotIndex,
+    toSlot,
+    worldItemId,
+    equipSlot,
+    quantity,
+  } = action;
 
   const {
     pickUpItem,
@@ -589,10 +631,23 @@ async function _processItem(action, player, now) {
       );
       break;
     case "moveWorld":
-      result = await moveWorldItem(playerId, worldItemId, action.toX, action.toY, action.toZ);
+      result = await moveWorldItem(
+        playerId,
+        worldItemId,
+        action.toX,
+        action.toY,
+        action.toZ,
+      );
       break;
     case "splitWorld":
-      result = await splitWorldItem(playerId, worldItemId, action.splitQty ?? 1, action.toX, action.toY, action.toZ);
+      result = await splitWorldItem(
+        playerId,
+        worldItemId,
+        action.splitQty ?? 1,
+        action.toX,
+        action.toY,
+        action.toZ,
+      );
       break;
     case "equip":
       result = await equipItem(playerId, slotIndex);
@@ -607,11 +662,17 @@ async function _processItem(action, player, now) {
       result = await useItem(playerId, slotIndex);
       break;
     default:
-      result = { success: false, error: `itemAction desconhecido: ${itemAction}` };
+      result = {
+        success: false,
+        error: `itemAction desconhecido: ${itemAction}`,
+      };
   }
 
   if (!result?.success) {
-    pushLog("error", `[${player.name}] item/${itemAction} falhou: ${result?.error ?? "erro"}`);
+    pushLog(
+      "error",
+      `[${player.name}] item/${itemAction} falhou: ${result?.error ?? "erro"}`,
+    );
   }
 
   return result;

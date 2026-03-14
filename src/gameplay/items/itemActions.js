@@ -18,6 +18,7 @@
 // =============================================================================
 
 import { batchWrite, dbGet, dbRemove, PATHS } from "../../core/db.js";
+import { RuntimeConfig } from "../../core/runtimeConfig.js";
 import { makeItem, validateItem, ITEM_SCHEMA } from "../../core/schema.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
 import { getPlayer, applyPlayersLocal } from "../../core/worldStore.js";
@@ -80,9 +81,33 @@ const PRIVILEGED_ITEM_ACTOR_IDS = new Set([
 ]);
 
 async function _resolvePlayerForItemAction(playerId) {
-  return (
-    getPlayer(playerId) ?? (await dbGet(`players_data/${playerId}`)) ?? null
-  );
+  const player =
+    getPlayer(playerId) ?? (await dbGet(`players_data/${playerId}`)) ?? null;
+  if (player) return player;
+
+  // Atores privilegiados (WorldEngine, GM) não têm entrada no Firebase.
+  // Retorna objeto sintético para que bypassRestrictions funcione corretamente.
+  const pid = String(playerId ?? "")
+    .trim()
+    .toLowerCase();
+  if (
+    PRIVILEGED_ITEM_ACTOR_IDS.has(pid) ||
+    pid.startsWith("gm_") ||
+    pid.includes("worldengine")
+  ) {
+    return {
+      id: playerId,
+      name: playerId,
+      isAdmin: true,
+      isGM: true,
+      role: "gm",
+      x: 0,
+      y: 0,
+      z: 7,
+    };
+  }
+
+  return null;
 }
 
 function _canBypassItemRestrictions(playerId, player) {
@@ -242,7 +267,7 @@ export async function pickUpItem(playerId, worldItemId) {
         player,
         worldItem.x ?? 0,
         worldItem.y ?? 0,
-        ITEM_CONFIG.pickupRange,
+        RuntimeConfig.get("items.pickupRange", ITEM_CONFIG.pickupRange),
       )
     ) {
       return { success: false, error: "Item fora de alcance" };
@@ -429,11 +454,16 @@ export async function dropItem(
 
   if (
     !bypassRestrictions &&
-    !_isWithinRange(player, targetX, targetY, ITEM_CONFIG.dropRange)
+    !_isWithinRange(
+      player,
+      targetX,
+      targetY,
+      RuntimeConfig.get("items.dropRange", ITEM_CONFIG.dropRange),
+    )
   ) {
     return {
       success: false,
-      error: `DROP fora do alcance (${ITEM_CONFIG.dropRange} SQM)`,
+      error: `DROP fora do alcance (${RuntimeConfig.get("items.dropRange", ITEM_CONFIG.dropRange)} SQM)`,
     };
   }
 
@@ -455,7 +485,9 @@ export async function dropItem(
     y: targetY,
     z: targetZ,
     ownerId: null,
-    expiresAt: Date.now() + ITEM_CONFIG.worldItemExpiry,
+    expiresAt:
+      Date.now() +
+      RuntimeConfig.get("items.worldItemExpiry", ITEM_CONFIG.worldItemExpiry),
     droppedBy: playerId,
     droppedAt: Date.now(),
     quantity: dropQty,
@@ -1040,7 +1072,11 @@ export async function useItem(playerId, slotIndex) {
   const lastUsed = player.itemCooldowns?.[item.id] ?? 0;
   if (
     Date.now() - lastUsed <
-    (item.cooldown ?? ITEM_CONFIG.consumableCooldown)
+    (item.cooldown ??
+      RuntimeConfig.get(
+        "items.consumableCooldown",
+        ITEM_CONFIG.consumableCooldown,
+      ))
   ) {
     return { success: false, error: "Aguarde antes de usar novamente" };
   }

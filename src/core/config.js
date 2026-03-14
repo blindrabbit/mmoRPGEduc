@@ -164,6 +164,11 @@ export const WORLD_SETTINGS = {
   roofFadeRadius: 0,
   defaultCols: 32,
   defaultRows: 24,
+  gc: {
+    transientIntervalMs: 5_000,
+    mapClaimTtlMs: 10 * 60 * 1000,
+    mapClaimSweepIntervalMs: 60_000,
+  },
   death: {
     hpRecoveryMultiplier: 1.0, // 1.0 = 100% de vida ao renascer
     clearStatusOnDeath: true,

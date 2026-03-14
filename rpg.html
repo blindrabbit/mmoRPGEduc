@@ -2384,10 +2384,27 @@
           worldRenderer: {
             screenToWorld: (clientX, clientY) => {
               const rect = canvas.getBoundingClientRect();
+              const scaleX = canvas.width / rect.width;
+              const scaleY = canvas.height / rect.height;
+              const px = (clientX - rect.left) * scaleX;
+              const py = (clientY - rect.top) * scaleY;
               return {
-                x: Math.floor((clientX - rect.left + cam.x) / TILE_SIZE),
-                y: Math.floor((clientY - rect.top + cam.y) / TILE_SIZE),
+                x: Math.floor((px + cam.x) / TILE_SIZE),
+                y: Math.floor((py + cam.y) / TILE_SIZE),
                 z: activeZ ?? myPos?.z ?? 7,
+              };
+            },
+            worldToScreen: (tileX, tileY) => {
+              const rect = canvas.getBoundingClientRect();
+              const scaleX = canvas.width / rect.width;
+              const scaleY = canvas.height / rect.height;
+              const px = Math.round(tileX * TILE_SIZE - cam.x);
+              const py = Math.round(tileY * TILE_SIZE - cam.y);
+              return {
+                x: rect.left + px / scaleX,
+                y: rect.top + py / scaleY,
+                tilePxW: TILE_SIZE / scaleX,
+                tilePxH: TILE_SIZE / scaleY,
               };
             },
           },

@@ -32,7 +32,14 @@ import {
 } from "./schema.js";
 
 // Re-exporta as primitivas para o playerManager.html e outros módulos
-export { dbGet, dbSet, dbWatch, dbRemove, registerPlayerDisconnect, dbTouchPresence };
+export {
+  dbGet,
+  dbSet,
+  dbWatch,
+  dbRemove,
+  registerPlayerDisconnect,
+  dbTouchPresence,
+};
 
 // ---------------------------------------------------------------------------
 // UTILITÁRIOS — Base64 & Formatação
@@ -113,6 +120,7 @@ export const PATHS = {
   chatMsg: (id) => safePath("world_chat", id),
   worldConfig: "world_config",
   worldSpawn: "world_config/spawn",
+  runtimeConfig: "world_config/runtime",
 };
 
 const WRITE_GUARD = {
@@ -472,7 +480,12 @@ export const deleteAccount = (uuid) => {
  * @param {string} PlayerClass - Classe do personagem (Cavaleiro, Mago, etc)
  * @returns {string} ID do novo personagem
  */
-export const createNewCharacter = async (uuid, slotIndex, playerClass, accountFullName = null) => {
+export const createNewCharacter = async (
+  uuid,
+  slotIndex,
+  playerClass,
+  accountFullName = null,
+) => {
   const normalizeClass = (value) => {
     const raw = String(value ?? "cavaleiro")
       .trim()
@@ -521,7 +534,9 @@ export const createNewCharacter = async (uuid, slotIndex, playerClass, accountFu
 
   // 3. Montar dados completos do novo personagem
   const newCharData = {
-    name: accountFullName ? formatDisplayName(accountFullName) : `${normalizedClass} ${slotIndex + 1}`,
+    name: accountFullName
+      ? formatDisplayName(accountFullName)
+      : `${normalizedClass} ${slotIndex + 1}`,
     class: normalizedClass,
     appearance: { class: normalizedClass },
     x: WORLD_SETTINGS.spawn.x,

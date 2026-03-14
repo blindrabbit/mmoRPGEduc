@@ -2,6 +2,7 @@
 // initializer.js — Orquestração da inicialização
 // ═══════════════════════════════════════════════════════════════
 import { NEW_ASSETS } from "../../../core/config.js";
+import { RuntimeConfig } from "../../../core/runtimeConfig.js";
 import { worldEvents, EVENT_TYPES } from "../../../core/events.js";
 import { WorldTick } from "../engine/worldTick.js";
 import { TransientGC } from "../engine/transientGC.js";
@@ -81,6 +82,10 @@ export class Initializer {
   }
 
   async init() {
+    // 0. Conectar RuntimeConfig ao Firebase (hot reload de parâmetros operacionais)
+    RuntimeConfig.init(dbWatch, dbGet);
+    await RuntimeConfig.seed(dbGet, dbSet);
+
     // 1. Carregar mapa e assets
     await this.loadMapAssets();
 
@@ -655,10 +660,28 @@ export class Initializer {
           const scaleY = this.canvas.height / rect.height;
           const px = (clientX - rect.left) * scaleX;
           const py = (clientY - rect.top) * scaleY;
+          const camXWorld = (ws.camera?.x ?? 0) * TILE_SIZE;
+          const camYWorld = (ws.camera?.y ?? 0) * TILE_SIZE;
           return {
-            x: Math.floor(px / TILE_SIZE) + (ws.camera?.x ?? 0),
-            y: Math.floor(py / TILE_SIZE) + (ws.camera?.y ?? 0),
+            x: Math.floor((px + camXWorld) / TILE_SIZE),
+            y: Math.floor((py + camYWorld) / TILE_SIZE),
             z: ws.activeZ ?? 7,
+          };
+        },
+        // Inverso: tile do mundo → posição de tela (canto sup-esq do tile)
+        worldToScreen: (tileX, tileY) => {
+          const rect = this.canvas.getBoundingClientRect();
+          const scaleX = this.canvas.width / rect.width;
+          const scaleY = this.canvas.height / rect.height;
+          const camXWorld = (ws.camera?.x ?? 0) * TILE_SIZE;
+          const camYWorld = (ws.camera?.y ?? 0) * TILE_SIZE;
+          const px = Math.round(tileX * TILE_SIZE - camXWorld);
+          const py = Math.round(tileY * TILE_SIZE - camYWorld);
+          return {
+            x: rect.left + px / scaleX,
+            y: rect.top + py / scaleY,
+            tilePxW: TILE_SIZE / scaleX,
+            tilePxH: TILE_SIZE / scaleY,
           };
         },
       };
@@ -748,16 +771,22 @@ export class Initializer {
           // canvas tem fundo transparente por padrão — sem borda/fundo
           const ctx2d = cvs.getContext("2d");
           ctx2d.imageSmoothingEnabled = false;
+          // Escala proporcional (letterbox) para não distorcer sprites não-quadrados
+          const scaleF = Math.min(TILE_SIZE / sprite.w, TILE_SIZE / sprite.h);
+          const dw = Math.round(sprite.w * scaleF);
+          const dh = Math.round(sprite.h * scaleF);
+          const dx = Math.round((TILE_SIZE - dw) / 2);
+          const dy = Math.round((TILE_SIZE - dh) / 2);
           ctx2d.drawImage(
             sprite.sheet,
             sprite.x,
             sprite.y,
             sprite.w,
             sprite.h,
-            0,
-            0,
-            TILE_SIZE,
-            TILE_SIZE,
+            dx,
+            dy,
+            dw,
+            dh,
           );
           return cvs;
         }
@@ -789,16 +818,23 @@ export class Initializer {
         cvs.height = TILE_SIZE - 6;
         const ctx = cvs.getContext("2d");
         ctx.imageSmoothingEnabled = false;
+        const iconSize = TILE_SIZE - 6;
+        // Escala proporcional para não distorcer sprites não-quadrados
+        const scaleI = Math.min(iconSize / sprite.w, iconSize / sprite.h);
+        const diw = Math.round(sprite.w * scaleI);
+        const dih = Math.round(sprite.h * scaleI);
+        const dix = Math.round((iconSize - diw) / 2);
+        const diy = Math.round((iconSize - dih) / 2);
         ctx.drawImage(
           sprite.sheet,
           sprite.x,
           sprite.y,
           sprite.w,
           sprite.h,
-          0,
-          0,
-          TILE_SIZE - 6,
-          TILE_SIZE - 6,
+          dix,
+          diy,
+          diw,
+          dih,
         );
         return cvs;
       };
@@ -1017,5 +1053,6 @@ export class Initializer {
     this.transientGC?.stop();
     this.inventoryUI?.unmount();
     this.dragDropManager?.unmount();
+    RuntimeConfig.destroy();
   }
 }
