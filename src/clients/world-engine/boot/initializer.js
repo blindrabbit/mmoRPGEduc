@@ -38,8 +38,9 @@ import { renderWorld } from "../../../render/worldRenderer.js";
 import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
-import { TILE_SIZE, FLOOR_RANGE } from "../../../core/config.js";
+import { TILE_SIZE } from "../../../core/config.js";
 import { createAnimationClock } from "../../../core/animationClock.js";
+import { getVisibleFloors } from "../../../core/floorVisibility.js";
 
 export class Initializer {
   constructor({ logger, canvas, canvasSetup, worldState, config }) {
@@ -176,24 +177,23 @@ export class Initializer {
     const spawnZ = this.config?.spawn?.z ?? firstParts[2] ?? 7;
     const { cols, rows } = this.canvasSetup;
 
-    const _initFloors = [];
-    for (let _dz = -FLOOR_RANGE; _dz <= FLOOR_RANGE; _dz++) _initFloors.push(spawnZ + _dz);
+    const _initFloors = getVisibleFloors(spawnZ);
     subscriber.update(spawnX, spawnY, _initFloors, cols, rows);
 
     // Centralizar câmera usando posição de spawn (mapa Firebase ainda carregando)
     const { centerCamera } = await import("../../../render/mapRenderer.js");
-    this.worldState.camera = centerCamera(
-      { x: spawnX, y: spawnY },
-      cols,
-      rows,
-    );
+    this.worldState.camera = centerCamera({ x: spawnX, y: spawnY }, cols, rows);
     this.logger.ok(
       `MapChunkSubscriber: spawn=(${spawnX},${spawnY},${spawnZ}), câmera centralizada`,
     );
 
     // Bootstrap: se Firebase não tem chunks, sobe o mapa local automaticamente
     const existingChunks = await dbGet(PATHS.tiles);
-    if (!existingChunks || typeof existingChunks !== "object" || Object.keys(existingChunks).length === 0) {
+    if (
+      !existingChunks ||
+      typeof existingChunks !== "object" ||
+      Object.keys(existingChunks).length === 0
+    ) {
       this.logger.info("Firebase vazio — fazendo bootstrap do mapa local...");
       await setMapChunks(this.worldState._localMap, (done, total) => {
         this.logger.info(`Bootstrap: ${done}/${total} chunks`);
@@ -427,8 +427,7 @@ export class Initializer {
             _lastChunkZ = z;
             // Carrega andar ativo + andares adjacentes para ver pisos inferiores
             // através de áreas sem tiles e edifícios acima
-            const _floors = [];
-            for (let _dz = -FLOOR_RANGE; _dz <= FLOOR_RANGE; _dz++) _floors.push(z + _dz);
+            const _floors = getVisibleFloors(z);
             sub.update(camX, camY, _floors, cs.cols, cs.rows);
           }
         }

@@ -7,14 +7,10 @@
 // ✅ Sistema de elevation acumulativo
 // ✅ Suporte a ASSETS_NOVO (metadata Python)
 // ═══════════════════════════════════════════════════════════════
-import {
-  TILE_SIZE,
-  GROUND_Z,
-  FLOOR_RANGE,
-  WORLD_ENGINE,
-} from "../core/config.js";
+import { TILE_SIZE, GROUND_Z, WORLD_ENGINE } from "../core/config.js";
 import { resolveStackPosition } from "../core/stackPosition.js";
 import { AtlasBatchRenderer } from "./batchRenderer.js";
+import { getVisibleFloors } from "../core/floorVisibility.js";
 
 // ═══════════════════════════════════════════════════════════════
 // CONFIGURAÇÕES
@@ -671,10 +667,18 @@ function _floorHasTilesNearPlayer(map, z, camera, activeZ, cols, rows, radius) {
   return false;
 }
 
-function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
+function _calcFloorAlphas(
+  map,
+  camera,
+  activeZ,
+  cols,
+  rows,
+  roofFadeRadius,
+  visibleFloors,
+) {
   const alphas = new Map();
-  for (let dz = FLOOR_RANGE; dz >= 0; dz--) {
-    alphas.set(dz, 1.0);
+  for (const z of visibleFloors) {
+    alphas.set(z, 1.0);
   }
 
   // Verifica cobertura usando raio estrito (1 tile) para não esconder andares
@@ -682,10 +686,10 @@ function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
   // se o sistema de fade está ativo, mas o raio de detecção é sempre 1.
   const checkRadius = roofFadeRadius > 0 ? 1 : 0;
 
-  let fadeFromDz = null;
+  let fadeFromZ = null;
   if (roofFadeRadius > 0) {
-    for (let dz = -1; dz >= -FLOOR_RANGE; dz--) {
-      const z = activeZ + dz;
+    for (const z of visibleFloors) {
+      if (z >= activeZ) continue;
       if (
         _floorHasTilesNearPlayer(
           map,
@@ -697,17 +701,16 @@ function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
           checkRadius,
         )
       ) {
-        fadeFromDz = dz;
+        fadeFromZ = z;
         break;
       }
     }
   }
 
-  // Esconde todos os andares a partir do detectado até o mais alto (dz crescente
-  // em valor absoluto = andar mais alto). dz >= fadeFromDz significa "entre o
-  // player e o teto detectado", que é o que deve ser ocultado.
-  for (let dz = -1; dz >= -FLOOR_RANGE; dz--) {
-    alphas.set(dz, fadeFromDz !== null && dz >= fadeFromDz ? 0.0 : 1.0);
+  // Esconde andares acima do player (z menor) até o primeiro teto detectado.
+  for (const z of visibleFloors) {
+    if (z >= activeZ) continue;
+    alphas.set(z, fadeFromZ !== null && z >= fadeFromZ ? 0.0 : 1.0);
   }
   return alphas;
 }
@@ -757,6 +760,7 @@ export function renderMap(opts) {
   }
 
   const alphaKey = `${Math.round(camera.x * 10)},${Math.round(camera.y * 10)},${activeZ},${roofFadeRadius}`;
+  const visibleFloors = getVisibleFloors(activeZ);
   if (!_floorAlphaCache || _floorAlphaCacheKey !== alphaKey) {
     _floorAlphaCache = _calcFloorAlphas(
       map,
@@ -765,6 +769,7 @@ export function renderMap(opts) {
       cols,
       rows,
       roofFadeRadius,
+      visibleFloors,
     );
     _floorAlphaCacheKey = alphaKey;
   }
@@ -776,8 +781,8 @@ export function renderMap(opts) {
   // PASSO 1: DRAW GROUND (todos os tiles)
   // ═══════════════════════════════════════════════════════════
   if (!skipGroundPass) {
-    for (let dz = FLOOR_RANGE; dz >= -FLOOR_RANGE; dz--) {
-      const z = activeZ + dz;
+    for (const z of visibleFloors) {
+      const dz = z - activeZ;
       if (typeof zPredicate === "function" && !zPredicate(z, dz, activeZ)) {
         continue;
       }
@@ -786,7 +791,7 @@ export function renderMap(opts) {
         ...opts,
         z,
         dz,
-        alpha: floorAlphas.get(dz) ?? 1.0,
+        alpha: floorAlphas.get(z) ?? 1.0,
         groundBatch,
       });
 
@@ -797,8 +802,8 @@ export function renderMap(opts) {
   // ═══════════════════════════════════════════════════════════
   // PASSO 2: DRAW PRINCIPAL (todos os tiles)
   // ═══════════════════════════════════════════════════════════
-  for (let dz = FLOOR_RANGE; dz >= -FLOOR_RANGE; dz--) {
-    const z = activeZ + dz;
+  for (const z of visibleFloors) {
+    const dz = z - activeZ;
     if (typeof zPredicate === "function" && !zPredicate(z, dz, activeZ)) {
       continue;
     }
@@ -807,7 +812,7 @@ export function renderMap(opts) {
       ...opts,
       z,
       dz,
-      alpha: floorAlphas.get(dz) ?? 1.0,
+      alpha: floorAlphas.get(z) ?? 1.0,
     });
   }
 }

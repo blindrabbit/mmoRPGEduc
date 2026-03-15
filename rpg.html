@@ -1336,8 +1336,8 @@
         TILE_SIZE,
         WORLD_SETTINGS,
         GROUND_Z,
-        FLOOR_RANGE,
       } from "./src/core/config.js";
+      import { getVisibleFloors } from "./src/core/floorVisibility.js";
       import { initEventLog, pushLog } from "./src/gameplay/eventLog.js";
       import {
         initSpellHUD,
@@ -1576,7 +1576,7 @@
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
           const qty = Number(item.quantity ?? 1);
           const variantKey = item.stackable
-            ? itemDataService?.getVariantForQuantity(tileId, qty) ?? "0"
+            ? (itemDataService?.getVariantForQuantity(tileId, qty) ?? "0")
             : "0";
           const sprite = Number.isFinite(tileId)
             ? assets.getMapSprite(tileId, variantKey)
@@ -1623,7 +1623,9 @@
           const item = equipment[equipSlot] ?? null;
 
           // Remove item anterior (mantém apenas o label de texto)
-          slot.querySelectorAll("canvas, .item-qty").forEach((el) => el.remove());
+          slot
+            .querySelectorAll("canvas, .item-qty")
+            .forEach((el) => el.remove());
           delete slot.dataset.itemSource;
           delete slot.dataset.itemEquipSlot;
 
@@ -1636,7 +1638,9 @@
           slot.dataset.itemEquipSlot = equipSlot;
 
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
-          const sprite = Number.isFinite(tileId) ? assets.getMapSprite(tileId) : null;
+          const sprite = Number.isFinite(tileId)
+            ? assets.getMapSprite(tileId)
+            : null;
           if (sprite?.sheet) {
             const cvs = document.createElement("canvas");
             cvs.width = TILE_SIZE;
@@ -1653,9 +1657,15 @@
             const dh = Math.max(1, Math.floor(srcH * scale));
             ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
             ctx.drawImage(
-              sprite.sheet, sprite.x, sprite.y, srcW, srcH,
-              Math.floor((TILE_SIZE - dw) / 2), Math.floor((TILE_SIZE - dh) / 2),
-              dw, dh,
+              sprite.sheet,
+              sprite.x,
+              sprite.y,
+              srcW,
+              srcH,
+              Math.floor((TILE_SIZE - dw) / 2),
+              Math.floor((TILE_SIZE - dh) / 2),
+              dw,
+              dh,
             );
             // Limpa o texto de label do slot antes de adicionar o canvas
             slot.replaceChildren(cvs);
@@ -1663,7 +1673,11 @@
 
           if (item.rarity) {
             const RARITY_COLORS = {
-              common: "#888", uncommon: "#4c4", rare: "#48f", epic: "#a4f", legendary: "#f84",
+              common: "#888",
+              uncommon: "#4c4",
+              rare: "#48f",
+              epic: "#a4f",
+              legendary: "#f84",
             };
             slot.style.borderColor = RARITY_COLORS[item.rarity] ?? "";
           } else {
@@ -1919,7 +1933,9 @@
       let floorIndex = null;
       let _chunkSubscriber = null;
       // Rastreia último tile onde os chunks foram atualizados
-      let _lastChunkTileX = -Infinity, _lastChunkTileY = -Infinity, _lastChunkZ = -1;
+      let _lastChunkTileX = -Infinity,
+        _lastChunkTileY = -Infinity,
+        _lastChunkZ = -1;
       let cam = { x: 0, y: 0 };
       let canvasW, canvasH, cols, rows;
       let activeZ = WORLD_SETTINGS?.spawn?.z ?? GROUND_Z;
@@ -2065,7 +2081,8 @@
             if (map && Number.isFinite(tx) && Number.isFinite(ty)) {
               const tileCoord = `${tx},${ty},${tz}`;
               if (!map[tileCoord]) map[tileCoord] = {};
-              if (!map[tileCoord][sourceLayer]) map[tileCoord][sourceLayer] = [];
+              if (!map[tileCoord][sourceLayer])
+                map[tileCoord][sourceLayer] = [];
               const already = map[tileCoord][sourceLayer].some(
                 (t) => Number(t.id) === sourceTileId,
               );
@@ -2321,10 +2338,18 @@
           // cols/rows ainda não definidos no boot; usa constantes do config
           const bootCols = RPG_ENGINE.canvasCols ?? 20;
           const bootRows = RPG_ENGINE.canvasRows ?? 15;
-          const _bootFloors = [];
-          for (let _dz = -FLOOR_RANGE; _dz <= 1; _dz++) _bootFloors.push(spawnZ + _dz);
-          _chunkSubscriber.update(spawnX, spawnY, _bootFloors, bootCols, bootRows);
-          blog(`MapChunkSubscriber iniciado em (${spawnX},${spawnY},${spawnZ})`, "ok");
+          const _bootFloors = getVisibleFloors(spawnZ);
+          _chunkSubscriber.update(
+            spawnX,
+            spawnY,
+            _bootFloors,
+            bootCols,
+            bootRows,
+          );
+          blog(
+            `MapChunkSubscriber iniciado em (${spawnX},${spawnY},${spawnZ})`,
+            "ok",
+          );
         } catch (e) {
           blog(`Falha ao iniciar MapChunkSubscriber: ${e.message}`, "err");
           return false;
@@ -2456,7 +2481,11 @@
 
                   if (payload.worldItemId?.startsWith("map_")) {
                     // Extrai coord do ID virtual "map_x,y,z_layer_tileId"
-                    const coord = payload.worldItemId.slice(4).split("_").slice(0, -2).join("_");
+                    const coord = payload.worldItemId
+                      .slice(4)
+                      .split("_")
+                      .slice(0, -2)
+                      .join("_");
                     const [cx, cy] = coord.split(",").map(Number);
                     itemX = cx;
                     itemY = cy;
@@ -2467,11 +2496,18 @@
                   }
 
                   if (itemX != null && itemY != null) {
-                    const dx = Math.abs(Math.round(myPos.x) - Math.round(itemX));
-                    const dy = Math.abs(Math.round(myPos.y) - Math.round(itemY));
+                    const dx = Math.abs(
+                      Math.round(myPos.x) - Math.round(itemX),
+                    );
+                    const dy = Math.abs(
+                      Math.round(myPos.y) - Math.round(itemY),
+                    );
                     if (Math.max(dx, dy) > 1) {
                       pushLog("rpg", "system", "Você não alcança o item.");
-                      _setDragPreviewHint("Você não alcança o item.", "invalid");
+                      _setDragPreviewHint(
+                        "Você não alcança o item.",
+                        "invalid",
+                      );
                       // Dispara rejeição imediata para o DragDropManager fazer rollback
                       if (payload.actionId) {
                         worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
@@ -2708,12 +2744,19 @@
           myPos.z = _numOr(serverData.z, myPos.z);
           // Atualiza chunks se o player mudou de tile ou de andar
           if (_chunkSubscriber) {
-            const tx = Math.round(myPos.x), ty = Math.round(myPos.y), tz = myPos.z;
-            if (tx !== _lastChunkTileX || ty !== _lastChunkTileY || tz !== _lastChunkZ) {
-              _lastChunkTileX = tx; _lastChunkTileY = ty; _lastChunkZ = tz;
-              // Carrega andar atual + andares acima (edifícios visíveis) + 1 abaixo
-              const _floors = [];
-              for (let _dz = -FLOOR_RANGE; _dz <= 1; _dz++) _floors.push(tz + _dz);
+            const tx = Math.round(myPos.x),
+              ty = Math.round(myPos.y),
+              tz = myPos.z;
+            if (
+              tx !== _lastChunkTileX ||
+              ty !== _lastChunkTileY ||
+              tz !== _lastChunkZ
+            ) {
+              _lastChunkTileX = tx;
+              _lastChunkTileY = ty;
+              _lastChunkZ = tz;
+              // Usa a mesma regra OT de floors do world engine (superficie 0-7 / underground +-2)
+              const _floors = getVisibleFloors(tz);
               _chunkSubscriber.update(tx, ty, _floors, cols, rows);
             }
           }

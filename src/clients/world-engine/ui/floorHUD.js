@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // floorHUD.js — Indicador visual de floors (pills)
 // ═══════════════════════════════════════════════════════════════
+import { getVisibleFloors } from "../../../core/floorVisibility.js";
+
 export class FloorHUD {
   /**
    * @param {import("../../../core/worldState.js").WorldState} worldState
@@ -20,11 +22,12 @@ export class FloorHUD {
     if (!this._el) return;
 
     const pills = [];
-    for (let z = active + this.floorRange; z >= active - this.floorRange; z--) {
+    const visibleFloors = getVisibleFloors(active);
+    for (const z of visibleFloors) {
       let cls = "floor-pill";
-      if (z === active)   cls += " active";
+      if (z === active) cls += " active";
       else if (z > active) cls += " above";
-      else                 cls += " below";
+      else cls += " below";
 
       pills.push(`<span class="${cls}" title="Floor ${z}">${z}</span>`);
     }
