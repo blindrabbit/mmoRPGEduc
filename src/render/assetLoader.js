@@ -27,7 +27,15 @@ export async function loadAllSprites(
   // 1. CARREGAR ASSETS DO MAPA (PIPELINE PYTHON) — PRIORIDADE
   // ═══════════════════════════════════════════════════════════════
   if (typeof assets.loadMapAssets === "function") {
-    const mapLoaded = await assets.loadMapAssets(mapPath);
+    const mapAlreadyLoaded =
+      !!assets.mapAtlasLookup &&
+      assets.mapAtlasLookup.size > 0 &&
+      assets.mapData &&
+      Object.keys(assets.mapData).length > 0;
+
+    const mapLoaded = mapAlreadyLoaded
+      ? true
+      : await assets.loadMapAssets(mapPath);
     if (mapLoaded) {
       console.log(
         `[assetLoader] ✅ Assets do mapa carregados: ${assets.mapItemCount} itens`,
@@ -80,7 +88,9 @@ export async function loadAllSprites(
     if (loadedFrom) {
       console.log(`[assetLoader] ✅ Outfits atlas carregado (${loadedFrom})`);
     } else {
-      console.warn("[assetLoader] ❌ Outfits atlas não carregado em nenhum caminho");
+      console.warn(
+        "[assetLoader] ❌ Outfits atlas não carregado em nenhum caminho",
+      );
     }
   } catch (e) {
     console.warn("[assetLoader] outfits atlas não carregado:", e?.message);

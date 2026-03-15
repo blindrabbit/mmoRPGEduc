@@ -29,10 +29,7 @@ import {
   dbGet,
   watchPlayerData,
   PATHS,
-  flatMapToChunks,
-  setMapChunks,
 } from "../../../core/db.js";
-import { MapChunkSubscriber } from "../../../core/MapChunkSubscriber.js";
 import { initItemDataService } from "../../../gameplay/items/ItemDataService.js";
 import { renderWorld } from "../../../render/worldRenderer.js";
 import { buildFloorIndex } from "../../../render/mapRenderer.js";
@@ -40,7 +37,14 @@ import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
 import { TILE_SIZE } from "../../../core/config.js";
 import { createAnimationClock } from "../../../core/animationClock.js";
-import { getVisibleFloors } from "../../../core/floorVisibility.js";
+import {
+  loadFirebaseTilesData,
+  ensureWorldTilesAvailable,
+  createFirebaseChunkSubscriber,
+  loadSharedRenderAssets,
+  createChunkUpdateTracker,
+  updateChunkSubscriberForObserver,
+} from "../../../core/worldBootstrapShared.js";
 
 export class Initializer {
   constructor({ logger, canvas, canvasSetup, worldState, config }) {
@@ -124,61 +128,41 @@ export class Initializer {
   }
 
   async loadMapAssets() {
-    // [1/4] Mapa local (fonte de verdade para upload/recarga)
-    this.logger.info("[1/4] map_compacto.json");
-    const mapRes = await fetch(NEW_ASSETS.mapFile);
-    if (!mapRes.ok)
-      throw new Error(`HTTP ${mapRes.status} — ${NEW_ASSETS.mapFile}`);
-    this.worldState._localMap = await mapRes.json();
-    this.logger.ok(
-      `Mapa local: ${Object.keys(this.worldState._localMap).length} tiles`,
-    );
-
-    // [2/4] tilesData do Firebase (dados de jogo: walkable, pickup, etc.)
-    this.logger.info("[2/4] tilesData (Firebase)");
-    const remoteTilesData = await dbGet(PATHS.tilesData);
-    if (!remoteTilesData || typeof remoteTilesData !== "object") {
-      throw new Error("tilesData indisponível no Firebase");
-    }
-    this.worldState.mapData = remoteTilesData;
+    // [1/4] tilesData do Firebase (dados de jogo: walkable, pickup, etc.)
+    this.logger.info("[1/4] tilesData (Firebase)");
+    this.worldState.mapData = await loadFirebaseTilesData();
     this.logger.ok(
       `Metadata: ${Object.keys(this.worldState.mapData).length} itens`,
     );
 
-    // [3/4] Atlas segmentados + map_data.json (sprites — carregamento local)
-    this.logger.info("[3/4] Atlas segmentados");
-    const atlasLoaded = await this.worldState.assetsMgr.loadMapAssets?.(
-      NEW_ASSETS.basePath,
-    );
-    if (!atlasLoaded) throw new Error("Falha ao carregar atlas de mapa");
-    this.logger.ok(
-      `Atlas: ${this.worldState.assetsMgr.mapAtlases?.length ?? 0} atlas`,
-    );
+    // [2/4] Atlas segmentados (usa metadata já lida do Firebase)
+    this.logger.info("[2/4] Atlas segmentados");
+    const { atlasCount, totalPacks } = await loadSharedRenderAssets({
+      assets: this.worldState.assetsMgr,
+      mapData: this.worldState.mapData,
+      basePath: NEW_ASSETS.basePath,
+    });
+    this.logger.ok(`Atlas: ${atlasCount} atlas`);
 
     // [3b] MapChunkSubscriber — renderiza mapa diretamente do Firebase por viewport
     this.logger.info("Iniciando MapChunkSubscriber (Firebase)...");
     const hudTiles = document.getElementById("hud-tiles");
-    const subscriber = new MapChunkSubscriber({
-      onFloorIndexUpdate: (fi) => {
-        this.worldState.floorIndex = fi;
-        if (hudTiles)
-          hudTiles.innerText = Object.keys(this.worldState.map).length;
-      },
-    });
+    const { subscriber, map, spawnX, spawnY, spawnZ } =
+      createFirebaseChunkSubscriber({
+        spawn: this.config?.spawn,
+        cols: this.canvasSetup.cols,
+        rows: this.canvasSetup.rows,
+        onFloorIndexUpdate: (fi) => {
+          this.worldState.floorIndex = fi;
+          if (hudTiles)
+            hudTiles.innerText = Object.keys(this.worldState.map).length;
+        },
+      });
     // ws.map agora é a referência viva do subscriber (mutada in-place)
-    this.worldState.map = subscriber.map;
+    this.worldState.map = map;
     this.worldState._chunkSubscriber = subscriber;
 
-    // Posição inicial: spawn do config ou primeiro tile do mapa local
-    const localKeys = Object.keys(this.worldState._localMap);
-    const firstParts = (localKeys[0] ?? "100,100,7").split(",").map(Number);
-    const spawnX = this.config?.spawn?.x ?? firstParts[0] ?? 100;
-    const spawnY = this.config?.spawn?.y ?? firstParts[1] ?? 100;
-    const spawnZ = this.config?.spawn?.z ?? firstParts[2] ?? 7;
     const { cols, rows } = this.canvasSetup;
-
-    const _initFloors = getVisibleFloors(spawnZ);
-    subscriber.update(spawnX, spawnY, _initFloors, cols, rows);
 
     // Centralizar câmera usando posição de spawn (mapa Firebase ainda carregando)
     const { centerCamera } = await import("../../../render/mapRenderer.js");
@@ -187,28 +171,15 @@ export class Initializer {
       `MapChunkSubscriber: spawn=(${spawnX},${spawnY},${spawnZ}), câmera centralizada`,
     );
 
-    // Bootstrap: se Firebase não tem chunks, sobe o mapa local automaticamente
-    const existingChunks = await dbGet(PATHS.tiles);
-    if (
-      !existingChunks ||
-      typeof existingChunks !== "object" ||
-      Object.keys(existingChunks).length === 0
-    ) {
-      this.logger.info("Firebase vazio — fazendo bootstrap do mapa local...");
-      await setMapChunks(this.worldState._localMap, (done, total) => {
-        this.logger.info(`Bootstrap: ${done}/${total} chunks`);
-      });
-      this.logger.ok("Bootstrap concluído.");
-    }
+    // Validação: world_tiles deve existir no Firebase.
+    await ensureWorldTilesAvailable();
 
     // floorIndex inicial (vazio até os chunks do Firebase chegarem)
     this.worldState.floorIndex = this.worldState.floorIndex ?? new Map();
     if (hudTiles) hudTiles.innerText = "…";
 
-    // [4/4] Sprites legados (outfits/monstros)
-    this.logger.info("[4/4] sprites...");
-    const { loadAllSprites } = await import("../../../render/assetLoader.js");
-    const totalPacks = await loadAllSprites(this.worldState.assetsMgr);
+    // [3/4] Sprites legados (outfits/monstros)
+    this.logger.info("[3/4] sprites...");
     this.logger.ok(`${totalPacks} packs carregados`);
   }
 
@@ -298,7 +269,7 @@ export class Initializer {
     this.firebaseSync = new FirebaseSync(
       this.worldState,
       this.logger,
-      NEW_ASSETS,
+      this.worldState.assetsMgr,
     );
 
     this.firebaseSync
@@ -357,10 +328,7 @@ export class Initializer {
     const MAX_CATCHUP_STEPS = 4;
 
     let accumulatorMs = 0;
-    // Rastreia última posição onde os chunks foram atualizados
-    let _lastChunkCamX = -Infinity;
-    let _lastChunkCamY = -Infinity;
-    let _lastChunkZ = -1;
+    const chunkTracker = createChunkUpdateTracker();
 
     const tick = (ts) => {
       const frameTime = animationClock.tick(ts);
@@ -418,17 +386,21 @@ export class Initializer {
           const camY = ws.camera.y;
           const z = ws.activeZ;
           if (
-            Math.abs(camX - _lastChunkCamX) >= sub.chunkSize / 2 ||
-            Math.abs(camY - _lastChunkCamY) >= sub.chunkSize / 2 ||
-            z !== _lastChunkZ
+            chunkTracker.needsCameraUpdate({
+              x: camX,
+              y: camY,
+              z,
+              chunkSize: sub.chunkSize,
+            })
           ) {
-            _lastChunkCamX = camX;
-            _lastChunkCamY = camY;
-            _lastChunkZ = z;
-            // Carrega andar ativo + andares adjacentes para ver pisos inferiores
-            // através de áreas sem tiles e edifícios acima
-            const _floors = getVisibleFloors(z);
-            sub.update(camX, camY, _floors, cs.cols, cs.rows);
+            updateChunkSubscriberForObserver({
+              subscriber: sub,
+              x: camX,
+              y: camY,
+              z,
+              cols: cs.cols,
+              rows: cs.rows,
+            });
           }
         }
       }

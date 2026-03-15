@@ -1324,7 +1324,6 @@
     <script type="module">
       import { AssetManager } from "./src/render/assetManager.js";
       import { AnimationController } from "./src/render/animationController.js";
-      import { loadAllSprites } from "./src/render/assetLoader.js";
       import {
         buildFloorIndex,
         setupCanvas,
@@ -1337,7 +1336,14 @@
         WORLD_SETTINGS,
         GROUND_Z,
       } from "./src/core/config.js";
-      import { getVisibleFloors } from "./src/core/floorVisibility.js";
+      import {
+        loadFirebaseTilesData,
+        ensureWorldTilesAvailable,
+        createFirebaseChunkSubscriber,
+        loadSharedRenderAssets,
+        createChunkUpdateTracker,
+        updateChunkSubscriberForObserver,
+      } from "./src/core/worldBootstrapShared.js";
       import { initEventLog, pushLog } from "./src/gameplay/eventLog.js";
       import {
         initSpellHUD,
@@ -1385,7 +1391,6 @@
       } from "./src/clients/shared/ui/dragPreviewMessages.js";
       import { DragDropManager } from "./src/clients/shared/input/DragDropManager.js";
       import { initItemDataService } from "./src/gameplay/items/ItemDataService.js";
-      import { MapChunkSubscriber } from "./src/core/MapChunkSubscriber.js";
       import {
         calculateCombatResult,
         calculateNewHp,
@@ -1932,10 +1937,7 @@
       let itemDataService = null;
       let floorIndex = null;
       let _chunkSubscriber = null;
-      // Rastreia último tile onde os chunks foram atualizados
-      let _lastChunkTileX = -Infinity,
-        _lastChunkTileY = -Infinity,
-        _lastChunkZ = -1;
+      const _chunkTracker = createChunkUpdateTracker();
       let cam = { x: 0, y: 0 };
       let canvasW, canvasH, cols, rows;
       let activeZ = WORLD_SETTINGS?.spawn?.z ?? GROUND_Z;
@@ -2325,27 +2327,25 @@
         blog("Iniciando mapa via Firebase (chunks)...", "info");
         try {
           const spawn = WORLD_SETTINGS?.spawn ?? {};
-          const spawnX = Number(spawn.x ?? 100);
-          const spawnY = Number(spawn.y ?? 100);
-          const spawnZ = Number(spawn.z ?? GROUND_Z);
-          _chunkSubscriber = new MapChunkSubscriber({
+          const bootCols = RPG_ENGINE.canvasCols ?? 20;
+          const bootRows = RPG_ENGINE.canvasRows ?? 15;
+          const {
+            subscriber,
+            map: liveMap,
+            spawnX,
+            spawnY,
+            spawnZ,
+          } = createFirebaseChunkSubscriber({
+            spawn,
+            cols: bootCols,
+            rows: bootRows,
             onFloorIndexUpdate: (fi) => {
               floorIndex = fi;
             },
           });
+          _chunkSubscriber = subscriber;
           // map aponta para a referência viva do subscriber
-          map = _chunkSubscriber.map;
-          // cols/rows ainda não definidos no boot; usa constantes do config
-          const bootCols = RPG_ENGINE.canvasCols ?? 20;
-          const bootRows = RPG_ENGINE.canvasRows ?? 15;
-          const _bootFloors = getVisibleFloors(spawnZ);
-          _chunkSubscriber.update(
-            spawnX,
-            spawnY,
-            _bootFloors,
-            bootCols,
-            bootRows,
-          );
+          map = liveMap;
           blog(
             `MapChunkSubscriber iniciado em (${spawnX},${spawnY},${spawnZ})`,
             "ok",
@@ -2358,11 +2358,7 @@
         // Metadados dos sprites (colisão, walkable, etc.) — vem do Firebase
         blog("Carregando tilesData do Firebase...", "info");
         try {
-          const remoteTilesData = await dbGet(PATHS.tilesData);
-          mapData =
-            remoteTilesData && typeof remoteTilesData === "object"
-              ? remoteTilesData
-              : {};
+          mapData = await loadFirebaseTilesData();
           itemDataService = initItemDataService(mapData ?? {});
 
           if (Object.keys(mapData).length > 0) {
@@ -2382,14 +2378,12 @@
         // Assets: atlas segmentados (sprites locais) + sprites legados
         blog("Carregando assets...", "info");
         try {
-          // Atlas novo (map_data.json local — coordenadas de sprites apenas)
-          await assets.loadMapAssets?.("./assets/");
-          blog(
-            `Atlas: ${assets.mapAtlases?.length ?? 0} atlas carregados`,
-            "ok",
-          );
-          // Sprites legados (outfits, monstros)
-          await loadAllSprites(assets, "./assets/");
+          const { atlasCount } = await loadSharedRenderAssets({
+            assets,
+            mapData,
+            basePath: "./assets/",
+          });
+          blog(`Atlas: ${atlasCount} atlas carregados`, "ok");
           const hasOutfits = assets.hasOutfitsAtlas();
           blog(
             `Assets carregados. outfitsAtlas=${hasOutfits}`,
@@ -2404,6 +2398,9 @@
         } catch (e) {
           blog(`Falha nos assets: ${e.message}`, "warn");
         }
+
+        await ensureWorldTilesAvailable();
+        blog("world_tiles validado no Firebase.", "ok");
 
         // WorldStore
         await initSchemaRegistry({ watch: true, remoteOnly: true });
@@ -2747,17 +2744,15 @@
             const tx = Math.round(myPos.x),
               ty = Math.round(myPos.y),
               tz = myPos.z;
-            if (
-              tx !== _lastChunkTileX ||
-              ty !== _lastChunkTileY ||
-              tz !== _lastChunkZ
-            ) {
-              _lastChunkTileX = tx;
-              _lastChunkTileY = ty;
-              _lastChunkZ = tz;
-              // Usa a mesma regra OT de floors do world engine (superficie 0-7 / underground +-2)
-              const _floors = getVisibleFloors(tz);
-              _chunkSubscriber.update(tx, ty, _floors, cols, rows);
+            if (_chunkTracker.needsTileUpdate({ x: tx, y: ty, z: tz })) {
+              updateChunkSubscriberForObserver({
+                subscriber: _chunkSubscriber,
+                x: tx,
+                y: ty,
+                z: tz,
+                cols,
+                rows,
+              });
             }
           }
           // ?? {} sem fallback para myPos: Firebase retorna null quando o nó fica

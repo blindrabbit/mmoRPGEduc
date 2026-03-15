@@ -15,12 +15,51 @@ import {
   previewSchemaMigration,
   runSchemaMigration,
 } from "../../../core/db.js";
+import { NEW_ASSETS } from "../../../core/config.js";
 
 export class FirebaseSync {
   constructor(worldState, logger, assets) {
     this.worldState = worldState;
     this.logger = logger;
     this.assets = assets;
+  }
+
+  async _fetchJsonNoCache(path, label) {
+    const sep = String(path).includes("?") ? "&" : "?";
+    const cacheBustedPath = `${path}${sep}_ts=${Date.now()}`;
+    const res = await fetch(cacheBustedPath, { cache: "no-store" });
+    if (!res.ok) {
+      throw new Error(`${label} indisponivel (${res.status})`);
+    }
+    return await res.json();
+  }
+
+  async _loadFreshLocalWorldData(statusEl) {
+    this._setStatus(
+      statusEl,
+      "Lendo map_compacto.json e map_data.json locais...",
+    );
+
+    const [freshMap, freshMapData] = await Promise.all([
+      this._fetchJsonNoCache(NEW_ASSETS.mapFile, "map_compacto.json"),
+      this._fetchJsonNoCache(NEW_ASSETS.dataFile, "map_data.json"),
+    ]);
+
+    if (!freshMap || typeof freshMap !== "object") {
+      throw new Error("map_compacto.json invalido");
+    }
+    if (!freshMapData || typeof freshMapData !== "object") {
+      throw new Error("map_data.json invalido");
+    }
+
+    this.worldState._localMap = freshMap;
+    this.worldState.mapData = freshMapData;
+    if (this.assets) this.assets.mapData = freshMapData;
+
+    return {
+      localMap: freshMap,
+      mapData: freshMapData,
+    };
   }
 
   setupButtons() {
@@ -82,13 +121,22 @@ export class FirebaseSync {
 
   // ── Recarregar Mundo ────────────────────────────────────────
   async _reloadWorld(statusEl) {
-    // _localMap = mapa carregado do JSON local (fonte de verdade)
-    // map = mapa vivo do Firebase via MapChunkSubscriber (não usar como fonte)
-    const localMap = this.worldState._localMap ?? this.worldState.map;
-
-    // Fonte de verdade para tilesData: map_data.json local (via assets manager)
-    // worldState.mapData vem do Firebase → circular, não usar
-    const mapData = this.assets?.mapData ?? this.worldState.mapData;
+    // Recarrega usando JSONs locais como fonte de verdade.
+    let localMap;
+    let mapData;
+    try {
+      const fresh = await this._loadFreshLocalWorldData(statusEl);
+      localMap = fresh.localMap;
+      mapData = fresh.mapData;
+    } catch (e) {
+      this._setStatus(
+        statusEl,
+        `Erro ao ler JSON local: ${e.message}`,
+        "error",
+      );
+      this.logger?.error?.("[FirebaseSync] Falha ao reler arquivos locais:", e);
+      return;
+    }
 
     if (!localMap || !mapData) {
       this._setStatus(
@@ -113,14 +161,16 @@ export class FirebaseSync {
         reason: "manual-reload",
         by: "worldEngine",
       });
+
+      this._setStatus(
+        statusEl,
+        "Limpando map_data e world_tiles anteriores...",
+      );
       await clearWorldForReload();
 
       this._setStatus(statusEl, `Enviando ${tilesCount} tiles em chunks...`);
       await setMapChunks(map, (done, total) => {
-        this._setStatus(
-          statusEl,
-          `Enviando chunks: ${done}/${total}...`,
-        );
+        this._setStatus(statusEl, `Enviando chunks: ${done}/${total}...`);
       });
 
       this._setStatus(statusEl, `Enviando ${mapDataCount} metadados...`);

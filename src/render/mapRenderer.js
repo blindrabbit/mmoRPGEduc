@@ -264,8 +264,11 @@ function _indexTileHasAnySprites(tileRecord) {
 }
 
 function _getIsoOffsetSqm(z, activeZ) {
-  const baseZ = Math.min(activeZ ?? GROUND_Z, GROUND_Z);
-  if (z < baseZ) return 1;
+  const baseZ = Number.isFinite(Number(activeZ))
+    ? Math.floor(Number(activeZ))
+    : GROUND_Z;
+  // Cada andar acima (z menor) desloca 1 SQM para cima/esquerda.
+  if (z < baseZ) return baseZ - z;
   return 0;
 }
 
@@ -843,7 +846,7 @@ function _renderGroundPass(opts) {
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
   const useAssets = !!assets?.mapAtlasLookup && !!nexoData;
-  const floorOffset = 0; // Ground não usa floorOffset
+  const floorOffset = -_getIsoOffsetSqm(z, activeZ) * TILE_SIZE;
 
   if (floorIndex) {
     const tiles = floorIndex.get(z);
@@ -942,7 +945,7 @@ function _renderMainPass(opts) {
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
   const useAssets = !!assets?.mapAtlasLookup && !!nexoData;
-  const floorOffset = 0;
+  const floorOffset = -_getIsoOffsetSqm(z, activeZ) * TILE_SIZE;
 
   if (floorIndex) {
     const tiles = floorIndex.get(z);

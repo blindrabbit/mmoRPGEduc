@@ -137,6 +137,7 @@ export class AssetManager {
     // ✅ NOVO: Atlas do pipeline Python
     this.mapAtlas = null; // { image, data }
     this.mapData = {}; // map_data.json completo
+    this._useMapDataVariantCoords = true;
     this.spriteCache = new SpriteCache(1200);
     this.atlasManager = new AtlasManager({ basePath: "./assets/" });
   }
@@ -144,17 +145,24 @@ export class AssetManager {
   // ═══════════════════════════════════════════════════════════════
   // NOVO: Carregar Assets do Mapa (Pipeline Python)
   // ═══════════════════════════════════════════════════════════════
-  async loadMapAssets(basePath = "./assets/") {
+  async loadMapAssets(basePath = "./assets/", options = {}) {
     try {
       const normalizedBasePath = String(basePath).endsWith("/")
         ? String(basePath)
         : `${basePath}/`;
       this.atlasManager = new AtlasManager({ basePath: normalizedBasePath });
 
-      // 1. Carregar map_data.json (metadata completa)
-      const dataRes = await fetch(`${basePath}map_data.json`);
-      if (!dataRes.ok) throw new Error("map_data.json não encontrado");
-      this.mapData = await dataRes.json();
+      // 1. Carregar metadata do mapa (preferência: Firebase)
+      const remoteMapData = options?.mapData;
+      if (remoteMapData && typeof remoteMapData === "object") {
+        this.mapData = remoteMapData;
+      } else {
+        const dataRes = await fetch(`${basePath}map_data.json`);
+        if (!dataRes.ok) throw new Error("map_data.json não encontrado");
+        this.mapData = await dataRes.json();
+      }
+      this._useMapDataVariantCoords =
+        options?.useMapDataVariantCoords !== false;
       console.log(
         `[AssetManager] ✅ ${Object.keys(this.mapData).length} itens de mapa carregados`,
       );
@@ -186,6 +194,9 @@ export class AssetManager {
         this.mapAtlasesById.set(atlas.index, atlas);
       }
 
+      // Mudança de fonte de variantes exige invalidar cache de sprites.
+      this.spriteCache.clear();
+
       // 5. Build lookup table para busca rápida por itemId_varKey
       this._buildMapAtlasLookup();
 
@@ -214,15 +225,22 @@ export class AssetManager {
       }
     }
 
-    // 2. Override + extend with map_data.json — authoritative source for ALL
-    //    variant keys and animation frames. map_data coordinates take priority
-    //    over atlas JSON, which may have stale positions for animated items
-    //    (atlas JSONs can be regenerated independently of map_data.json).
+    // 2. Opcionalmente sobrescreve com coordenadas de map_data.json.
+    // Em modo Firebase, isso pode vir desatualizado e embaralhar sprites,
+    // então deixamos desativavel via options.useMapDataVariantCoords=false.
     for (const [itemId, itemData] of Object.entries(this.mapData)) {
       if (!itemData.variants) continue;
       for (const [varKey, variant] of Object.entries(itemData.variants)) {
         if (variant.atlas_index == null) continue;
-        this.mapAtlasLookup.set(`${itemId}_${varKey}`, {
+
+        const lookupKey = `${itemId}_${varKey}`;
+        const hasAtlasVariant = this.mapAtlasLookup.has(lookupKey);
+
+        // Modo seguro: usa map_data apenas para preencher lacunas.
+        // Modo completo: map_data pode sobrescrever coordenadas existentes.
+        if (!this._useMapDataVariantCoords && hasAtlasVariant) continue;
+
+        this.mapAtlasLookup.set(lookupKey, {
           atlasIndex: variant.atlas_index,
           atlasName: variant.atlas_name ?? "",
           variant: { x: variant.x, y: variant.y, w: variant.w, h: variant.h },
