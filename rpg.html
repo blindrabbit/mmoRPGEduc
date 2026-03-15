@@ -1335,6 +1335,7 @@
         TILE_SIZE,
         WORLD_SETTINGS,
         GROUND_Z,
+        UNIFIED_RENDER_OPTIONS,
       } from "./src/core/config.js";
       import {
         loadFirebaseTilesData,
@@ -3257,15 +3258,7 @@
             [myPos.id]: myPos,
           },
           renderOptions: {
-            showHP: true,
-            showName: true,
-            renderMode: "high",
-            isPlayer: true,
-            viewMode: "player",
-            entitiesOnTop: true,
-            mapTallBeforeEntities: false,
-            upperFloorsBeforeEntities: true,
-            topDecorBeforeEntities: false,
+            ...UNIFIED_RENDER_OPTIONS,
             lockTarget: targetLock,
           },
         });

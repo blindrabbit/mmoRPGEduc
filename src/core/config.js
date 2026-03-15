@@ -74,6 +74,22 @@ export const GROUND_Z = 7; // andar padrão do mundo
 export const FLOOR_RANGE = 3; // andares visíveis acima/abaixo no floor HUD
 export const GLOBALOFFSET = 0; // legado — não usado no pipeline principal
 
+// Perfil unificado de renderizacao para todos os clientes.
+export const UNIFIED_RENDER_OPTIONS = Object.freeze({
+  showHP: true,
+  showName: true,
+  renderMode: "high",
+  entitiesOnTop: true,
+  mapTallBeforeEntities: false,
+  upperFloorsBeforeEntities: true,
+  topDecorBeforeEntities: false,
+  labelsSameFloorOnly: true,
+  showBodiesAcrossVisibleFloors: true,
+  useFrontOcclusionSort: true,
+  showUpperFloors: true,
+  showTopDecor: true,
+});
+
 // ───────────────────────────────────────────────────────────────────────────
 // EFFECTS_RENDER — offset global dos efeitos visuais, magias e cadáveres.
 // Ajuste aqui para alinhar efeitos (fire wave, fields, corpses) com os tiles.

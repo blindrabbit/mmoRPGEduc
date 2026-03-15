@@ -62,7 +62,9 @@
       </div>
       <div id="sidebar">
         <!-- Preenchido dinamicamente por adminPanel.js -->
-        <p style="color:#666;font-size:11px;padding:10px;">Carregando painel...</p>
+        <p style="color: #666; font-size: 11px; padding: 10px">
+          Carregando painel...
+        </p>
       </div>
     </div>
 
@@ -76,8 +78,16 @@
         setAssetManagerRef,
       } from "./render/mapRenderer.js";
       import { renderWorld } from "./render/worldRenderer.js";
-      import { WORLD_ENGINE, TILE_SIZE } from "./core/config.js";
-      import { initWorldStore, getPlayers, getMonsters } from "./core/worldStore.js";
+      import {
+        WORLD_ENGINE,
+        TILE_SIZE,
+        UNIFIED_RENDER_OPTIONS,
+      } from "./core/config.js";
+      import {
+        initWorldStore,
+        getPlayers,
+        getMonsters,
+      } from "./core/worldStore.js";
       import { initAdminPanel } from "./clients/world-engine/adminPanel.js";
 
       window.DEBUG_RENDER = false;
@@ -144,7 +154,7 @@
         animClock += 16;
 
         // Combina jogadores e monstros do worldStore para renderização ao vivo
-        const livePlayers  = getPlayers()  ?? {};
+        const livePlayers = getPlayers() ?? {};
         const liveMonsters = getMonsters() ?? {};
         const extraEntities = { ...livePlayers, ...liveMonsters };
 
@@ -164,7 +174,7 @@
           anim: null,
           floorIndex,
           extraEntities,
-          renderOptions: { showHP: true, showName: true },
+          renderOptions: UNIFIED_RENDER_OPTIONS,
         });
 
         requestAnimationFrame(gameLoop);

@@ -6,11 +6,17 @@
 // ✅ Entidades com outfits reais via AnimationController
 // ═══════════════════════════════════════════════════════════════
 
-import { TILE_SIZE, ENTITY_RENDER, GROUND_Z } from "../core/config.js";
+import {
+  TILE_SIZE,
+  ENTITY_RENDER,
+  GROUND_Z,
+  UNIFIED_RENDER_OPTIONS,
+} from "../core/config.js";
+import { canSeeFloor, getVisibleFloors } from "../core/floorVisibility.js";
 import { renderMap, getTileDrawElevation } from "./mapRenderer.js";
 import { sortEntitiesForRender } from "../core/renderOrder.js";
 import { STACK_POSITION } from "../core/stackPosition.js";
-import { isEntityInViewport, VIEW_CONFIG } from "./viewCulling.js";
+import { VIEW_CONFIG } from "./viewCulling.js";
 import { ObjectPool } from "../core/objectPool.js";
 import { getMonsters, getPlayers } from "../core/worldStore.js";
 import { getMonsterTemplates } from "../core/remoteTemplates.js";
@@ -26,6 +32,7 @@ const _visibleEntityPool = new ObjectPool(
   () => ({
     id: null,
     ent: null,
+    entZ: 0,
     drawX: 0,
     drawY: 0,
     labelX: 0,
@@ -35,6 +42,7 @@ const _visibleEntityPool = new ObjectPool(
   (it) => {
     it.id = null;
     it.ent = null;
+    it.entZ = 0;
     it.drawX = 0;
     it.drawY = 0;
     it.labelX = 0;
@@ -155,15 +163,19 @@ function renderEntitiesFull(
     map = null,
     floorIndex = null,
     mapData = null,
-    showHP = true,
-    showName = true,
-    renderMode = "high",
+    showHP = UNIFIED_RENDER_OPTIONS.showHP,
+    showName = UNIFIED_RENDER_OPTIONS.showName,
+    labelsSameFloorOnly = UNIFIED_RENDER_OPTIONS.labelsSameFloorOnly,
+    showBodiesAcrossVisibleFloors = UNIFIED_RENDER_OPTIONS.showBodiesAcrossVisibleFloors,
+    renderMode = UNIFIED_RENDER_OPTIONS.renderMode,
     remoteTemplates = null,
   },
 ) {
   const visible = [];
   // Single timestamp for the whole frame — all entities animate consistently.
   const frameNow = Date.now();
+  const activeZNum = Number(activeZ);
+  const floorRef = Number.isFinite(activeZNum) ? activeZNum : 7;
 
   // View-radius pre-filter: skip entities clearly outside the visible area.
   // Uses canvas center as observer and expands by VIEW_CONFIG.radius beyond the canvas edge.
@@ -178,23 +190,35 @@ function renderEntitiesFull(
   const _cullConfig = { radius: _viewRadius };
 
   const normalizedEntities = Object.entries(entities ?? {})
-    .filter(([, ent]) => ent && isEntityInViewport(ent, _observer, _cullConfig))
+    .filter(([, ent]) => {
+      if (!ent) return false;
+      const entZRaw = Number(ent.z);
+      const entZ = Number.isFinite(entZRaw) ? entZRaw : floorRef;
+      if (showBodiesAcrossVisibleFloors) {
+        if (!canSeeFloor(floorRef, entZ)) return false;
+      } else if (entZ !== floorRef) {
+        return false;
+      }
+      const dx = Math.abs(Number(ent.x) - Number(_observer.x));
+      const dy = Math.abs(Number(ent.y) - Number(_observer.y));
+      return dx <= _cullConfig.radius && dy <= _cullConfig.radius;
+    })
     .map(([id, ent]) => {
-    const isMonsterLike =
-      ent?.type === "monster" ||
-      typeof ent?.species === "string" ||
-      (typeof id === "string" && id.startsWith("mob"));
-    return {
-      ...(ent ?? {}),
-      _entityId: id,
-      category: "creature",
-      stackPosition: Number.isFinite(Number(ent?.stackPosition))
-        ? Number(ent.stackPosition)
-        : isMonsterLike
-          ? STACK_POSITION.CREATURE_FIRST + 2
-          : STACK_POSITION.CREATURE_FIRST + 1,
-    };
-  });
+      const isMonsterLike =
+        ent?.type === "monster" ||
+        typeof ent?.species === "string" ||
+        (typeof id === "string" && id.startsWith("mob"));
+      return {
+        ...(ent ?? {}),
+        _entityId: id,
+        category: "creature",
+        stackPosition: Number.isFinite(Number(ent?.stackPosition))
+          ? Number(ent.stackPosition)
+          : isMonsterLike
+            ? STACK_POSITION.CREATURE_FIRST + 2
+            : STACK_POSITION.CREATURE_FIRST + 1,
+      };
+    });
   const sortedEntities = sortEntitiesForRender(normalizedEntities, activeZ);
 
   // ── Pass 1: Sprites/Corpos ───────────────────────────────────
@@ -202,15 +226,17 @@ function renderEntitiesFull(
     const id = ent?._entityId;
     if (!ent || ent.dead) continue;
 
-    const activeZNum = Number(activeZ);
     const entZNumRaw = Number(ent.z);
     const entZNum = Number.isFinite(entZNumRaw)
       ? entZNumRaw
-      : Number.isFinite(activeZNum)
-        ? activeZNum
+      : Number.isFinite(floorRef)
+        ? floorRef
         : 7;
-    const floorRef = Number.isFinite(activeZNum) ? activeZNum : 7;
-    if (entZNum !== floorRef) continue;
+    if (showBodiesAcrossVisibleFloors) {
+      if (!canSeeFloor(floorRef, entZNum)) continue;
+    } else if (entZNum !== floorRef) {
+      continue;
+    }
 
     if (ent.x == null || ent.y == null) continue;
 
@@ -221,6 +247,12 @@ function renderEntitiesFull(
       assets && anim
         ? anim.getVisualPos(safeEnt, frameNow)
         : { x: ent.x * TILE_SIZE, y: ent.y * TILE_SIZE };
+    const floorOffsetSqm = entZNum < floorRef ? floorRef - entZNum : 0;
+    const floorOffsetPx = floorOffsetSqm * TILE_SIZE;
+    const floorShiftedVPos =
+      floorOffsetPx > 0
+        ? { x: vPos.x - floorOffsetPx, y: vPos.y - floorOffsetPx }
+        : vPos;
 
     const tileElevation = getTileDrawElevation({
       map,
@@ -233,8 +265,11 @@ function renderEntitiesFull(
 
     const elevatedVPos =
       tileElevation > 0
-        ? { x: vPos.x - tileElevation, y: vPos.y - tileElevation }
-        : vPos;
+        ? {
+            x: floorShiftedVPos.x - tileElevation,
+            y: floorShiftedVPos.y - tileElevation,
+          }
+        : floorShiftedVPos;
 
     const drawX = Math.round(elevatedVPos.x - camX + TILE_SIZE / 2);
     const drawY = Math.round(elevatedVPos.y - camY + TILE_SIZE / 2);
@@ -344,6 +379,7 @@ function renderEntitiesFull(
     const row = _visibleEntityPool.acquire();
     row.id = id;
     row.ent = ent;
+    row.entZ = entZNum;
     row.drawX = drawX;
     row.drawY = drawY;
     row.labelX = labelX;
@@ -356,12 +392,15 @@ function renderEntitiesFull(
   for (const {
     id,
     ent,
+    entZ,
     drawX,
     drawY,
     labelX,
     spriteTopY,
     isMonster,
   } of visible) {
+    if (labelsSameFloorOnly && entZ !== floorRef) continue;
+
     const hp = ent.stats?.hp ?? 100;
     const maxHp = ent.stats?.maxHp ?? 100;
 
@@ -435,9 +474,10 @@ export function renderWorld({
   roofFadeRadius = 0,
   clearColor = "#111", // null = fundo transparente (WorldEngine)
   extraEntities = {},
-  renderOptions = { showHP: true, showName: true, renderMode: "high" },
+  renderOptions = UNIFIED_RENDER_OPTIONS,
 }) {
-  const { showHP, showName } = renderOptions;
+  const opts = { ...UNIFIED_RENDER_OPTIONS, ...(renderOptions ?? {}) };
+  const { showHP, showName } = opts;
   const remoteTemplates = getMonsterTemplates();
   const perfEnabled = window.DEBUG_RENDER_PERF === true;
   const perf = perfEnabled
@@ -456,28 +496,29 @@ export function renderWorld({
       })
     : null;
   const frameStart = perfEnabled ? performance.now() : 0;
-  const lockTarget = renderOptions.lockTarget ?? null;
-  const renderMode = renderOptions.renderMode ?? renderOptions.mode ?? "high";
-  const isPlayerView =
-    renderOptions.isPlayer === true || renderOptions.viewMode === "player";
-  const entitiesOnTop = renderOptions.entitiesOnTop ?? isPlayerView;
-  const mapTallBeforeEntities =
-    renderOptions.mapTallBeforeEntities ?? entitiesOnTop;
-  const upperFloorsBeforeEntities =
-    renderOptions.upperFloorsBeforeEntities ?? entitiesOnTop;
-  const topDecorBeforeEntities =
-    renderOptions.topDecorBeforeEntities ?? entitiesOnTop;
-  const labelsSameFloorOnly = renderOptions.labelsSameFloorOnly ?? isPlayerView;
-  const showUpperFloors = renderOptions.showUpperFloors ?? true;
-  const showTopDecor = renderOptions.showTopDecor ?? true;
+  const lockTarget = opts.lockTarget ?? null;
+  const renderMode = opts.renderMode ?? opts.mode ?? "high";
+  const entitiesOnTop = opts.entitiesOnTop;
+  const mapTallBeforeEntities = opts.mapTallBeforeEntities;
+  const upperFloorsBeforeEntities = opts.upperFloorsBeforeEntities;
+  const topDecorBeforeEntities = opts.topDecorBeforeEntities;
+  const labelsSameFloorOnly = opts.labelsSameFloorOnly;
+  const showBodiesAcrossVisibleFloors = opts.showBodiesAcrossVisibleFloors;
+  const useFrontOcclusionSort = opts.useFrontOcclusionSort;
+  const showUpperFloors = opts.showUpperFloors;
+  const showTopDecor = opts.showTopDecor;
 
   const camera = { x: camX / TILE_SIZE, y: camY / TILE_SIZE };
   const camXWorld = camX;
   const camYWorld = camY;
+  const upperVisibleFloors = getVisibleFloors(activeZ).filter(
+    (z) => z < activeZ,
+  );
+  const enforceStrictFloorPriority = upperVisibleFloors.length > 0;
 
   // Y-sort: linha de tile aproximada do player (câmera centrada no player)
   // Tiles com ty > focusTileY estão "na frente" do player e devem cobri-lo.
-  const focusTileY = isPlayerView
+  const focusTileY = useFrontOcclusionSort
     ? Math.floor(camY / TILE_SIZE + rows / 2)
     : null;
 
@@ -532,6 +573,11 @@ export function renderWorld({
     return !isFlat(spriteMeta) && !isOccluder(spriteMeta);
   };
 
+  const drawAllLayer2Tall = (_spriteId, spriteMeta, info) => {
+    if (info?.renderLayer !== 2) return false;
+    return !isFlat(spriteMeta);
+  };
+
   // Predicate para step 6.25: redesenhá tiles occluders APÓS as entidades.
   // Não usa info.renderLayer (nunca é setado pelo mapRenderer).
   // Y-sort: só redesenha tiles cujo ty > focusTileY (na frente do player).
@@ -550,6 +596,23 @@ export function renderWorld({
   const drawLayer3Post = (_spriteId, spriteMeta, info) => {
     if (info?.renderLayer !== 3) return false; // ← era true (bug: desenhava tudo)
     return isOccluder(spriteMeta);
+  };
+
+  const drawAllLayer3 = (_spriteId, _spriteMeta, info) => {
+    return info?.renderLayer === 3;
+  };
+
+  const renderUpperFloorStack = () => {
+    if (!showUpperFloors || upperVisibleFloors.length === 0) return;
+    renderMap({
+      ..._mapBase,
+      layerMin: 0,
+      // Upper floors keep classic OT layering: no top-decoration pass.
+      // This prevents tops (e.g. 7143 canopies) from being duplicated across Zs.
+      layerMax: 2,
+      clearCanvas: false,
+      zPredicate: (z, _dz, aZ) => z < aZ,
+    });
   };
 
   // ── 1. Mapa base (andar ativo e abaixo) — layers 0-2, só flat ──
@@ -601,7 +664,9 @@ export function renderWorld({
           layerMax: 2,
           clearCanvas: false,
           zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: drawOnlyLayer2IfTallPre,
+          spritePredicate: enforceStrictFloorPriority
+            ? drawAllLayer2Tall
+            : drawOnlyLayer2IfTallPre,
         });
       });
     } else {
@@ -611,7 +676,31 @@ export function renderWorld({
         layerMax: 2,
         clearCanvas: false,
         zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: drawOnlyLayer2IfTallPre,
+        spritePredicate: enforceStrictFloorPriority
+          ? drawAllLayer2Tall
+          : drawOnlyLayer2IfTallPre,
+      });
+    }
+  } else if (enforceStrictFloorPriority) {
+    if (perfEnabled) {
+      perfStep(perf, "mapTall", () => {
+        renderMap({
+          ..._mapBase,
+          layerMin: 2,
+          layerMax: 2,
+          clearCanvas: false,
+          zPredicate: (z, _dz, aZ) => z === aZ,
+          spritePredicate: drawAllLayer2Tall,
+        });
+      });
+    } else {
+      renderMap({
+        ..._mapBase,
+        layerMin: 2,
+        layerMax: 2,
+        clearCanvas: false,
+        zPredicate: (z, _dz, aZ) => z === aZ,
+        spritePredicate: drawAllLayer2Tall,
       });
     }
   }
@@ -621,22 +710,10 @@ export function renderWorld({
   if (showUpperFloors && upperFloorsBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapAbove", () => {
-        renderMap({
-          ..._mapBase,
-          layerMin: 0,
-          layerMax: 2,
-          clearCanvas: false,
-          zPredicate: (z, _dz, aZ) => z < aZ,
-        });
+        renderUpperFloorStack();
       });
     } else {
-      renderMap({
-        ..._mapBase,
-        layerMin: 0,
-        layerMax: 2,
-        clearCanvas: false,
-        zPredicate: (z, _dz, aZ) => z < aZ,
-      });
+      renderUpperFloorStack();
     }
   }
 
@@ -651,7 +728,9 @@ export function renderWorld({
           layerMax: 3,
           clearCanvas: false,
           zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: drawLayer3Pre,
+          spritePredicate: enforceStrictFloorPriority
+            ? drawAllLayer3
+            : drawLayer3Pre,
         });
       });
     } else {
@@ -661,7 +740,31 @@ export function renderWorld({
         layerMax: 3,
         clearCanvas: false,
         zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: drawLayer3Pre,
+        spritePredicate: enforceStrictFloorPriority
+          ? drawAllLayer3
+          : drawLayer3Pre,
+      });
+    }
+  } else if (showTopDecor && enforceStrictFloorPriority) {
+    if (perfEnabled) {
+      perfStep(perf, "mapTop", () => {
+        renderMap({
+          ..._mapBase,
+          layerMin: 3,
+          layerMax: 3,
+          clearCanvas: false,
+          zPredicate: (z, _dz, aZ) => z === aZ,
+          spritePredicate: drawAllLayer3,
+        });
+      });
+    } else {
+      renderMap({
+        ..._mapBase,
+        layerMin: 3,
+        layerMax: 3,
+        clearCanvas: false,
+        zPredicate: (z, _dz, aZ) => z === aZ,
+        spritePredicate: drawAllLayer3,
       });
     }
   }
@@ -715,6 +818,7 @@ export function renderWorld({
           showName,
           renderMode,
           labelsSameFloorOnly,
+          showBodiesAcrossVisibleFloors,
           remoteTemplates,
         },
       );
@@ -737,6 +841,7 @@ export function renderWorld({
         showName,
         renderMode,
         labelsSameFloorOnly,
+        showBodiesAcrossVisibleFloors,
         remoteTemplates,
       },
     );
@@ -756,8 +861,20 @@ export function renderWorld({
   // de chão por cima do player (o ground já foi desenhado no step 1).
   // Y-sort via drawOccluderAfterEntities: só redesenha occluders cujo
   // ty > focusTileY (visualmente na frente do player).
-  if (perfEnabled) {
-    perfStep(perf, "mapTall", () => {
+  if (!enforceStrictFloorPriority) {
+    if (perfEnabled) {
+      perfStep(perf, "mapTall", () => {
+        renderMap({
+          ..._mapBase,
+          layerMin: 2,
+          layerMax: 2,
+          clearCanvas: false,
+          skipGroundPass: true,
+          zPredicate: (z, _dz, aZ) => z === aZ,
+          spritePredicate: drawOccluderAfterEntities,
+        });
+      });
+    } else {
       renderMap({
         ..._mapBase,
         layerMin: 2,
@@ -767,17 +884,7 @@ export function renderWorld({
         zPredicate: (z, _dz, aZ) => z === aZ,
         spritePredicate: drawOccluderAfterEntities,
       });
-    });
-  } else {
-    renderMap({
-      ..._mapBase,
-      layerMin: 2,
-      layerMax: 2,
-      clearCanvas: false,
-      skipGroundPass: true,
-      zPredicate: (z, _dz, aZ) => z === aZ,
-      spritePredicate: drawOccluderAfterEntities,
-    });
+    }
   }
 
   // ── 6.5 Mapa de andares acima (z < activeZ) — layers 0-2 ────
@@ -785,22 +892,10 @@ export function renderWorld({
   if (showUpperFloors && !upperFloorsBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapAbove", () => {
-        renderMap({
-          ..._mapBase,
-          layerMin: 0,
-          layerMax: 2,
-          clearCanvas: false,
-          zPredicate: (z, _dz, aZ) => z < aZ,
-        });
+        renderUpperFloorStack();
       });
     } else {
-      renderMap({
-        ..._mapBase,
-        layerMin: 0,
-        layerMax: 2,
-        clearCanvas: false,
-        zPredicate: (z, _dz, aZ) => z < aZ,
-      });
+      renderUpperFloorStack();
     }
   }
 
@@ -816,7 +911,7 @@ export function renderWorld({
   // ── 8. Mapa — layer 3 (top_decoration: copas, telhados) ──────
   // skipGroundPass=true: evita que o ground pass redesenhe tiles de chão
   // por cima do player (já desenhados no step 1).
-  if (showTopDecor && !topDecorBeforeEntities) {
+  if (showTopDecor && !topDecorBeforeEntities && !enforceStrictFloorPriority) {
     if (perfEnabled) {
       perfStep(perf, "mapTop", () => {
         renderMap({

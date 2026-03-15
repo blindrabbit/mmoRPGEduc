@@ -1,7 +1,11 @@
 // ═══════════════════════════════════════════════════════════════
 // initializer.js — Orquestração da inicialização
 // ═══════════════════════════════════════════════════════════════
-import { NEW_ASSETS } from "../../../core/config.js";
+import {
+  NEW_ASSETS,
+  TILE_SIZE,
+  UNIFIED_RENDER_OPTIONS,
+} from "../../../core/config.js";
 import { RuntimeConfig } from "../../../core/runtimeConfig.js";
 import { worldEvents, EVENT_TYPES } from "../../../core/events.js";
 import { WorldTick } from "../engine/worldTick.js";
@@ -35,7 +39,6 @@ import { renderWorld } from "../../../render/worldRenderer.js";
 import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
-import { TILE_SIZE } from "../../../core/config.js";
 import { createAnimationClock } from "../../../core/animationClock.js";
 import {
   loadFirebaseTilesData,
@@ -368,16 +371,7 @@ export class Initializer {
           roofFadeRadius: this.config?.WORLDENGINE?.roofFadeRadius ?? 0,
           clearColor: null, // transparente: andares inferiores aparecem através de tiles vazios
           extraEntities: { ...getMonsters(), ...getPlayers() },
-          renderOptions: {
-            showHP: true,
-            showName: true,
-            renderMode: "high",
-            viewMode: "gm",
-            entitiesOnTop: true,
-            mapTallBeforeEntities: false,
-            upperFloorsBeforeEntities: true,
-            topDecorBeforeEntities: false,
-          },
+          renderOptions: UNIFIED_RENDER_OPTIONS,
         });
 
         // Atualiza chunks quando a câmera move meio chunk ou troca de andar

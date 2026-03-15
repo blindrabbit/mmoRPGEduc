@@ -42,6 +42,37 @@ function _flattenTileItems(tileLayers, layerKeys) {
   return out;
 }
 
+function _flattenTileEntries(tileLayers, layerKeys) {
+  const keys =
+    layerKeys ??
+    Object.keys(tileLayers)
+      .map((k) => parseInt(k, 10))
+      .filter((n) => Number.isFinite(n))
+      .sort((a, b) => a - b);
+
+  const out = [];
+  for (const layer of keys) {
+    const arr = tileLayers[String(layer)];
+    if (!Array.isArray(arr) || !arr.length) continue;
+    for (const item of arr) {
+      out.push({ tileLayer: layer, item });
+    }
+  }
+  return out;
+}
+
+function _resolveRenderLayer(metadata, category = "common") {
+  const rawLayer = Number(metadata?.game?.render_layer);
+  if (Number.isFinite(rawLayer)) {
+    return Math.max(0, Math.min(3, Math.floor(rawLayer)));
+  }
+
+  if (category === "ground") return 0;
+  if (category === "groundBorder") return 1;
+  if (category === "top") return 3;
+  return 2;
+}
+
 function _getSpriteCategory(spriteId, nexoData) {
   const sid = String(spriteId);
   const spriteMeta = nexoData?.[sid];
@@ -271,6 +302,109 @@ function _getIsoOffsetSqm(z, activeZ) {
   // Cada andar acima (z menor) desloca 1 SQM para cima/esquerda.
   if (z < baseZ) return baseZ - z;
   return 0;
+}
+
+function _createUpperLayerOcclusionChecker({
+  floorIndex,
+  visibleFloors,
+  activeZ,
+  nexoData,
+  layerMin,
+  layerMax,
+  zPredicate,
+  spritePredicate,
+  pass,
+}) {
+  const cache = new Map();
+
+  return function isOccludedByUpperFloor({
+    projectedX,
+    projectedY,
+    currentZ,
+    renderLayer,
+  }) {
+    if (!floorIndex || !Number.isFinite(Number(renderLayer))) return false;
+
+    const key = `${pass}|${currentZ}|${renderLayer}|${projectedX},${projectedY}`;
+    const cached = cache.get(key);
+    if (cached !== undefined) return cached;
+
+    for (const upperZ of visibleFloors) {
+      if (upperZ >= currentZ) continue;
+
+      const dz = upperZ - activeZ;
+      if (
+        typeof zPredicate === "function" &&
+        !zPredicate(upperZ, dz, activeZ)
+      ) {
+        continue;
+      }
+
+      const upperOffsetSqm = _getIsoOffsetSqm(upperZ, activeZ);
+      const tx = projectedX + upperOffsetSqm;
+      const ty = projectedY + upperOffsetSqm;
+      const tile = floorIndex.get(upperZ)?.get(`${tx},${ty},${upperZ}`);
+      if (!_indexTileHasAnySprites(tile)) continue;
+
+      const tileEntries = tile.layers
+        ? _flattenTileEntries(tile.layers, tile.layerKeys)
+        : (tile.flatItems ?? tile.items ?? []).map((item) => ({
+            tileLayer: null,
+            item,
+          }));
+
+      for (const entry of tileEntries) {
+        const item = entry.item;
+        const spriteId =
+          typeof item === "object" && item !== null ? item.id : item;
+        if (spriteId == null || spriteId === 0) continue;
+
+        const spriteMeta = nexoData?.[String(spriteId)];
+        const category = _getSpriteCategory(spriteId, nexoData);
+        const itemLayer = _resolveRenderLayer(spriteMeta, category);
+
+        if (itemLayer < layerMin || itemLayer > layerMax) continue;
+        if (itemLayer !== renderLayer) continue;
+
+        if (pass === "ground") {
+          if (category !== "ground" && category !== "groundBorder") continue;
+        } else if (category === "ground" || category === "groundBorder") {
+          continue;
+        }
+
+        const info = {
+          spriteId,
+          spriteMeta,
+          category,
+          stackPosition: resolveStackPosition(spriteMeta, category),
+          renderLayer: itemLayer,
+          tileLayer: Number.isFinite(Number(entry?.tileLayer))
+            ? Number(entry.tileLayer)
+            : -1,
+          count:
+            typeof item === "object" && item !== null ? (item.count ?? 1) : 1,
+          tx,
+          ty,
+          z: upperZ,
+          dz,
+          activeZ,
+        };
+
+        if (
+          typeof spritePredicate === "function" &&
+          spritePredicate(spriteId, spriteMeta, info) === false
+        ) {
+          continue;
+        }
+
+        cache.set(key, true);
+        return true;
+      }
+    }
+
+    cache.set(key, false);
+    return false;
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -765,6 +899,7 @@ export function renderMap(opts) {
     canvasW,
     canvasH,
     map,
+    floorIndex,
     camera,
     activeZ,
     cols = WORLD_ENGINE.canvasCols,
@@ -773,6 +908,8 @@ export function renderMap(opts) {
     clearCanvas = true,
     clearColor = "#111", // null = transparente (sem fillRect)
     skipGroundPass = false,
+    layerMin = 0,
+    layerMax = 3,
     zPredicate = null,
     spritePredicate = null,
   } = opts;
@@ -804,6 +941,28 @@ export function renderMap(opts) {
 
   const floorAlphas = _floorAlphaCache;
   const groundBatch = opts.groundBatch ?? new AtlasBatchRenderer(ctx);
+  const occlusionChecker = _createUpperLayerOcclusionChecker({
+    floorIndex,
+    visibleFloors,
+    activeZ,
+    nexoData: opts.nexoData ?? opts.assets?.mapData ?? null,
+    layerMin,
+    layerMax,
+    zPredicate,
+    spritePredicate,
+    pass: "main",
+  });
+  const groundOcclusionChecker = _createUpperLayerOcclusionChecker({
+    floorIndex,
+    visibleFloors,
+    activeZ,
+    nexoData: opts.nexoData ?? opts.assets?.mapData ?? null,
+    layerMin,
+    layerMax,
+    zPredicate,
+    spritePredicate,
+    pass: "ground",
+  });
 
   // ═══════════════════════════════════════════════════════════
   // PASSO 1: DRAW GROUND (todos os tiles)
@@ -821,6 +980,9 @@ export function renderMap(opts) {
         dz,
         alpha: floorAlphas.get(z) ?? 1.0,
         groundBatch,
+        layerMin,
+        layerMax,
+        isOccludedByUpperFloor: groundOcclusionChecker,
       });
 
       groundBatch.flush();
@@ -841,6 +1003,9 @@ export function renderMap(opts) {
       z,
       dz,
       alpha: floorAlphas.get(z) ?? 1.0,
+      layerMin,
+      layerMax,
+      isOccludedByUpperFloor: occlusionChecker,
     });
   }
 }
@@ -867,6 +1032,9 @@ function _renderGroundPass(opts) {
     rows = WORLD_ENGINE.canvasRows,
     alpha = 1.0,
     groundBatch = null,
+    layerMin = 0,
+    layerMax = 3,
+    isOccludedByUpperFloor = null,
   } = opts;
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
@@ -892,18 +1060,38 @@ function _renderGroundPass(opts) {
         const sy = Math.floor((ty - camera.y) * TILE_SIZE + floorOffset);
 
         // Extrair apenas ground e groundBorder
-        const _groundItems =
-          tile.flatItems ??
-          (tile.layers
-            ? _flattenTileItems(tile.layers, tile.layerKeys)
-            : (tile.items ?? []));
+        const tileEntries = tile.layers
+          ? _flattenTileEntries(tile.layers, tile.layerKeys)
+          : (tile.flatItems ?? tile.items ?? []).map((item) => ({
+              tileLayer: null,
+              item,
+            }));
 
-        for (const item of _groundItems) {
+        for (const entry of tileEntries) {
+          const item = entry.item;
           const spriteId =
             typeof item === "object" && item !== null ? item.id : item;
           if (spriteId == null || spriteId === 0) continue;
 
+          const spriteMeta = nexoData?.[String(spriteId)];
           const category = _getSpriteCategory(spriteId, nexoData);
+          const renderLayer = _resolveRenderLayer(spriteMeta, category);
+
+          if (renderLayer < layerMin || renderLayer > layerMax) continue;
+
+          const projectedX = tx - floorOffsetSqm;
+          const projectedY = ty - floorOffsetSqm;
+          if (
+            typeof isOccludedByUpperFloor === "function" &&
+            isOccludedByUpperFloor({
+              projectedX,
+              projectedY,
+              currentZ: z,
+              renderLayer,
+            })
+          ) {
+            continue;
+          }
 
           // Apenas ground e groundBorder neste passo
           if (category !== "ground" && category !== "groundBorder") continue;
@@ -967,6 +1155,9 @@ function _renderMainPass(opts) {
     rows = WORLD_ENGINE.canvasRows,
     alpha = 1.0,
     spritePredicate = null,
+    layerMin = 0,
+    layerMax = 3,
+    isOccludedByUpperFloor = null,
   } = opts;
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
@@ -998,20 +1189,39 @@ function _renderMainPass(opts) {
           top: [],
         };
 
-        const _allItems =
-          tile.flatItems ??
-          (tile.layers
-            ? _flattenTileItems(tile.layers, tile.layerKeys)
-            : (tile.items ?? []));
+        const tileEntries = tile.layers
+          ? _flattenTileEntries(tile.layers, tile.layerKeys)
+          : (tile.flatItems ?? tile.items ?? []).map((item) => ({
+              tileLayer: null,
+              item,
+            }));
 
         const sortable = [];
-        for (const item of _allItems) {
+        for (const entry of tileEntries) {
+          const item = entry.item;
           const spriteId =
             typeof item === "object" && item !== null ? item.id : item;
           if (spriteId == null || spriteId === 0) continue;
 
           const spriteMeta = nexoData?.[String(spriteId)];
           const category = _getSpriteCategory(spriteId, nexoData);
+          const renderLayer = _resolveRenderLayer(spriteMeta, category);
+
+          if (renderLayer < layerMin || renderLayer > layerMax) continue;
+
+          const projectedX = tx - floorOffsetSqm;
+          const projectedY = ty - floorOffsetSqm;
+          if (
+            typeof isOccludedByUpperFloor === "function" &&
+            isOccludedByUpperFloor({
+              projectedX,
+              projectedY,
+              currentZ: z,
+              renderLayer,
+            })
+          ) {
+            continue;
+          }
 
           // Ignorar ground e groundBorder (já renderizados)
           if (category === "ground" || category === "groundBorder") continue;
@@ -1021,6 +1231,10 @@ function _renderMainPass(opts) {
             spriteMeta,
             category,
             stackPosition: resolveStackPosition(spriteMeta, category),
+            renderLayer,
+            tileLayer: Number.isFinite(Number(entry?.tileLayer))
+              ? Number(entry.tileLayer)
+              : -1,
             count:
               typeof item === "object" && item !== null ? (item.count ?? 1) : 1,
             tx,
@@ -1041,6 +1255,12 @@ function _renderMainPass(opts) {
         }
 
         sortable.sort((a, b) => {
+          const ar = Number(a?.renderLayer ?? 2);
+          const br = Number(b?.renderLayer ?? 2);
+          if (ar !== br) return ar - br;
+          const atl = Number(a?.tileLayer ?? -1);
+          const btl = Number(b?.tileLayer ?? -1);
+          if (atl !== btl) return atl - btl;
           const as = Number(a?.stackPosition ?? 5);
           const bs = Number(b?.stackPosition ?? 5);
           if (as !== bs) return as - bs;

@@ -1,6 +1,8 @@
 // ═══════════════════════════════════════════════════════════════
 // mouseHandler.js — Clique no canvas para inspecionar tile
 // ═══════════════════════════════════════════════════════════════
+import { pickTopVisibleTileAtScreen } from "./tilePicker.js";
+
 export class MouseHandler {
   /**
    * @param {HTMLCanvasElement} canvas
@@ -17,19 +19,19 @@ export class MouseHandler {
   }
 
   _onClick(e) {
-    const rect  = this._canvas.getBoundingClientRect();
-    const zoom  = this.worldState.zoom ?? 1;
-    const tsize = this.tileSize * zoom;
+    const rect = this._canvas.getBoundingClientRect();
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
 
-    const tileX = Math.floor(this.worldState.camera.x + (e.clientX - rect.left)  / tsize);
-    const tileY = Math.floor(this.worldState.camera.y + (e.clientY - rect.top)   / tsize);
-    const tileZ = this.worldState.activeZ ?? 7;
+    const picked = pickTopVisibleTileAtScreen({
+      worldState: this.worldState,
+      px,
+      py,
+      tileSize: this.tileSize,
+    });
 
-    const key  = `${tileX},${tileY},${tileZ}`;
-    const tile = this.worldState.map?.[key];
-
-    if (tile) {
-      console.log(`[MouseHandler] tile ${key}:`, tile);
+    if (picked?.tile) {
+      console.log(`[MouseHandler] tile ${picked.key}:`, picked.tile);
     }
   }
 
