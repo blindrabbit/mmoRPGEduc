@@ -24,6 +24,7 @@ let _floorAlphaCache = null;
 let _floorAlphaCacheKey = "";
 const _spriteCategoryCache = new Map(); // spriteId -> { meta, category }
 const _spriteElevationCache = new Map(); // spriteId -> { meta, elevation }
+const _anyVariantLookupCache = new Map(); // spriteId -> lookup|null
 
 function _flattenTileItems(tileLayers, layerKeys) {
   const keys =
@@ -545,16 +546,39 @@ function _drawSpriteFromAssets(
   count = 1,
   batchRenderer = null,
 ) {
-  const data = nexoData?.[String(spriteId)];
-  if (!data) return;
+  const sid = String(spriteId);
+  const data = nexoData?.[sid] ?? null;
 
   // Stackables usam variante por quantidade; demais usam posição modulo
-  const varKey = data.game?.is_stackable
-    ? getStackableVariantKey(count)
-    : resolveVariantKey(data, tx, ty, animClock);
-  const lookup =
-    assets.mapAtlasLookup?.get(`${spriteId}_${varKey}`) ??
-    assets.mapAtlasLookup?.get(`${spriteId}_0`);
+  const varKey = data
+    ? data.game?.is_stackable
+      ? getStackableVariantKey(count)
+      : resolveVariantKey(data, tx, ty, animClock)
+    : "0";
+
+  let lookup =
+    assets.mapAtlasLookup?.get(`${sid}_${varKey}`) ??
+    assets.mapAtlasLookup?.get(`${sid}_0`);
+
+  // Se metadata do Firebase estiver incompleta para um item/variant,
+  // procura qualquer variante disponível no atlas local para evitar "buracos".
+  if (!lookup && assets.mapAtlasLookup) {
+    const cached = _anyVariantLookupCache.get(sid);
+    if (cached !== undefined) {
+      lookup = cached || null;
+    } else {
+      let found = null;
+      for (const [key, value] of assets.mapAtlasLookup.entries()) {
+        if (key.startsWith(`${sid}_`)) {
+          found = value;
+          break;
+        }
+      }
+      _anyVariantLookupCache.set(sid, found || null);
+      lookup = found;
+    }
+  }
+
   if (!lookup) return;
 
   // Usa mapAtlasesById (Map<atlas_index, atlas>) para lookup robusto
@@ -658,8 +682,8 @@ function _floorHasTilesNearPlayer(map, z, camera, activeZ, cols, rows, radius) {
   const cx = Math.floor(camera.x + cols / 2);
   const cy = Math.floor(camera.y + rows / 2);
   const offsetSqm = _getIsoOffsetSqm(z, activeZ);
-  const baseX = cx - offsetSqm;
-  const baseY = cy - offsetSqm;
+  const baseX = cx + offsetSqm;
+  const baseY = cy + offsetSqm;
 
   for (let dy = -radius; dy <= radius; dy++) {
     for (let dx = -radius; dx <= radius; dx++) {
@@ -710,10 +734,11 @@ function _calcFloorAlphas(
     }
   }
 
-  // Esconde andares acima do player (z menor) até o primeiro teto detectado.
+  // Esconde o andar detectado e todos os andares acima dele (z menor),
+  // que é o comportamento esperado ao entrar sob cobertura.
   for (const z of visibleFloors) {
     if (z >= activeZ) continue;
-    alphas.set(z, fadeFromZ !== null && z >= fadeFromZ ? 0.0 : 1.0);
+    alphas.set(z, fadeFromZ !== null && z <= fadeFromZ ? 0.0 : 1.0);
   }
   return alphas;
 }
@@ -846,14 +871,15 @@ function _renderGroundPass(opts) {
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
   const useAssets = !!assets?.mapAtlasLookup && !!nexoData;
-  const floorOffset = -_getIsoOffsetSqm(z, activeZ) * TILE_SIZE;
+  const floorOffsetSqm = _getIsoOffsetSqm(z, activeZ);
+  const floorOffset = -floorOffsetSqm * TILE_SIZE;
 
   if (floorIndex) {
     const tiles = floorIndex.get(z);
     if (!tiles) return;
 
-    const x0 = Math.floor(camera.x) - 3;
-    const y0 = Math.floor(camera.y) - 3;
+    const x0 = Math.floor(camera.x) + floorOffsetSqm - 3;
+    const y0 = Math.floor(camera.y) + floorOffsetSqm - 3;
     const x1 = x0 + cols + 6;
     const y1 = y0 + rows + 6;
 
@@ -945,14 +971,15 @@ function _renderMainPass(opts) {
 
   const nexoData = _nexoDataRaw ?? assets?.mapData ?? null;
   const useAssets = !!assets?.mapAtlasLookup && !!nexoData;
-  const floorOffset = -_getIsoOffsetSqm(z, activeZ) * TILE_SIZE;
+  const floorOffsetSqm = _getIsoOffsetSqm(z, activeZ);
+  const floorOffset = -floorOffsetSqm * TILE_SIZE;
 
   if (floorIndex) {
     const tiles = floorIndex.get(z);
     if (!tiles) return;
 
-    const x0 = Math.floor(camera.x) - 3;
-    const y0 = Math.floor(camera.y) - 3;
+    const x0 = Math.floor(camera.x) + floorOffsetSqm - 3;
+    const y0 = Math.floor(camera.y) + floorOffsetSqm - 3;
     const x1 = x0 + cols + 6;
     const y1 = y0 + rows + 6;
 

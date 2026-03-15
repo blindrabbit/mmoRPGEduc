@@ -365,6 +365,7 @@ export class Initializer {
           assets: ws.assetsMgr,
           anim: ws.anim,
           floorIndex: ws.floorIndex,
+          roofFadeRadius: this.config?.WORLDENGINE?.roofFadeRadius ?? 0,
           clearColor: null, // transparente: andares inferiores aparecem através de tiles vazios
           extraEntities: { ...getMonsters(), ...getPlayers() },
           renderOptions: {
