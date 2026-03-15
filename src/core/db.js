@@ -106,6 +106,7 @@ export const PATHS = {
   field: (id) => safePath("world_fields", id),
   tiles: "world_tiles",
   tilesData: "world_tiles_data",
+  worldItems: "world_items",
   worldState: "world_state",
   account: (userOrUuid) =>
     `accounts/${userOrUuid.includes("@") ? encodeUser(userOrUuid) : userOrUuid}`,
@@ -593,6 +594,54 @@ export const getMapData = () => dbGet(PATHS.tilesData);
 export const setPlayerData = (id, data) =>
   dbSet(PATHS.playerData(id), makePlayer({ id, ...(data ?? {}) }));
 export const setMap = (data) => dbSet(PATHS.tiles, data);
+
+// ---------------------------------------------------------------------------
+// MAP CHUNK UTILITIES
+// Armazena o mapa como world_tiles/{z}/{cx},{cy} → { "x,y": { "layer": [...] } }
+// Permite carregamento por viewport sem buscar o mapa inteiro.
+// ---------------------------------------------------------------------------
+export const TILE_CHUNK_SIZE = 16;
+
+/**
+ * Converte o mapa flat (map_compacto.json) para o formato de chunks.
+ * @param {Object} flatMap - { "x,y,z": { "layer": [...] } }
+ * @param {number} [chunkSize]
+ * @returns {Object} - { "z/cx,cy": { "x,y": { "layer": [...] } } }
+ */
+export function flatMapToChunks(flatMap, chunkSize = TILE_CHUNK_SIZE) {
+  const chunks = {};
+  for (const [coord, layers] of Object.entries(flatMap ?? {})) {
+    const [x, y, z] = coord.split(",").map(Number);
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
+      continue;
+    const cx = Math.floor(x / chunkSize);
+    const cy = Math.floor(y / chunkSize);
+    const chunkKey = `${z}/${cx},${cy}`;
+    if (!chunks[chunkKey]) chunks[chunkKey] = {};
+    chunks[chunkKey][`${x},${y}`] = layers;
+  }
+  return chunks;
+}
+
+/**
+ * Faz upload do mapa para Firebase em chunks.
+ * @param {Object} flatMap - formato flat do map_compacto.json
+ * @param {function} [onProgress] - callback(done, total)
+ */
+export async function setMapChunks(flatMap, onProgress) {
+  const chunks = flatMapToChunks(flatMap);
+  const entries = Object.entries(chunks);
+  const BATCH = 20;
+  for (let i = 0; i < entries.length; i += BATCH) {
+    const batch = entries.slice(i, i + BATCH);
+    const update = {};
+    for (const [chunkKey, chunkData] of batch) {
+      update[`${PATHS.tiles}/${chunkKey}`] = chunkData;
+    }
+    await _dbUpdateClient(update);
+    onProgress?.(Math.min(i + BATCH, entries.length), entries.length);
+  }
+}
 export const setMapData = (data) => dbSet(PATHS.tilesData, data);
 export const setWorldState = (data) => dbSet(PATHS.worldState, data);
 export const getWorldState = () => dbGet(PATHS.worldState);
@@ -683,6 +732,7 @@ export const clearWorldForReload = () =>
   dbUpdate({
     [PATHS.tiles]: null,
     [PATHS.tilesData]: null,
+    [PATHS.worldItems]: null,
     [PATHS.monsterTemplates]: null,
     [PATHS.monsters]: null,
     [PATHS.effects]: null,

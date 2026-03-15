@@ -17,7 +17,7 @@
 // Dependências: db.js, schema.js, events.js, worldStore.js, progressionSystem.js
 // =============================================================================
 
-import { batchWrite, dbGet, dbRemove, PATHS } from "../../core/db.js";
+import { batchWrite, dbGet, dbRemove, PATHS, TILE_CHUNK_SIZE } from "../../core/db.js";
 import { RuntimeConfig } from "../../core/runtimeConfig.js";
 import { makeItem, validateItem, ITEM_SCHEMA } from "../../core/schema.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
@@ -31,7 +31,8 @@ import { isTileBlockedByWall } from "../../core/collision.js";
 
 export const ITEM_CONFIG = Object.freeze({
   // Distância máxima para pegar item do chão (em tiles)
-  pickupRange: 2,
+  // 1 = apenas os 8 SQMs ao redor + SQM do próprio player (Chebyshev ≤ 1)
+  pickupRange: 1,
 
   // Distância máxima para arremessar/largar item no chão
   dropRange: 15,
@@ -128,17 +129,21 @@ function _canBypassItemRestrictions(playerId, player) {
 }
 
 async function _isBlockedByWallAt(x, y, z) {
-  const mapTiles = await dbGet(PATHS.tiles);
+  // Busca apenas o chunk relevante (evita baixar o mapa inteiro)
+  const cx = Math.floor(x / TILE_CHUNK_SIZE);
+  const cy = Math.floor(y / TILE_CHUNK_SIZE);
+  const chunkData = await dbGet(`${PATHS.tiles}/${z}/${cx},${cy}`);
   const mapData = await dbGet(PATHS.tilesData);
-  const hasTilesSnapshot =
-    mapTiles &&
-    typeof mapTiles === "object" &&
-    Object.keys(mapTiles).length > 0;
-  const hasTilesMetadata =
-    mapData && typeof mapData === "object" && Object.keys(mapData).length > 0;
-  if (!hasTilesSnapshot || !hasTilesMetadata) return false;
 
-  return isTileBlockedByWall(x, y, z, mapTiles ?? {}, mapData ?? {});
+  if (!chunkData || typeof chunkData !== "object") return false;
+  if (!mapData || typeof mapData !== "object") return false;
+
+  // Converte o chunk para o formato flat esperado por isTileBlockedByWall
+  const flatTiles = {};
+  for (const [xy, layers] of Object.entries(chunkData)) {
+    flatTiles[`${xy},${z}`] = layers;
+  }
+  return isTileBlockedByWall(x, y, z, flatTiles, mapData);
 }
 
 function _normalizeInventory(raw) {
@@ -320,12 +325,31 @@ export async function pickUpItem(playerId, worldItemId) {
   const { valid, errors } = validateItem(inventoryItem, "inventory");
   if (!valid) return { success: false, error: errors.join("; ") };
 
-  const updates = {};
   const existingAtSlot = inventory?.[slotIndex] ?? null;
   const isMapOrigin = _isMapOriginWorldItem(worldItem);
   const mapClaimId = isMapOrigin
     ? _buildMapClaimIdFromWorldItem(worldItem)
     : null;
+
+  // Guard: re-verifica estado actual do slot antes de escrever.
+  // Previne sobrescrita quando worldEngine escreveu no slot entre o dbGet
+  // de _getAuthoritativeInventory e este batchWrite.
+  const isStackMerge =
+    existingAtSlot &&
+    _sameItemForStack(existingAtSlot, inventoryItem) &&
+    inventoryItem.stackable;
+  const currentAtSlotRaw = await dbGet(P.inventorySlot(playerId, slotIndex));
+  if (isStackMerge) {
+    if (!currentAtSlotRaw || !_sameItemForStack(currentAtSlotRaw, inventoryItem)) {
+      return { success: false, error: "Slot modificado durante a operação. Tente novamente." };
+    }
+  } else {
+    if (currentAtSlotRaw && typeof currentAtSlotRaw === "object") {
+      return { success: false, error: "Slot ocupado. Tente novamente." };
+    }
+  }
+
+  const updates = {};
 
   if (
     existingAtSlot &&

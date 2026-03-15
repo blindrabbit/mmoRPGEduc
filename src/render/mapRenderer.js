@@ -677,6 +677,11 @@ function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
     alphas.set(dz, 1.0);
   }
 
+  // Verifica cobertura usando raio estrito (1 tile) para não esconder andares
+  // visíveis do lado de fora de construções. O roofFadeRadius controla apenas
+  // se o sistema de fade está ativo, mas o raio de detecção é sempre 1.
+  const checkRadius = roofFadeRadius > 0 ? 1 : 0;
+
   let fadeFromDz = null;
   if (roofFadeRadius > 0) {
     for (let dz = -1; dz >= -FLOOR_RANGE; dz--) {
@@ -689,7 +694,7 @@ function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
           activeZ,
           cols,
           rows,
-          roofFadeRadius,
+          checkRadius,
         )
       ) {
         fadeFromDz = dz;
@@ -698,6 +703,9 @@ function _calcFloorAlphas(map, camera, activeZ, cols, rows, roofFadeRadius) {
     }
   }
 
+  // Esconde todos os andares a partir do detectado até o mais alto (dz crescente
+  // em valor absoluto = andar mais alto). dz >= fadeFromDz significa "entre o
+  // player e o teto detectado", que é o que deve ser ocultado.
   for (let dz = -1; dz >= -FLOOR_RANGE; dz--) {
     alphas.set(dz, fadeFromDz !== null && dz >= fadeFromDz ? 0.0 : 1.0);
   }
@@ -732,6 +740,7 @@ export function renderMap(opts) {
     rows = WORLD_ENGINE.canvasRows,
     roofFadeRadius = 0,
     clearCanvas = true,
+    clearColor = "#111", // null = transparente (sem fillRect)
     skipGroundPass = false,
     zPredicate = null,
     spritePredicate = null,
@@ -739,8 +748,10 @@ export function renderMap(opts) {
 
   if (clearCanvas) {
     ctx.clearRect(0, 0, canvasW, canvasH);
-    ctx.fillStyle = "#111";
-    ctx.fillRect(0, 0, canvasW, canvasH);
+    if (clearColor) {
+      ctx.fillStyle = clearColor;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    }
     _floorAlphaCache = null;
     _floorAlphaCacheKey = "";
   }

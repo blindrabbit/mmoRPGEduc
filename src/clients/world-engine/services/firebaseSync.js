@@ -3,7 +3,7 @@
 // Usa db.js como única camada de acesso ao Firebase
 // ═══════════════════════════════════════════════════════════════
 import {
-  setMap,
+  setMapChunks,
   setMapData,
   setMonsterTemplates,
   setEntitySchemas,
@@ -82,9 +82,15 @@ export class FirebaseSync {
 
   // ── Recarregar Mundo ────────────────────────────────────────
   async _reloadWorld(statusEl) {
-    const { map, mapData } = this.worldState;
+    // _localMap = mapa carregado do JSON local (fonte de verdade)
+    // map = mapa vivo do Firebase via MapChunkSubscriber (não usar como fonte)
+    const localMap = this.worldState._localMap ?? this.worldState.map;
 
-    if (!map || !mapData) {
+    // Fonte de verdade para tilesData: map_data.json local (via assets manager)
+    // worldState.mapData vem do Firebase → circular, não usar
+    const mapData = this.assets?.mapData ?? this.worldState.mapData;
+
+    if (!localMap || !mapData) {
       this._setStatus(
         statusEl,
         "Erro: mapa não carregado na memória.",
@@ -93,8 +99,9 @@ export class FirebaseSync {
       return;
     }
 
-    const tilesCount = Object.keys(map).length;
+    const tilesCount = Object.keys(localMap).length;
     const mapDataCount = Object.keys(mapData).length;
+    const map = localMap;
     const reloadId = Date.now();
 
     this._setStatus(statusEl, "Iniciando recarga...");
@@ -108,8 +115,13 @@ export class FirebaseSync {
       });
       await clearWorldForReload();
 
-      this._setStatus(statusEl, `Enviando ${tilesCount} tiles...`);
-      await setMap(map);
+      this._setStatus(statusEl, `Enviando ${tilesCount} tiles em chunks...`);
+      await setMapChunks(map, (done, total) => {
+        this._setStatus(
+          statusEl,
+          `Enviando chunks: ${done}/${total}...`,
+        );
+      });
 
       this._setStatus(statusEl, `Enviando ${mapDataCount} metadados...`);
       await setMapData(mapData);

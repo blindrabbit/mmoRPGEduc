@@ -134,6 +134,46 @@ export class ItemDataService {
   }
 
   /**
+   * Retorna a chave de variante OTClient para uma quantidade de item stackable.
+   * Mapeamento idêntico ao do mapRenderer (spec OTClient):
+   *   0-1 → "0", 2 → "1", 3 → "2", 4-9 → "3",
+   *   10-24 → "4", 25-49 → "5", 50-99 → "6", 100+ → "7"
+   *
+   * @param {number} qty
+   * @returns {string} chave de variante ("0"–"7")
+   */
+  static getStackableVariantKey(qty) {
+    const q = Math.max(0, Math.floor(Number(qty) || 0));
+    if (q <= 1) return "0";
+    if (q === 2) return "1";
+    if (q === 3) return "2";
+    if (q <= 9) return "3";
+    if (q <= 24) return "4";
+    if (q <= 49) return "5";
+    if (q <= 99) return "6";
+    return "7";
+  }
+
+  /**
+   * Retorna a chave de variante de sprite adequada para a quantidade informada.
+   * Usa mapeamento OTClient (idêntico ao mapRenderer) para garantir que o sprite
+   * no inventário seja o mesmo exibido no mapa.
+   *
+   * Retorna "0" se o item não for stackable ou tiver apenas uma variante.
+   *
+   * @param {number|string} tileId
+   * @param {number} qty
+   * @returns {string} chave de variante ("0"–"7")
+   */
+  getVariantForQuantity(tileId, qty) {
+    const entry = this._get(tileId);
+    if (!entry?.variants) return "0";
+    const count = Object.keys(entry.variants).length;
+    if (count <= 1) return "0";
+    return ItemDataService.getStackableVariantKey(qty);
+  }
+
+  /**
    * Retorna o nome canônico do slot de equipamento (ex: 'weapon', 'ring')
    * a partir do número em flags_raw.clothes.slot, ou null se não for equipamento.
    * @param {number|string} tileId

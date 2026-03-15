@@ -242,7 +242,7 @@ export const WORLD_ENGINE = {
 // RPG ENGINE — cliente do jogador
 // ───────────────────────────────────────────────────────────────────────────
 export const RPG_ENGINE = {
-  canvasCols: 25, // SQMs visíveis (padrão Tibia)
+  canvasCols: 30, // SQMs visíveis (padrão Tibia)
   canvasRows: 20,
   roofFadeRadius: 3, // raio do fade de teto
   stepMs: 250, // ms entre passos do personagem

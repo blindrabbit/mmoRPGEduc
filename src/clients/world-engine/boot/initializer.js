@@ -29,13 +29,16 @@ import {
   dbGet,
   watchPlayerData,
   PATHS,
+  flatMapToChunks,
+  setMapChunks,
 } from "../../../core/db.js";
+import { MapChunkSubscriber } from "../../../core/MapChunkSubscriber.js";
 import { initItemDataService } from "../../../gameplay/items/ItemDataService.js";
 import { renderWorld } from "../../../render/worldRenderer.js";
 import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
-import { TILE_SIZE } from "../../../core/config.js";
+import { TILE_SIZE, FLOOR_RANGE } from "../../../core/config.js";
 import { createAnimationClock } from "../../../core/animationClock.js";
 
 export class Initializer {
@@ -120,15 +123,17 @@ export class Initializer {
   }
 
   async loadMapAssets() {
+    // [1/4] Mapa local (fonte de verdade para upload/recarga)
     this.logger.info("[1/4] map_compacto.json");
     const mapRes = await fetch(NEW_ASSETS.mapFile);
     if (!mapRes.ok)
       throw new Error(`HTTP ${mapRes.status} — ${NEW_ASSETS.mapFile}`);
-    this.worldState.map = await mapRes.json();
+    this.worldState._localMap = await mapRes.json();
     this.logger.ok(
-      `Mapa carregado: ${Object.keys(this.worldState.map).length} tiles`,
+      `Mapa local: ${Object.keys(this.worldState._localMap).length} tiles`,
     );
 
+    // [2/4] tilesData do Firebase (dados de jogo: walkable, pickup, etc.)
     this.logger.info("[2/4] tilesData (Firebase)");
     const remoteTilesData = await dbGet(PATHS.tilesData);
     if (!remoteTilesData || typeof remoteTilesData !== "object") {
@@ -136,43 +141,71 @@ export class Initializer {
     }
     this.worldState.mapData = remoteTilesData;
     this.logger.ok(
-      `Metadata carregada: ${Object.keys(this.worldState.mapData).length} itens`,
+      `Metadata: ${Object.keys(this.worldState.mapData).length} itens`,
     );
 
+    // [3/4] Atlas segmentados + map_data.json (sprites — carregamento local)
     this.logger.info("[3/4] Atlas segmentados");
     const atlasLoaded = await this.worldState.assetsMgr.loadMapAssets?.(
       NEW_ASSETS.basePath,
     );
     if (!atlasLoaded) throw new Error("Falha ao carregar atlas de mapa");
     this.logger.ok(
-      `Atlas carregados: ${this.worldState.assetsMgr.mapAtlases?.length ?? 0} atlas`,
+      `Atlas: ${this.worldState.assetsMgr.mapAtlases?.length ?? 0} atlas`,
     );
 
-    this.logger.info("Construindo floorIndex...");
-    this.worldState.floorIndex = buildFloorIndex(this.worldState.map);
-    this.logger.ok(`floorIndex: ${this.worldState.floorIndex.size} andares`);
+    // [3b] MapChunkSubscriber — renderiza mapa diretamente do Firebase por viewport
+    this.logger.info("Iniciando MapChunkSubscriber (Firebase)...");
+    const hudTiles = document.getElementById("hud-tiles");
+    const subscriber = new MapChunkSubscriber({
+      onFloorIndexUpdate: (fi) => {
+        this.worldState.floorIndex = fi;
+        if (hudTiles)
+          hudTiles.innerText = Object.keys(this.worldState.map).length;
+      },
+    });
+    // ws.map agora é a referência viva do subscriber (mutada in-place)
+    this.worldState.map = subscriber.map;
+    this.worldState._chunkSubscriber = subscriber;
 
-    // Centralizar câmera
-    const firstKey = Object.keys(this.worldState.map)[0];
-    if (firstKey) {
-      const [fx, fy] = firstKey.split(",").map(Number);
-      const { centerCamera } = await import("../../../render/mapRenderer.js");
-      this.worldState.camera = centerCamera(
-        { x: fx, y: fy },
-        this.canvasSetup.cols,
-        this.canvasSetup.rows,
-      );
-      this.logger.ok(
-        `Câmera centralizada: ${this.worldState.camera.x},${this.worldState.camera.y}`,
-      );
+    // Posição inicial: spawn do config ou primeiro tile do mapa local
+    const localKeys = Object.keys(this.worldState._localMap);
+    const firstParts = (localKeys[0] ?? "100,100,7").split(",").map(Number);
+    const spawnX = this.config?.spawn?.x ?? firstParts[0] ?? 100;
+    const spawnY = this.config?.spawn?.y ?? firstParts[1] ?? 100;
+    const spawnZ = this.config?.spawn?.z ?? firstParts[2] ?? 7;
+    const { cols, rows } = this.canvasSetup;
+
+    const _initFloors = [];
+    for (let _dz = -FLOOR_RANGE; _dz <= FLOOR_RANGE; _dz++) _initFloors.push(spawnZ + _dz);
+    subscriber.update(spawnX, spawnY, _initFloors, cols, rows);
+
+    // Centralizar câmera usando posição de spawn (mapa Firebase ainda carregando)
+    const { centerCamera } = await import("../../../render/mapRenderer.js");
+    this.worldState.camera = centerCamera(
+      { x: spawnX, y: spawnY },
+      cols,
+      rows,
+    );
+    this.logger.ok(
+      `MapChunkSubscriber: spawn=(${spawnX},${spawnY},${spawnZ}), câmera centralizada`,
+    );
+
+    // Bootstrap: se Firebase não tem chunks, sobe o mapa local automaticamente
+    const existingChunks = await dbGet(PATHS.tiles);
+    if (!existingChunks || typeof existingChunks !== "object" || Object.keys(existingChunks).length === 0) {
+      this.logger.info("Firebase vazio — fazendo bootstrap do mapa local...");
+      await setMapChunks(this.worldState._localMap, (done, total) => {
+        this.logger.info(`Bootstrap: ${done}/${total} chunks`);
+      });
+      this.logger.ok("Bootstrap concluído.");
     }
 
-    // Atualizar HUD
-    document.getElementById("hud-tiles").innerText = Object.keys(
-      this.worldState.map,
-    ).length;
+    // floorIndex inicial (vazio até os chunks do Firebase chegarem)
+    this.worldState.floorIndex = this.worldState.floorIndex ?? new Map();
+    if (hudTiles) hudTiles.innerText = "…";
 
-    // 4/4. Carregar sprites legados (outfits/monstros)
+    // [4/4] Sprites legados (outfits/monstros)
     this.logger.info("[4/4] sprites...");
     const { loadAllSprites } = await import("../../../render/assetLoader.js");
     const totalPacks = await loadAllSprites(this.worldState.assetsMgr);
@@ -324,6 +357,10 @@ export class Initializer {
     const MAX_CATCHUP_STEPS = 4;
 
     let accumulatorMs = 0;
+    // Rastreia última posição onde os chunks foram atualizados
+    let _lastChunkCamX = -Infinity;
+    let _lastChunkCamY = -Infinity;
+    let _lastChunkZ = -1;
 
     const tick = (ts) => {
       const frameTime = animationClock.tick(ts);
@@ -360,6 +397,7 @@ export class Initializer {
           assets: ws.assetsMgr,
           anim: ws.anim,
           floorIndex: ws.floorIndex,
+          clearColor: null, // transparente: andares inferiores aparecem através de tiles vazios
           extraEntities: { ...getMonsters(), ...getPlayers() },
           renderOptions: {
             showHP: true,
@@ -372,6 +410,28 @@ export class Initializer {
             topDecorBeforeEntities: false,
           },
         });
+
+        // Atualiza chunks quando a câmera move meio chunk ou troca de andar
+        const sub = ws._chunkSubscriber;
+        if (sub) {
+          const camX = ws.camera.x;
+          const camY = ws.camera.y;
+          const z = ws.activeZ;
+          if (
+            Math.abs(camX - _lastChunkCamX) >= sub.chunkSize / 2 ||
+            Math.abs(camY - _lastChunkCamY) >= sub.chunkSize / 2 ||
+            z !== _lastChunkZ
+          ) {
+            _lastChunkCamX = camX;
+            _lastChunkCamY = camY;
+            _lastChunkZ = z;
+            // Carrega andar ativo + andares adjacentes para ver pisos inferiores
+            // através de áreas sem tiles e edifícios acima
+            const _floors = [];
+            for (let _dz = -FLOOR_RANGE; _dz <= FLOOR_RANGE; _dz++) _floors.push(z + _dz);
+            sub.update(camX, camY, _floors, cs.cols, cs.rows);
+          }
+        }
       }
 
       this._rafId = requestAnimationFrame(tick);
@@ -809,7 +869,8 @@ export class Initializer {
         const tileId = itemData?.tileId ?? itemData?.id;
         if (tileId == null) return null;
 
-        const sprite = ws.assetsMgr.getMapSprite(tileId);
+        const variantKey = itemData?._variantKey ?? "0";
+        const sprite = ws.assetsMgr.getMapSprite(tileId, variantKey);
         if (!sprite?.sheet) return null;
 
         const cvs = document.createElement("canvas");

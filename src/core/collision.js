@@ -19,14 +19,38 @@ const IMPASSABLE_COST_THRESHOLD = 500;
 
 // ── Helpers por item ──────────────────────────────────────────
 
+/**
+ * Retorna true/false/null para walkability de um item.
+ *   true  = confirma que o tile é walkable (tile de chão)
+ *   false = bloqueia o tile (parede, objeto sólido)
+ *   null  = sem informação (ignorar na decisão)
+ *
+ * Suporta formato novo (game.is_walkable) e antigo (flags_raw.bank.waypoints).
+ */
+function _itemWalkable(meta) {
+  if (!meta) return null;
+
+  // Formato novo
+  if (meta.game) {
+    if (meta.game.is_walkable === false) return false;
+    if (meta.game.is_walkable === true) return true;
+  }
+
+  // Fallback formato antigo: unreadable = bloqueante
+  if (meta?.flags_raw?.unreadable === true) return false;
+
+  // Fallback formato antigo: bank.waypoints > 0 = tile de chão walkable
+  const waypoints = meta?.flags_raw?.bank?.waypoints;
+  if (typeof waypoints === "number" && waypoints > 0) return true;
+
+  return null;
+}
+
 function _itemBlocksMovement(meta) {
   if (!meta) return false;
   if (meta.game) {
-    // is_walkable:false → objeto fisicamente bloqueante (parede, árvore, caixa...)
-    // movement_cost:0  → não é tile de chão (objeto de mapa), portanto bloqueia passagem
     return meta.game.is_walkable === false || meta.game.movement_cost === 0;
   }
-  // Fallback formato antigo
   if (meta?.flags_raw?.unreadable === true) return true;
   return false;
 }
@@ -92,17 +116,22 @@ export function isTileWalkable(x, y, z, worldTiles, nexoData) {
   if (!nexoData) return false;
 
   const ids = _extractItemIds(raw);
+  if (ids.length === 0) return false;
+
   let hasWalkableTrue = false;
+  let hasAnyKnownItem = false;
 
   for (const itemId of ids) {
     const meta = nexoData[String(itemId)];
-    const walkable = meta?.game?.is_walkable;
+    const walkable = _itemWalkable(meta);
 
-    if (walkable === false) return false;
-    if (walkable === true) hasWalkableTrue = true;
+    if (walkable === false) return false;   // bloqueio explícito → para imediatamente
+    if (walkable === true) hasWalkableTrue = true;  // ao menos um confirma ground
+    if (meta != null) hasAnyKnownItem = true;
   }
 
-  return hasWalkableTrue;
+  // Se nenhum item tem metadados no nexoData, não bloquear o movimento
+  return hasWalkableTrue || !hasAnyKnownItem;
 }
 
 /**
@@ -146,8 +175,7 @@ export function isTileBlockedByWall(x, y, z, worldTiles, nexoData) {
   const raw = worldTiles?.[`${x},${y},${z}`];
   if (!raw || !nexoData) return false; // sem dados = não é parede
   for (const itemId of _extractItemIds(raw)) {
-    const meta = nexoData[String(itemId)];
-    if (meta?.game?.is_walkable === false) return true;
+    if (_itemWalkable(nexoData[String(itemId)]) === false) return true;
   }
   return false;
 }

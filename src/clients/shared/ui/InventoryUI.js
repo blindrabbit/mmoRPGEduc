@@ -93,6 +93,7 @@ export class InventoryUI {
       createGhostElement,
     });
 
+    this._itemDataService = itemDataService;
     this._createItemIconElement = createItemIconElement;
     this._getItemDescription = getItemDescription;
 
@@ -298,19 +299,29 @@ export class InventoryUI {
       if (item.rarity)
         el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? "";
 
+      // Resolve variante visual baseada na quantidade (ex: moedas mudam de sprite)
+      // Usa mapeamento OTClient para coincidir com o sprite exibido no mapa.
+      const qty = item.quantity ?? 1;
+      const variantKey =
+        item.stackable && this._itemDataService && item.tileId != null
+          ? this._itemDataService.getVariantForQuantity(item.tileId, qty)
+          : "0";
+      const displayItem = variantKey !== "0" ? { ...item, _variantKey: variantKey } : item;
+
       const icon = document.createElement("div");
-      const builtIcon = this._buildItemIcon(item);
+      const builtIcon = this._buildItemIcon(displayItem);
       if (builtIcon) {
         builtIcon.setAttribute("aria-label", item.name ?? "item");
         el.appendChild(builtIcon);
       } else {
         icon.className = "item-icon";
-        if (item.spriteId != null) icon.dataset.spriteId = item.spriteId;
+        if (displayItem.spriteId != null) icon.dataset.spriteId = displayItem.spriteId;
+        if (variantKey !== "0") icon.dataset.variantKey = variantKey;
         icon.setAttribute("aria-label", item.name);
         el.appendChild(icon);
       }
 
-      if (item.stackable && (item.quantity ?? 1) > 1) {
+      if (item.stackable && qty > 1) {
         const qty = document.createElement("span");
         qty.className = "item-qty";
         qty.textContent = item.quantity;

@@ -433,6 +433,7 @@ export function renderWorld({
   anim,
   floorIndex = null,
   roofFadeRadius = 0,
+  clearColor = "#111", // null = fundo transparente (WorldEngine)
   extraEntities = {},
   renderOptions = { showHP: true, showName: true, renderMode: "high" },
 }) {
@@ -495,6 +496,7 @@ export function renderWorld({
     cols,
     rows,
     roofFadeRadius,
+    clearColor,
     forceObstacleOverlay: true,
     assets, // ✅ NOVO: passar AssetManager para getMapSprite()
   };

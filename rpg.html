@@ -1336,6 +1336,7 @@
         TILE_SIZE,
         WORLD_SETTINGS,
         GROUND_Z,
+        FLOOR_RANGE,
       } from "./src/core/config.js";
       import { initEventLog, pushLog } from "./src/gameplay/eventLog.js";
       import {
@@ -1384,6 +1385,7 @@
       } from "./src/clients/shared/ui/dragPreviewMessages.js";
       import { DragDropManager } from "./src/clients/shared/input/DragDropManager.js";
       import { initItemDataService } from "./src/gameplay/items/ItemDataService.js";
+      import { MapChunkSubscriber } from "./src/core/MapChunkSubscriber.js";
       import {
         calculateCombatResult,
         calculateNewHp,
@@ -1572,8 +1574,12 @@
           slot.dataset.itemSlot = String(i);
 
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
+          const qty = Number(item.quantity ?? 1);
+          const variantKey = item.stackable
+            ? itemDataService?.getVariantForQuantity(tileId, qty) ?? "0"
+            : "0";
           const sprite = Number.isFinite(tileId)
-            ? assets.getMapSprite(tileId)
+            ? assets.getMapSprite(tileId, variantKey)
             : null;
           if (sprite?.sheet) {
             const cvs = document.createElement("canvas");
@@ -1592,8 +1598,6 @@
             fallback.textContent = "?";
             slot.appendChild(fallback);
           }
-
-          const qty = Number(item.quantity ?? 1);
           if (qty > 1) {
             const badge = document.createElement("span");
             badge.textContent = String(qty);
@@ -1609,6 +1613,64 @@
 
           slot.title = buildDesc(item);
         }
+      }
+
+      function _renderEquipmentGrid(equipment = {}) {
+        const slots = document.querySelectorAll("#equip-grid .equip-slot");
+        slots.forEach((slot) => {
+          const equipSlot = slot.dataset.dropEquipSlot;
+          if (!equipSlot) return;
+          const item = equipment[equipSlot] ?? null;
+
+          // Remove item anterior (mantém apenas o label de texto)
+          slot.querySelectorAll("canvas, .item-qty").forEach((el) => el.remove());
+          delete slot.dataset.itemSource;
+          delete slot.dataset.itemEquipSlot;
+
+          if (!item) {
+            slot.style.borderColor = "";
+            return;
+          }
+
+          slot.dataset.itemSource = "equipment";
+          slot.dataset.itemEquipSlot = equipSlot;
+
+          const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
+          const sprite = Number.isFinite(tileId) ? assets.getMapSprite(tileId) : null;
+          if (sprite?.sheet) {
+            const cvs = document.createElement("canvas");
+            cvs.width = TILE_SIZE;
+            cvs.height = TILE_SIZE;
+            cvs.style.width = `${TILE_SIZE}px`;
+            cvs.style.height = `${TILE_SIZE}px`;
+            cvs.style.imageRendering = "pixelated";
+            const ctx = cvs.getContext("2d");
+            ctx.imageSmoothingEnabled = false;
+            const srcW = Math.max(1, sprite.w);
+            const srcH = Math.max(1, sprite.h);
+            const scale = Math.min(TILE_SIZE / srcW, TILE_SIZE / srcH);
+            const dw = Math.max(1, Math.floor(srcW * scale));
+            const dh = Math.max(1, Math.floor(srcH * scale));
+            ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
+            ctx.drawImage(
+              sprite.sheet, sprite.x, sprite.y, srcW, srcH,
+              Math.floor((TILE_SIZE - dw) / 2), Math.floor((TILE_SIZE - dh) / 2),
+              dw, dh,
+            );
+            // Limpa o texto de label do slot antes de adicionar o canvas
+            slot.replaceChildren(cvs);
+          }
+
+          if (item.rarity) {
+            const RARITY_COLORS = {
+              common: "#888", uncommon: "#4c4", rare: "#48f", epic: "#a4f", legendary: "#f84",
+            };
+            slot.style.borderColor = RARITY_COLORS[item.rarity] ?? "";
+          } else {
+            slot.style.borderColor = "";
+          }
+          slot.title = item.name ?? equipSlot;
+        });
       }
 
       function _removeTileFromLayer(coord, layerKey, predicate) {
@@ -1855,6 +1917,9 @@
       let mapData = {}; // map_data.json — metadados dos sprites (is_walkable, etc.)
       let itemDataService = null;
       let floorIndex = null;
+      let _chunkSubscriber = null;
+      // Rastreia último tile onde os chunks foram atualizados
+      let _lastChunkTileX = -Infinity, _lastChunkTileY = -Infinity, _lastChunkZ = -1;
       let cam = { x: 0, y: 0 };
       let canvasW, canvasH, cols, rows;
       let activeZ = WORLD_SETTINGS?.spawn?.z ?? GROUND_Z;
@@ -1971,6 +2036,43 @@
         _dragUiUnsubs.push(
           worldEvents.subscribe(EVENT_TYPES.ITEM_DRAG_END, () => {
             setTimeout(() => _setDragPreviewHint(""), 350);
+          }),
+        );
+
+        // Rollback: item rejeitado pelo servidor → restaura tile do mapa
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_ACTION_ROLLBACK, (evt) => {
+            const worldItemId = evt?.worldItemId;
+            if (!worldItemId?.startsWith("map_")) return;
+
+            // Extrai coord, layer e tileId do ID virtual "map_x,y,z_layer_tileId"
+            const withoutPrefix = worldItemId.slice(4);
+            const parts = withoutPrefix.split("_");
+            const sourceTileId = parseInt(parts.pop(), 10);
+            const sourceLayer = parts.pop();
+            const coord = parts.join("_");
+            if (!coord || isNaN(sourceTileId)) return;
+
+            const sourceKey = `${coord}|${sourceLayer}|${sourceTileId}`;
+
+            // Restaura tile no mapa local se ainda não foi re-adicionado
+            // (só é necessário se o tile chegou a ser removido — pre-flight rejeições
+            //  não chegam a remover o tile, então estas operações são no-ops nesses casos)
+            _removedMapSourceKeys.delete(sourceKey);
+            _claimedMapSourceKeys.delete(sourceKey);
+
+            const [tx, ty, tz] = coord.split(",").map(Number);
+            if (map && Number.isFinite(tx) && Number.isFinite(ty)) {
+              const tileCoord = `${tx},${ty},${tz}`;
+              if (!map[tileCoord]) map[tileCoord] = {};
+              if (!map[tileCoord][sourceLayer]) map[tileCoord][sourceLayer] = [];
+              const already = map[tileCoord][sourceLayer].some(
+                (t) => Number(t.id) === sourceTileId,
+              );
+              if (!already) {
+                map[tileCoord][sourceLayer].push({ id: sourceTileId });
+              }
+            }
           }),
         );
       }
@@ -2202,21 +2304,33 @@
           "info",
         );
 
-        // Mapa tiles
-        blog("Carregando mapa...", "info");
+        // Mapa via Firebase — MapChunkSubscriber carrega apenas tiles do viewport
+        blog("Iniciando mapa via Firebase (chunks)...", "info");
         try {
-          let res = await fetch("./assets/map_compacto.json");
-          if (!res.ok) res = await fetch("./assets_novo/map_compacto.json");
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          map = await res.json();
-          floorIndex = buildFloorIndex(map);
-          blog(`Mapa: ${Object.keys(map).length} tiles`, "ok");
+          const spawn = WORLD_SETTINGS?.spawn ?? {};
+          const spawnX = Number(spawn.x ?? 100);
+          const spawnY = Number(spawn.y ?? 100);
+          const spawnZ = Number(spawn.z ?? GROUND_Z);
+          _chunkSubscriber = new MapChunkSubscriber({
+            onFloorIndexUpdate: (fi) => {
+              floorIndex = fi;
+            },
+          });
+          // map aponta para a referência viva do subscriber
+          map = _chunkSubscriber.map;
+          // cols/rows ainda não definidos no boot; usa constantes do config
+          const bootCols = RPG_ENGINE.canvasCols ?? 20;
+          const bootRows = RPG_ENGINE.canvasRows ?? 15;
+          const _bootFloors = [];
+          for (let _dz = -FLOOR_RANGE; _dz <= 1; _dz++) _bootFloors.push(spawnZ + _dz);
+          _chunkSubscriber.update(spawnX, spawnY, _bootFloors, bootCols, bootRows);
+          blog(`MapChunkSubscriber iniciado em (${spawnX},${spawnY},${spawnZ})`, "ok");
         } catch (e) {
-          blog(`Falha ao carregar mapa: ${e.message}`, "err");
+          blog(`Falha ao iniciar MapChunkSubscriber: ${e.message}`, "err");
           return false;
         }
 
-        // Metadados dos sprites (colisão, walkable, etc.)
+        // Metadados dos sprites (colisão, walkable, etc.) — vem do Firebase
         blog("Carregando tilesData do Firebase...", "info");
         try {
           const remoteTilesData = await dbGet(PATHS.tilesData);
@@ -2240,9 +2354,16 @@
           blog(`Falha ao carregar tilesData do Firebase: ${e.message}`, "err");
         }
 
-        // Assets
+        // Assets: atlas segmentados (sprites locais) + sprites legados
         blog("Carregando assets...", "info");
         try {
+          // Atlas novo (map_data.json local — coordenadas de sprites apenas)
+          await assets.loadMapAssets?.("./assets/");
+          blog(
+            `Atlas: ${assets.mapAtlases?.length ?? 0} atlas carregados`,
+            "ok",
+          );
+          // Sprites legados (outfits, monstros)
           await loadAllSprites(assets, "./assets/");
           const hasOutfits = assets.hasOutfitsAtlas();
           blog(
@@ -2310,7 +2431,9 @@
         _lastPlayerTotalXp = Number(myPos.stats?.totalXp);
         if (!Number.isFinite(_lastPlayerTotalXp)) _lastPlayerTotalXp = null;
         myPos.inventory = playerData.inventory ?? {};
+        myPos.equipment = playerData.equipment ?? {};
         _renderInventoryGrid(myPos.inventory);
+        _renderEquipmentGrid(myPos.equipment);
 
         _dragDropManager?.unmount?.();
         _dragDropManager = new DragDropManager({
@@ -2321,6 +2444,47 @@
               }
               try {
                 let payload = action.payload;
+
+                // ── Checagem de alcance antes de qualquer escrita no Firebase ──
+                // pickUp e moveWorld de itens do mundo exigem Chebyshev ≤ 1
+                if (
+                  payload.itemAction === "pickUp" ||
+                  payload.itemAction === "moveWorld"
+                ) {
+                  let itemX = null;
+                  let itemY = null;
+
+                  if (payload.worldItemId?.startsWith("map_")) {
+                    // Extrai coord do ID virtual "map_x,y,z_layer_tileId"
+                    const coord = payload.worldItemId.slice(4).split("_").slice(0, -2).join("_");
+                    const [cx, cy] = coord.split(",").map(Number);
+                    itemX = cx;
+                    itemY = cy;
+                  } else if (payload.worldItemId) {
+                    const wi = _worldItemsById[payload.worldItemId];
+                    itemX = wi?.x ?? null;
+                    itemY = wi?.y ?? null;
+                  }
+
+                  if (itemX != null && itemY != null) {
+                    const dx = Math.abs(Math.round(myPos.x) - Math.round(itemX));
+                    const dy = Math.abs(Math.round(myPos.y) - Math.round(itemY));
+                    if (Math.max(dx, dy) > 1) {
+                      pushLog("rpg", "system", "Você não alcança o item.");
+                      _setDragPreviewHint("Você não alcança o item.", "invalid");
+                      // Dispara rejeição imediata para o DragDropManager fazer rollback
+                      if (payload.actionId) {
+                        worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
+                          actionId: payload.actionId,
+                          playerId: uid,
+                          itemAction: payload.itemAction,
+                          reason: "Item fora de alcance",
+                        });
+                      }
+                      return { success: false, error: "Item fora de alcance" };
+                    }
+                  }
+                }
 
                 if (
                   (payload.itemAction === "pickUp" ||
@@ -2369,6 +2533,16 @@
                   type: action.type,
                   ...payload,
                 });
+                // Confirma ação para o DragDropManager cancelar o timeout de rollback.
+                // (ACTION_CONFIRMED do servidor fica no processo do worldEngine;
+                //  aqui emitimos no worldEvents local após a escrita no Firebase.)
+                if (payload.actionId) {
+                  worldEvents.emit(EVENT_TYPES.ACTION_CONFIRMED, {
+                    actionId: payload.actionId,
+                    playerId: uid,
+                    itemAction: payload.itemAction,
+                  });
+                }
                 return { success: true };
               } catch (err) {
                 return {
@@ -2410,6 +2584,7 @@
           },
           getItemData: (source, key) => {
             if (source === "inventory") return myPos?.inventory?.[key] ?? null;
+            if (source === "equipment") return myPos?.equipment?.[key] ?? null;
             if (source === "world") {
               const bucket = _worldItemsByCoord[key];
               if (Array.isArray(bucket) && bucket.length) {
@@ -2531,12 +2706,27 @@
           myPos.x = _numOr(serverData.x, myPos.x);
           myPos.y = _numOr(serverData.y, myPos.y);
           myPos.z = _numOr(serverData.z, myPos.z);
-          myPos.inventory = serverData.inventory ?? myPos.inventory ?? {};
+          // Atualiza chunks se o player mudou de tile ou de andar
+          if (_chunkSubscriber) {
+            const tx = Math.round(myPos.x), ty = Math.round(myPos.y), tz = myPos.z;
+            if (tx !== _lastChunkTileX || ty !== _lastChunkTileY || tz !== _lastChunkZ) {
+              _lastChunkTileX = tx; _lastChunkTileY = ty; _lastChunkZ = tz;
+              // Carrega andar atual + andares acima (edifícios visíveis) + 1 abaixo
+              const _floors = [];
+              for (let _dz = -FLOOR_RANGE; _dz <= 1; _dz++) _floors.push(tz + _dz);
+              _chunkSubscriber.update(tx, ty, _floors, cols, rows);
+            }
+          }
+          // ?? {} sem fallback para myPos: Firebase retorna null quando o nó fica
+          // vazio (ex: último item dropado), e manter o valor antigo causa ghost slots.
+          myPos.inventory = serverData.inventory ?? {};
+          myPos.equipment = serverData.equipment ?? {};
           myPos.status = serverData.status ?? null;
           myPos.lastAttack = serverData.lastAttack ?? myPos.lastAttack;
           myPos[BASIC_ATTACK_CD_KEY] =
             serverData[BASIC_ATTACK_CD_KEY] ?? myPos[BASIC_ATTACK_CD_KEY];
           _renderInventoryGrid(myPos.inventory);
+          _renderEquipmentGrid(myPos.equipment);
           handleStatsChanges("players", { [uid]: myPos });
           updateRegenPlayer(myPos);
           updateSpellHUDPlayer(myPos);

@@ -594,15 +594,22 @@ async function _processAllocateStat(action, player, now) {
 // AÇÕES DE ITEM
 // ---------------------------------------------------------------------------
 async function _processItem(action, player, now) {
-  const {
-    playerId,
-    itemAction,
-    slotIndex,
-    toSlot,
-    worldItemId,
-    equipSlot,
-    quantity,
-  } = action;
+  // payload pode vir aninhado (via WorldEngineInterface: { type, payload:{...} })
+  // ou na raiz (código legado / chamadas internas diretas).
+  const src =
+    action.payload && typeof action.payload === "object"
+      ? action.payload
+      : action;
+
+  const playerId       = action.playerId ?? src.playerId;
+  const itemAction     = src.itemAction;
+  const slotIndex      = src.slotIndex;
+  const toSlot         = src.toSlot;
+  const worldItemId    = src.worldItemId;
+  const equipSlot      = src.equipSlot;
+  const quantity       = src.quantity;
+  // ID gerado pelo DragDropManager — permite emitir ACTION_CONFIRMED/REJECTED
+  const clientActionId = src.actionId ?? null;
 
   const {
     pickUpItem,
@@ -625,28 +632,28 @@ async function _processItem(action, player, now) {
         playerId,
         slotIndex,
         quantity ?? null,
-        action.toX,
-        action.toY,
-        action.toZ,
+        src.toX,
+        src.toY,
+        src.toZ,
       );
       break;
     case "moveWorld":
       result = await moveWorldItem(
         playerId,
         worldItemId,
-        action.toX,
-        action.toY,
-        action.toZ,
+        src.toX,
+        src.toY,
+        src.toZ,
       );
       break;
     case "splitWorld":
       result = await splitWorldItem(
         playerId,
         worldItemId,
-        action.splitQty ?? 1,
-        action.toX,
-        action.toY,
-        action.toZ,
+        src.splitQty ?? 1,
+        src.toX,
+        src.toY,
+        src.toZ,
       );
       break;
     case "equip":
@@ -673,6 +680,24 @@ async function _processItem(action, player, now) {
       "error",
       `[${player.name}] item/${itemAction} falhou: ${result?.error ?? "erro"}`,
     );
+  }
+
+  // Notifica o DragDropManager sobre confirmação ou rejeição da ação.
+  if (clientActionId) {
+    if (result?.success) {
+      worldEvents.emit(EVENT_TYPES.ACTION_CONFIRMED, {
+        actionId: clientActionId,
+        playerId,
+        itemAction,
+      });
+    } else {
+      worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
+        actionId: clientActionId,
+        playerId,
+        itemAction,
+        reason: result?.error ?? "erro desconhecido",
+      });
+    }
   }
 
   return result;
