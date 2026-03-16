@@ -602,117 +602,38 @@ export function renderWorld({
     return info?.renderLayer === 3;
   };
 
-  const renderUpperFloorStack = () => {
-    if (!showUpperFloors || upperVisibleFloors.length === 0) return;
+  // ── 1. Floors — isolamento explícito, back-to-front (painter's algorithm) ──
+  // Cada floor renderiza completamente (ground → borders → items) antes do próximo.
+  // getVisibleFloors() retorna em ordem decrescente: Z maior (mais fundo) primeiro.
+  //   Ex: activeZ=7 → [7, 6, 5, 4, 3, 2, 1, 0]
+  //   Z=7 renderiza primeiro (fundo do canvas), Z=0 por último (topo visual).
+  //
+  // Upper floors (z < activeZ): bloqueiam top items (coberturas de edifícios).
+  // Active floor / abaixo: layer 2 apenas flat (paredes altas tratadas nos steps 4/6.25).
+  const _floorsToRender = showUpperFloors
+    ? getVisibleFloors(activeZ)
+    : getVisibleFloors(activeZ).filter((z) => z >= activeZ);
 
-    // Renderiza andares de cima (z < activeZ) em DUAS FASES separadas.
-    // Isso resolve o conflito entre:
-    //   ✅ Bordas de Z=7 NÃO cobertas por ground de Z=6 (problema raiz)
-    //   ✅ Paredes/itens de Z=6 aparecem EM CIMA das bordas de Z=7 (order correta)
-    //
-    // FASE 1 — Ground-only, ascendente (z=0 primeiro → z=activeZ-1 último):
-    //   Ground de Z=6 é pintado ANTES das bordas dos andares base.
-    //
-    // FASE 1.5 — Re-render bordas dos andares base (groundBorder, layer 1):
-    //   Bordas ficam EM CIMA do ground dos andares acima,
-    //   mas ANTES dos itens/paredes desses andares (fase 2).
-    //
-    // FASE 2 — Main-only (borders + items), ascendente:
-    //   Paredes/itens de Z=6 rendem POR CIMA das bordas de Z=7 onde for o caso.
-    const _blockTopFromUpperFloors = (_id, _meta, info) =>
-      info?.category !== "top";
-
-    const sortedUpper = [...upperVisibleFloors].sort((a, b) => a - b); // z=0 ... z=activeZ-1
-    // O andar mais próximo do ativo (último da lista ascendente = activeZ-1) é o mais
-    // crítico: seu ground é o que mais cobre as bordas dos andares base.
-    // Estratégia: todos os andares acima exceto o último renderizam em ISOLAMENTO TOTAL
-    // (ground+main completo). Apenas o ÚLTIMO andar é dividido em três sub-fases:
-    //
-    //   FASE A – ground-only do último andar (z = activeZ-1)
-    //   FASE B – re-render das bordas dos andares base (layer 1)
-    //            → agora sobre o ground de TODOS os andares acima
-    //   FASE C – main-only do último andar
-    //            → paredes/itens de z=activeZ-1 ficam sobre as bordas re-renderizadas
-    //
-    // Isso preserva a isolação de cada floor (ground de Z=6 ainda cobre itens de Z=5)
-    // e ao mesmo tempo garante que bordas de Z=7 nunca fiquem cobertas pelo ground
-    // de nenhum andar acima.
-    const lastUpperZ = sortedUpper[sortedUpper.length - 1]; // = activeZ - 1
-
-    sortedUpper.forEach((z) => {
-      if (z !== lastUpperZ) {
-        // Andares intermediários: isolamento total (comportamento original)
-        renderMap({
-          ..._mapBase,
-          layerMin: 0,
-          layerMax: 2,
-          clearCanvas: false,
-          zPredicate: (fz) => fz === z,
-          spritePredicate: _blockTopFromUpperFloors,
-        });
-      } else {
-        // Último andar acima (z = activeZ-1): dividido em três sub-fases
-
-        // FASE A: ground-only
-        renderMap({
-          ..._mapBase,
-          layerMin: 0,
-          layerMax: 2,
-          clearCanvas: false,
-          skipMainPass: true,
-          zPredicate: (fz) => fz === z,
-        });
-
-        // FASE B: re-render bordas dos andares base (sobre o ground de todos os andares acima)
-        _floorsBase.forEach((bz) => {
-          renderMap({
-            ..._mapBase,
-            clearCanvas: false,
-            skipMainPass: true,
-            layerMin: 1,  // apenas groundBorder (render_layer 1)
-            layerMax: 1,
-            zPredicate: (fz) => fz === bz,
-          });
-        });
-
-        // FASE C: main-only (paredes/itens ficam sobre as bordas re-renderizadas)
-        renderMap({
-          ..._mapBase,
-          layerMin: 0,
-          layerMax: 2,
-          clearCanvas: false,
-          skipGroundPass: true,
-          zPredicate: (fz) => fz === z,
-          spritePredicate: _blockTopFromUpperFloors,
-        });
-      }
-    });
-  };
-
-  // ── 1. Mapa base — renderização ISOLADA por floor Z (painter's algorithm) ──
-  // Correção de vazamento: cada floor renderiza completamente (ground + items)
-  // ANTES do próximo, garantindo separação total entre Z levels.
-  // Ordem: Z mais fundo (valor alto) primeiro → Z ativo por último.
-  const _floorsBase = getVisibleFloors(activeZ).filter((z) => z >= activeZ);
-  // _floorsBase está em ordem decrescente: e.g. [7,6,5] quando activeZ=5
-
-  const _renderIsolatedFloor = (z, clearCanvas) => {
+  const _renderFloorComplete = (z, clearCanvas) => {
     renderMap({
       ..._mapBase,
       clearCanvas,
       layerMin: 0,
       layerMax: 2,
       zPredicate: (fz) => fz === z,
-      spritePredicate: drawLayer2IfFlat,
+      spritePredicate:
+        z < activeZ
+          ? (_id, _meta, info) => info?.category !== "top"
+          : drawLayer2IfFlat,
     });
   };
 
   if (perfEnabled) {
     perfStep(perf, "mapBase", () => {
-      _floorsBase.forEach((z, idx) => _renderIsolatedFloor(z, idx === 0));
+      _floorsToRender.forEach((z, idx) => _renderFloorComplete(z, idx === 0));
     });
   } else {
-    _floorsBase.forEach((z, idx) => _renderIsolatedFloor(z, idx === 0));
+    _floorsToRender.forEach((z, idx) => _renderFloorComplete(z, idx === 0));
   }
 
   // ── 2. Cadáveres ──────────────────────────────────────────────
@@ -847,19 +768,7 @@ export function renderWorld({
     }
   }
 
-  // ── 4.6 Mapa de andares acima (z < activeZ) — layers 0-2 ────
-  // Em player view, desenha ANTES das entidades para não cobrir o player.
-  // IMPORTANTE: renderizado APÓS o layer 3 do andar ativo (step 4.5) para que
-  // os andares superiores cubram corretamente os itens de topo (copas, telhados).
-  if (showUpperFloors && upperFloorsBeforeEntities) {
-    if (perfEnabled) {
-      perfStep(perf, "mapAbove", () => {
-        renderUpperFloorStack();
-      });
-    } else {
-      renderUpperFloorStack();
-    }
-  }
+  // [step 4.6 removido] — upper floors já renderizados no step 1 (isolamento explícito)
 
   // ── 5. Entidades (players, monstros) ─────────────────────────
   // REORDENADO: Agora renderiza DEPOIS do mapTall
@@ -979,17 +888,7 @@ export function renderWorld({
     }
   }
 
-  // ── 6.5 Mapa de andares acima (z < activeZ) — layers 0-2 ────
-  // Fora do player view, mantém desenho após entidades.
-  if (showUpperFloors && !upperFloorsBeforeEntities) {
-    if (perfEnabled) {
-      perfStep(perf, "mapAbove", () => {
-        renderUpperFloorStack();
-      });
-    } else {
-      renderUpperFloorStack();
-    }
-  }
+  // [step 6.5 removido] — upper floors já renderizados no step 1 (isolamento explícito)
 
   // ── 7. Textos flutuantes ─────────────────────────────────────
   if (perfEnabled) {

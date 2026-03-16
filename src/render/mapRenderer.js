@@ -1249,15 +1249,18 @@ function _renderMainPass(opts) {
         }
 
         sortable.sort((a, b) => {
+          // 1. renderLayer: ground(0) → border(1) → items(2) → top(3)
           const ar = Number(a?.renderLayer ?? 2);
           const br = Number(b?.renderLayer ?? 2);
           if (ar !== br) return ar - br;
-          const atl = Number(a?.tileLayer ?? -1);
-          const btl = Number(b?.tileLayer ?? -1);
-          if (atl !== btl) return atl - btl;
+          // 2. stackPosition (dentro do mesmo renderLayer): bottom(3) < common(5) < top(10)
           const as = Number(a?.stackPosition ?? 5);
           const bs = Number(b?.stackPosition ?? 5);
           if (as !== bs) return as - bs;
+          // 3. tileLayer: ordem de empilhamento dentro do tile
+          const atl = Number(a?.tileLayer ?? -1);
+          const btl = Number(b?.tileLayer ?? -1);
+          if (atl !== btl) return atl - btl;
           return Number(a?.spriteId ?? 0) - Number(b?.spriteId ?? 0);
         });
 
