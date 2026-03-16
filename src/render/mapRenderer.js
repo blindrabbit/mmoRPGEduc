@@ -299,9 +299,13 @@ function _getIsoOffsetSqm(z, activeZ) {
   const baseZ = Number.isFinite(Number(activeZ))
     ? Math.floor(Number(activeZ))
     : GROUND_Z;
-  // Cada andar acima (z menor) desloca 1 SQM para cima/esquerda.
-  if (z < baseZ) return baseZ - z;
-  return 0;
+  // Offset isométrico ASSINADO: activeZ - z
+  //   z < activeZ (andares acima)  → positivo → desloca UP-LEFT  (floorOffset negativo em px)
+  //   z = activeZ (andar ativo)    → 0        → sem deslocamento
+  //   z > activeZ (andares abaixo) → negativo → desloca DOWN-RIGHT (floorOffset positivo em px)
+  // Exemplos com activeZ=6:
+  //   z=5 → +1 SQM UP-LEFT  |  z=6 → 0  |  z=7 → -1 SQM → floorOffset=+32px (DOWN-RIGHT)
+  return baseZ - z;
 }
 
 function _createUpperLayerOcclusionChecker({
@@ -908,6 +912,7 @@ export function renderMap(opts) {
     clearCanvas = true,
     clearColor = "#111", // null = transparente (sem fillRect)
     skipGroundPass = false,
+    skipMainPass = false,
     layerMin = 0,
     layerMax = 3,
     zPredicate = null,
@@ -992,21 +997,23 @@ export function renderMap(opts) {
   // ═══════════════════════════════════════════════════════════
   // PASSO 2: DRAW PRINCIPAL (todos os tiles)
   // ═══════════════════════════════════════════════════════════
-  for (const z of visibleFloors) {
-    const dz = z - activeZ;
-    if (typeof zPredicate === "function" && !zPredicate(z, dz, activeZ)) {
-      continue;
-    }
+  if (!skipMainPass) {
+    for (const z of visibleFloors) {
+      const dz = z - activeZ;
+      if (typeof zPredicate === "function" && !zPredicate(z, dz, activeZ)) {
+        continue;
+      }
 
-    _renderMainPass({
-      ...opts,
-      z,
-      dz,
-      alpha: floorAlphas.get(z) ?? 1.0,
-      layerMin,
-      layerMax,
-      isOccludedByUpperFloor: occlusionChecker,
-    });
+      _renderMainPass({
+        ...opts,
+        z,
+        dz,
+        alpha: floorAlphas.get(z) ?? 1.0,
+        layerMin,
+        layerMax,
+        isOccludedByUpperFloor: occlusionChecker,
+      });
+    }
   }
 }
 
@@ -1079,21 +1086,8 @@ function _renderGroundPass(opts) {
 
           if (renderLayer < layerMin || renderLayer > layerMax) continue;
 
-          const projectedX = tx - floorOffsetSqm;
-          const projectedY = ty - floorOffsetSqm;
-          if (
-            typeof isOccludedByUpperFloor === "function" &&
-            isOccludedByUpperFloor({
-              projectedX,
-              projectedY,
-              currentZ: z,
-              renderLayer,
-            })
-          ) {
-            continue;
-          }
-
           // Apenas ground e groundBorder neste passo
+          // NUNCA ocluir ground/groundBorder: o algoritmo do pintor já cobre com andares superiores
           if (category !== "ground" && category !== "groundBorder") continue;
 
           if (useAssets) {

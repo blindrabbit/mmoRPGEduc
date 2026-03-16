@@ -23,15 +23,22 @@ export class MouseHandler {
     const px = e.clientX - rect.left;
     const py = e.clientY - rect.top;
 
+    // Ctrl+Click: força busca apenas no floor ativo (evita pegar tiles de outros Z)
+    const forceFloor = e.ctrlKey
+      ? Number(this.worldState.activeZ ?? 7)
+      : null;
+
     const picked = pickTopVisibleTileAtScreen({
       worldState: this.worldState,
       px,
       py,
       tileSize: this.tileSize,
+      forceFloor,
     });
 
-    if (picked?.tile) {
-      console.log(`[MouseHandler] tile ${picked.key}:`, picked.tile);
+    if (picked) {
+      const modeLabel = forceFloor !== null ? ` [Ctrl→Z${forceFloor}]` : "";
+      console.log(`[MouseHandler] tile ${picked.key}${modeLabel} (floorZ=${picked.floorZ}):`, picked.tile);
     }
   }
 

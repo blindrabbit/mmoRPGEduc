@@ -7,6 +7,41 @@ export const FLOOR_LIMITS = Object.freeze({
   undergroundDelta: 2,
 });
 
+// ─── isFloorVisible ───────────────────────────────────────────────────────────
+/**
+ * Verifica se um floor (tileZ) é visível da posição da câmera (cameraZ).
+ *
+ * Regra Canary / Tibia:
+ *   • Superfície (cameraZ ≤ 7): vê todos os floors 0-7
+ *   • Underground (cameraZ > 7): vê apenas ±2 do floor atual (e apenas ≥ 8)
+ *
+ * Alias legível para canSeeFloor — use este nos novos módulos.
+ *
+ * @param {number} cameraZ
+ * @param {number} tileZ
+ * @param {typeof FLOOR_LIMITS} [limits]
+ * @returns {boolean}
+ */
+export function isFloorVisible(cameraZ, tileZ, limits = FLOOR_LIMITS) {
+  return canSeeFloor(cameraZ, tileZ, limits);
+}
+
+/**
+ * Atualiza a flag `isVisible` de cada FloorLayer com base no cameraZ.
+ * Chame antes do loop de renderização a cada frame.
+ *
+ * @param {Record<number, { isVisible: boolean }>} floorLayers
+ * @param {number} cameraZ
+ * @param {typeof FLOOR_LIMITS} [limits]
+ */
+export function updateFloorVisibility(floorLayers, cameraZ, limits = FLOOR_LIMITS) {
+  for (let z = limits.min; z <= limits.max; z++) {
+    if (floorLayers[z]) {
+      floorLayers[z].isVisible = canSeeFloor(cameraZ, z, limits);
+    }
+  }
+}
+
 function _toInt(value, fallback) {
   const n = Number(value);
   return Number.isFinite(n) ? Math.floor(n) : fallback;

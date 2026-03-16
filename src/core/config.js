@@ -1,12 +1,8 @@
-// ═══════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════
 // config.js — Fonte única de verdade para todas as constantes do projeto.
 // Regra: NENHUM arquivo do projeto define valores fixos localmente.
 //        Tudo vem daqui.
-// ═══════════════════════════════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════
-// config.js — Configurações globais
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════
 
 // Configurações do World Engine
 export const WORLDENGINE = {
@@ -19,14 +15,6 @@ export const WORLDENGINE = {
 
 // Range de floors visíveis
 export const FLOORRANGE = 0;
-
-// Assets — LEGADO (para compatibilidade)
-// export const ASSETS = {
-//   basePath: './assets/',
-//   mapFile: './assets/map_compacto.json',
-//   dataFile: './assets/nexo_data.json',
-//   atlasFile: './assets/nexo_atlas.png',
-// };
 
 // Assets — NOVO PIPELINE (prioritário)
 export const NEW_ASSETS = {
@@ -48,7 +36,7 @@ export const NEW_ASSETS = {
 //   labelBarY: -8,
 //   labelNameY: -12,
 // };
-
+// porque o TILE 5159 em X:89,Y:109,Z:5 está sendo renderizado (podendo ser visto) junto dos tiles de Z=6?
 // ───────────────────────────────────────────────────────────────────────────
 // ASSETS — caminhos dos arquivos de dados (compartilhado por todas as telas)
 // ───────────────────────────────────────────────────────────────────────────
@@ -165,15 +153,15 @@ export const ENTITY_RENDER = Object.freeze({
   labelNameY: -16,
 });
 
-// ───────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
 // MOVIMENTO
-// ───────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
 /** Tempo em ms para completar 1 SQM de caminhada */
 export const WALK_SPEED = 200;
 
-// ───────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
 // MUNDO — spawn, morte, regras globais
-// ───────────────────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────
 export const WORLD_SETTINGS = {
   spawn: { x: 100, y: 100, z: 7 },
   camSpeed: 1.5,
