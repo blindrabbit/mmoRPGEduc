@@ -587,10 +587,6 @@ export function renderWorld({
     return !isFlat(spriteMeta) && !isOccluder(spriteMeta);
   };
 
-  const drawAllLayer2Tall = (_spriteId, spriteMeta, info) => {
-    if (info?.renderLayer !== 2) return false;
-    return !isFlat(spriteMeta);
-  };
 
   // Predicate para step 6.25: redesenhá tiles occluders APÓS as entidades.
   // Não usa info.renderLayer (nunca é setado pelo mapRenderer).
@@ -612,18 +608,22 @@ export function renderWorld({
     return isOccluder(spriteMeta);
   };
 
-  const drawAllLayer3 = (_spriteId, _spriteMeta, info) => {
-    return info?.renderLayer === 3;
-  };
-
   // ── 1. Floors — isolamento explícito, back-to-front (painter's algorithm) ──
-  // Cada floor renderiza completamente (ground → borders → items) antes do próximo.
+  // Cada floor renderiza completamente (layers 0–3) antes do próximo.
   // getVisibleFloors() retorna em ordem decrescente: Z maior (mais fundo) primeiro.
   //   Ex: activeZ=7 → [7, 6, 5, 4, 3, 2, 1, 0]
   //   Z=7 renderiza primeiro (fundo do canvas), Z=0 por último (topo visual).
   //
-  // Upper floors (z < activeZ): bloqueiam top items (coberturas de edifícios).
-  // Active floor / abaixo: layer 2 apenas flat (paredes altas tratadas nos steps 4/6.25).
+  // Upper floors (z < activeZ):  spritePredicate bloqueia category="top" — andares
+  //   superiores não exibem copas de árvore/telhado (cobrem o andar ativo, não o contrário).
+  //
+  // Andar ativo em multi-floor (enforceStrictFloorPriority=true):
+  //   predicate=undefined → renderiza TUDO (layers 0–3). O painter's algorithm garante
+  //   que Z=6/Z=5 pintam por cima. Steps 4 e 6.25 NÃO redesenham layer 2 neste modo.
+  //
+  // Andar ativo em single-floor (enforceStrictFloorPriority=false):
+  //   drawLayer2IfFlat → layer 2 tall fica para step 4 (y-sort antes do player)
+  //   e step 6.25 (y-sort após entidades).
   const _floorsToRender = showUpperFloors
     ? getVisibleFloors(activeZ)
     : getVisibleFloors(activeZ).filter((z) => z >= activeZ);
@@ -633,12 +633,14 @@ export function renderWorld({
       ..._mapBase,
       clearCanvas,
       layerMin: 0,
-      layerMax: 3, // inclui layer 3 (top_decoration) para que o painter's algorithm os cubra corretamente
+      layerMax: 3,
       zPredicate: (fz) => fz === z,
       spritePredicate:
         z < activeZ
-          ? (_id, _meta, info) => info?.category !== "top" // upper floors: bloqueia top items de andares superiores
-          : drawLayer2IfFlat, // andar ativo: layer 2 flat + layers 0/1/3 livres
+          ? (_id, _meta, info) => info?.category !== "top" // upper floors: bloqueia top items
+          : enforceStrictFloorPriority
+          ? undefined // multi-floor: render tudo — painter's algorithm garante que Z=6/Z=5 cobrem Z=7
+          : drawLayer2IfFlat, // single-floor: layer 2 tall fica para steps 4/6.25 (y-sort)
     });
   };
 
@@ -668,8 +670,13 @@ export function renderWorld({
     drawVisualEffects?.(ctx, assets, camXWorld, camYWorld, "ground");
   }
 
-  // ── 4. Layer 2 alta (paredes/árvores altas) ──────────────────
-  if (mapTallBeforeEntities) {
+  // ── 4. Layer 2 alta (paredes/árvores altas) — apenas single-floor ────────
+  // Em multi-floor (enforceStrictFloorPriority=true), todo o layer 2 do andar ativo
+  // já foi renderizado no step 1 (predicate=undefined, render tudo). Steps 4 e 4.5
+  // que redesenham layer 2 tall após os upper floors causariam os sprites de Z=7
+  // aparecendo sobre os tiles de Z=6/Z=5.
+  // Em single-floor, mantém o y-sort: drawOnlyLayer2IfTallPre (antes do player).
+  if (!enforceStrictFloorPriority && mapTallBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapTall", () => {
         renderMap({
@@ -678,9 +685,7 @@ export function renderWorld({
           layerMax: 2,
           clearCanvas: false,
           zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: enforceStrictFloorPriority
-            ? drawAllLayer2Tall
-            : drawOnlyLayer2IfTallPre,
+          spritePredicate: drawOnlyLayer2IfTallPre,
         });
       });
     } else {
@@ -690,31 +695,7 @@ export function renderWorld({
         layerMax: 2,
         clearCanvas: false,
         zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: enforceStrictFloorPriority
-          ? drawAllLayer2Tall
-          : drawOnlyLayer2IfTallPre,
-      });
-    }
-  } else if (enforceStrictFloorPriority) {
-    if (perfEnabled) {
-      perfStep(perf, "mapTall", () => {
-        renderMap({
-          ..._mapBase,
-          layerMin: 2,
-          layerMax: 2,
-          clearCanvas: false,
-          zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: drawAllLayer2Tall,
-        });
-      });
-    } else {
-      renderMap({
-        ..._mapBase,
-        layerMin: 2,
-        layerMax: 2,
-        clearCanvas: false,
-        zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: drawAllLayer2Tall,
+        spritePredicate: drawOnlyLayer2IfTallPre,
       });
     }
   }
