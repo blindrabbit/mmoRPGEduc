@@ -543,8 +543,22 @@ export function renderWorld({
   };
 
   // Helpers para filtragem de sprites por layer
-  const isFlat = (spriteMeta) =>
-    (spriteMeta?.grid_size ?? TILE_SIZE) <= TILE_SIZE;
+  // Verifica se o sprite é visualmente plano (não excede a altura de 1 tile).
+  // Usa a altura real do sprite (variants["0"].h) quando disponível, pois
+  // grid_size pode refletir bounding box de colisão e não a altura visual.
+  // Ex: ID 2910 tem grid_size=53 mas h=32 → plano; ID 2156 tem h=64 → alto.
+  // Verifica se o sprite é visualmente plano (não excede a altura de 1 tile).
+  // Usa a altura real do sprite (variants["0"].h) quando disponível, pois
+  // grid_size pode refletir bounding box de colisão e não a altura visual.
+  // Ex: ID 2910 tem grid_size=53 mas h=32 → plano; ID 2156 tem h=64 → alto.
+  // Itens com flag "hang" (pendurados em parede) são sempre tratados como planos:
+  // sua âncora visual é a parede, não o tile abaixo, e nunca devem sobrepor andares superiores.
+  const isFlat = (spriteMeta) => {
+    if (spriteMeta?.flags_raw?.hang) return true;
+    const variantH = Number(spriteMeta?.variants?.["0"]?.h ?? 0);
+    if (variantH > 0) return variantH <= TILE_SIZE;
+    return (spriteMeta?.grid_size ?? TILE_SIZE) <= TILE_SIZE;
+  };
   const blocksPlayer = (spriteMeta) =>
     spriteMeta?.game?.is_walkable === false ||
     spriteMeta?.flags_raw?.unpass === true ||
@@ -619,12 +633,12 @@ export function renderWorld({
       ..._mapBase,
       clearCanvas,
       layerMin: 0,
-      layerMax: 2,
+      layerMax: 3, // inclui layer 3 (top_decoration) para que o painter's algorithm os cubra corretamente
       zPredicate: (fz) => fz === z,
       spritePredicate:
         z < activeZ
-          ? (_id, _meta, info) => info?.category !== "top"
-          : drawLayer2IfFlat,
+          ? (_id, _meta, info) => info?.category !== "top" // upper floors: bloqueia top items de andares superiores
+          : drawLayer2IfFlat, // andar ativo: layer 2 flat + layers 0/1/3 livres
     });
   };
 
@@ -705,17 +719,11 @@ export function renderWorld({
     }
   }
 
-  // ── 4.5 Mapa — layer 3 do andar ativo (ANTES dos andares acima) ─────────
-  // Quando upperFloorsBeforeEntities=true e enforceStrictFloorPriority=true,
-  // o layer 3 do andar ativo (top_decoration, copas, telhados) DEVE ser
-  // desenhado ANTES dos andares superiores para que os andares Z < activeZ
-  // possam cobrir os itens de topo (e.g. copa de árvore 7143 ao Z=7 não deve
-  // aparecer acima de tiles do andar Z=6).
-  //
-  // ❌ ANTES: else if (enforceStrictFloorPriority) ficava APÓS renderUpperFloorStack
-  //            → layer 3 de Z=7 aparecia POR CIMA dos andares superiores
-  // ✅ AGORA: layer 3 de Z=7 é desenhado ANTES de renderUpperFloorStack
-  //            → andares superiores cobrem corretamente os itens de topo
+  // ── 4.5 Mapa — layer 3 do andar ativo (topDecorBeforeEntities=true) ──────
+  // Quando topDecorBeforeEntities=true, renderiza layer 3 aqui (antes das entidades).
+  // Quando enforceStrictFloorPriority=true (andares superiores visíveis), layer 3
+  // já está incluído no step 1 via layerMax=3 — o painter's algorithm garante que
+  // Z=6/Z=5 pintam por cima dos top items de Z=7. Não precisa de passo separado.
   if (showTopDecor && topDecorBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapTop", () => {
@@ -725,9 +733,7 @@ export function renderWorld({
           layerMax: 3,
           clearCanvas: false,
           zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: enforceStrictFloorPriority
-            ? drawAllLayer3
-            : drawLayer3Pre,
+          spritePredicate: drawLayer3Pre,
         });
       });
     } else {
@@ -737,33 +743,7 @@ export function renderWorld({
         layerMax: 3,
         clearCanvas: false,
         zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: enforceStrictFloorPriority
-          ? drawAllLayer3
-          : drawLayer3Pre,
-      });
-    }
-  } else if (showTopDecor && enforceStrictFloorPriority) {
-    // enforceStrictFloorPriority=true → upper floors present → render layer 3
-    // AQUI (antes dos andares superiores) para que sejam cobertos por eles.
-    if (perfEnabled) {
-      perfStep(perf, "mapTop", () => {
-        renderMap({
-          ..._mapBase,
-          layerMin: 3,
-          layerMax: 3,
-          clearCanvas: false,
-          zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: drawAllLayer3,
-        });
-      });
-    } else {
-      renderMap({
-        ..._mapBase,
-        layerMin: 3,
-        layerMax: 3,
-        clearCanvas: false,
-        zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: drawAllLayer3,
+        spritePredicate: drawLayer3Pre,
       });
     }
   }
