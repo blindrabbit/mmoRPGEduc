@@ -48,6 +48,7 @@ export const EVENT_TYPES = {
   ITEM_PICKED_UP: "item:pickedUp", // Jogador pegou item do chão
   ITEM_DROPPED: "item:dropped", // Jogador soltou item no chão
   ITEM_EQUIPPED: "item:equipped", // Jogador equipou item
+  ITEM_OUT_OF_REACH: "item:outOfReach", // Item fora de alcance para mover
   ITEM_UNEQUIPPED: "item:unequipped", // Jogador desequipou item
   ITEM_MOVED: "item:moved", // Item movido entre slots de inventário
   ITEM_USED: "item:used", // Item consumível usado

@@ -1404,6 +1404,11 @@
         getDefense,
       } from "./src/gameplay/progression/progressionSystem.js";
       import { setupMovement } from "./src/gameplay/input.js";
+      import {
+        initRPGPlayerActions,
+        cleanupRPGPlayerActions,
+      } from "./src/clients/shared/initRPGPlayerActions.js";
+      import { createActionConfigLoader } from "./src/core/actionConfigLoader.js";
       import { handlePlayerSync } from "./src/gameplay/playerManager.js";
       import {
         startRegen,
@@ -2469,7 +2474,7 @@
                 let payload = action.payload;
 
                 // ── Checagem de alcance antes de qualquer escrita no Firebase ──
-                // pickUp e moveWorld de itens do mundo exigem Chebyshev ≤ 1
+                // pickUp e moveWorld de itens do mundo exigem estar em tile adjacente (Chebyshev ≤ 1)
                 if (
                   payload.itemAction === "pickUp" ||
                   payload.itemAction === "moveWorld"
@@ -2695,6 +2700,9 @@
             return cvs;
           },
         });
+        // Expõe globalmente para o initRPGPlayerActions
+        window._dragDropManager = _dragDropManager;
+
         _dragDropManager.mount();
         _bindDragPreviewUI();
 
@@ -2914,6 +2922,90 @@
           false, // isAdmin
           mapData, // metadados de sprites para colisão (is_walkable, etc.)
         );
+
+        // Player Actions — sistema de ações com default_action (OTClient)
+        initRPGPlayerActions({
+          player: myPos,
+          worldState: {
+            map,
+            camera: cam,
+            assets: { mapData },
+            getMonsters,
+          },
+          canvas,
+          onPlayerMove: (nx, ny, nz, dir) => {
+            // Callback de movimento do Player Actions
+            if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
+              myPos.oldX = myPos.x;
+              myPos.oldY = myPos.y;
+              myPos.x = nx;
+              myPos.y = ny;
+              myPos.z = nz;
+              myPos.direcao = dir;
+              myPos.lastMoveTime = Date.now();
+              handlePlayerSync(uid, myPos);
+              pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
+            }
+          },
+          onPlayerAction: (actionData) => {
+            // Callback de ação (use, open, change_floor, etc)
+            console.log("[RPG] Player action:", actionData);
+
+            // Se for ação de item, envia para o Firebase via sendAction do DragDropManager
+            if (actionData.type === "item" && actionData.payload) {
+              // Reutiliza o sendAction do DragDropManager
+              if (window._dragDropManager) {
+                window._dragDropManager._sendAction(actionData.payload);
+                pushLog(
+                  "rpg",
+                  "action",
+                  `Item action: ${actionData.payload.itemAction}`,
+                );
+              } else {
+                pushLog("rpg", "error", "DragDropManager não disponível");
+              }
+            } else {
+              pushLog("rpg", "action", `Ação: ${actionData.type}`);
+            }
+          },
+        });
+
+        // Action Config Loader — carrega ações de JSON externo
+        (async () => {
+          try {
+            const actionLoader = createActionConfigLoader({
+              player: myPos,
+              map,
+              camera: cam,
+              assets: { mapData },
+            });
+
+            // Carrega configurações do arquivo JSON
+            const configResponse = await fetch("./assets/action_configs.json");
+            if (configResponse.ok) {
+              const config = await configResponse.json();
+              const count = actionLoader.loadFromJSON(config);
+              console.log(`[RPG] ${count} ações customizadas carregadas.`);
+
+              // Registra listeners para eventos customizados
+              actionLoader.on("questStarted", (data) => {
+                pushLog("rpg", "quest", `Quest iniciada: ${data.questId}`);
+              });
+
+              actionLoader.on("spawnCreature", (data) => {
+                console.log("[RPG] Spawn creature:", data);
+                // Integrar com sistema de monstros
+              });
+
+              actionLoader.on("openShop", (data) => {
+                pushLog("rpg", "trade", `Abrindo shop de ${data.npcId}`);
+                // TODO: Abrir UI de shop
+              });
+            }
+          } catch (error) {
+            console.warn("[RPG] Erro ao carregar action configs:", error);
+          }
+        })();
 
         // Context menu — trava alvo
         canvas.addEventListener("contextmenu", (e) => {
@@ -3268,6 +3360,10 @@
 
       // ── Cleanup ────────────────────────────────────────────────────────────
       function _cleanup() {
+        // Cleanup Player Actions
+        const canvas = document.getElementById("gameCanvas");
+        cleanupRPGPlayerActions(canvas);
+
         _dragDropManager?.unmount?.();
         _dragDropManager = null;
         _clearDragPreviewUI();

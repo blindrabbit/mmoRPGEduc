@@ -1,0 +1,226 @@
+{
+  "name": "Ações Customizadas - Exemplo",
+  "version": "1.0.0",
+  "description": "Configuração de ações para eventos e quests",
+  "actions": [
+    {
+      "id": "quest_start_chest",
+      "type": "position",
+      "x": 150,
+      "y": 200,
+      "z": 7,
+      "action": 2,
+      "conditions": {
+        "storageKey": "quest_chest_completed",
+        "minStorage": 0
+      },
+      "effects": {
+        "setStorage": {
+          "key": "quest_chest_started",
+          "value": 1
+        }
+      },
+      "messages": {
+        "success": "Você encontrou um baú antigo! Uma quest foi iniciada.",
+        "conditionFailed": "Você já encontrou este baú."
+      },
+      "onTrigger": {
+        "eventName": "questStarted",
+        "eventData": {
+          "questId": "chest_quest",
+          "stage": "start"
+        }
+      }
+    },
+    {
+      "id": "magic_teleport_blue",
+      "type": "item",
+      "spriteId": 1800,
+      "action": 4,
+      "effects": {
+        "teleportTo": {
+          "x": 200,
+          "y": 250,
+          "z": 7
+        },
+        "playEffect": "teleport_blue"
+      },
+      "messages": {
+        "success": "Você foi teleportado pela magia azul!"
+      }
+    },
+    {
+      "id": "stairs_up_1",
+      "type": "item",
+      "spriteId": 1900,
+      "action": 5,
+      "effects": {
+        "floorChange": -1
+      },
+      "messages": {
+        "success": "Subindo escada..."
+      }
+    },
+    {
+      "id": "trap_fire_damage",
+      "type": "position",
+      "x": 180,
+      "y": 220,
+      "z": 7,
+      "conditions": {
+        "distance": 0
+      },
+      "effects": {
+        "damage": {
+          "amount": 25,
+          "type": "fire"
+        },
+        "playEffect": "fire_hit"
+      },
+      "messages": {
+        "success": "Você pisou em uma armadilha de fogo! -25 HP"
+      }
+    },
+    {
+      "id": "healing_shrine",
+      "type": "item",
+      "spriteId": 8500,
+      "action": 2,
+      "conditions": {
+        "minLevel": 5,
+        "storageKey": "healing_shrine_cooldown",
+        "minStorage": 0
+      },
+      "effects": {
+        "heal": {
+          "amount": 100
+        },
+        "setStorage": {
+          "key": "healing_shrine_cooldown",
+          "value": 1
+        },
+        "playEffect": "heal_shrine"
+      },
+      "messages": {
+        "success": "O santuário curou suas feridas! +100 HP",
+        "conditionFailed": "Você precisa estar no nível 5 ou este santuário está em recarga."
+      }
+    },
+    {
+      "id": "npc_merchant_greet",
+      "type": "item",
+      "spriteId": 5010,
+      "action": 6,
+      "conditions": {
+        "distance": 1
+      },
+      "messages": {
+        "success": "Mercador: 'Olá! Deseja comprar ou vender itens?'"
+      },
+      "onTrigger": {
+        "eventName": "openShop",
+        "eventData": {
+          "npcId": "merchant_01",
+          "shopType": "general"
+        }
+      }
+    },
+    {
+      "id": "lever_door_opener",
+      "type": "item",
+      "spriteId": 7000,
+      "action": 2,
+      "effects": {
+        "setStorage": {
+          "key": "door_opened",
+          "value": 1
+        },
+        "spawnCreature": "guard_01"
+      },
+      "messages": {
+        "success": "Você puxou a alavanca! Algo aconteceu..."
+      },
+      "onTrigger": {
+        "eventName": "doorOpened",
+        "eventData": {
+          "doorId": "castle_gate_01",
+          "position": { "x": 175, "y": 210, "z": 7 }
+        }
+      }
+    },
+    {
+      "id": "quest_item_required",
+      "type": "position",
+      "x": 300,
+      "y": 400,
+      "z": 7,
+      "conditions": {
+        "requiredItems": [1234, 5678],
+        "minLevel": 10
+      },
+      "effects": {
+        "removeItem": {
+          "itemId": 1234,
+          "count": 1
+        },
+        "setStorage": {
+          "key": "quest_delivered",
+          "value": 1
+        },
+        "teleportTo": {
+          "x": 305,
+          "y": 405,
+          "z": 7
+        }
+      },
+      "messages": {
+        "success": "Você entregou os itens e foi teleportado para a sala secreta!",
+        "conditionFailed": "Você precisa dos itens necessários ou nível 10 para entrar."
+      }
+    },
+    {
+      "id": "buff_shrine_strength",
+      "type": "item",
+      "spriteId": 8600,
+      "action": 2,
+      "conditions": {
+        "storageKey": "buff_strength_expires",
+        "minStorage": 0
+      },
+      "effects": {
+        "setStorage": {
+          "key": "buff_strength_active",
+          "value": 1
+        },
+        "setStorage": {
+          "key": "buff_strength_expires",
+          "value": 300000
+        },
+        "playEffect": "buff_shrine"
+      },
+      "messages": {
+        "success": "Você recebeu bênção de força! +50% ATK por 5 minutos."
+      }
+    },
+    {
+      "id": "trap_poison_floor",
+      "type": "position",
+      "x": 250,
+      "y": 300,
+      "z": 6,
+      "effects": {
+        "damage": {
+          "amount": 10,
+          "type": "poison"
+        },
+        "setStorage": {
+          "key": "status_poisoned",
+          "value": 1
+        }
+      },
+      "messages": {
+        "success": "O chão é venenoso! -10 HP e você foi envenenado."
+      }
+    }
+  ]
+}

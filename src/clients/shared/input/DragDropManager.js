@@ -369,6 +369,83 @@ export class DragDropManager {
     const { source, slotIndex, equipSlot, worldItemId } = this._drag;
     const worldPos = this._screenToWorld(clientX, clientY);
 
+    // Verifica alcance do player antes de enviar ação
+    const player = getPlayer(this._playerId);
+    if (player) {
+      const targetPos = worldPos || { x: clientX, y: clientY, z: 7 };
+
+      // Para DROP de inventário: verifica alcance no DESTINO
+      // Para MOVE de item no chão: verifica alcance na ORIGEM e no DESTINO
+      let checkPos = targetPos;
+      let fromPos = targetPos;
+
+      if (source === "world" && worldItemId) {
+        // Item no mundo - usa posição atual do item como origem
+        const itemData = this._getItemData("world", worldItemId);
+        const MAX_RANGE = 1; // Alcance máximo: 1 tile adjacente
+
+        // Calcula fromPos: prefere coordenadas do itemData; fallback = posição onde o drag começou
+        let itemWorldPos = null;
+        if (itemData && itemData.x != null && itemData.y != null) {
+          itemWorldPos = { x: itemData.x, y: itemData.y, z: itemData.z ?? 7 };
+        } else {
+          // Fallback: converte posição de tela do início do drag para tile
+          itemWorldPos = this._screenToWorld(this._drag.startX, this._drag.startY);
+          console.log(
+            "[DragDropManager] itemData sem coordenadas — usando posição inicial do drag como fromPos:",
+            itemWorldPos,
+          );
+        }
+
+        if (itemWorldPos) {
+          fromPos = itemWorldPos;
+
+          // Apenas verifica se player está em alcance da ORIGEM (adjacente ao item).
+          // O destino pode ser qualquer tile visível — o servidor valida o range de lançamento.
+          const distanceFromOrigin = this._calculateDistance(player, fromPos);
+
+          if (distanceFromOrigin > MAX_RANGE) {
+            console.log(
+              `[DragDropManager] Item fora de alcance na origem (${distanceFromOrigin} > ${MAX_RANGE}). Player deve se aproximar.`,
+            );
+            worldEvents.emit(EVENT_TYPES.ITEM_OUT_OF_REACH, {
+              source,
+              slotIndex,
+              worldItemId,
+              targetPos,
+              fromPos,
+              distance: distanceFromOrigin,
+              maxRange: MAX_RANGE,
+            });
+            return;
+          }
+        }
+      } else if (source === "inventory") {
+        // Item no inventário - drop pode ser em qualquer tile adjacente ao player
+        // Verifica alcance no destino
+        const distance = this._calculateDistance(player, targetPos);
+        const MAX_RANGE = 1; // Alcance máximo: 1 tile adjacente
+
+        if (distance > MAX_RANGE) {
+          console.log(
+            `[DragDropManager] Destino fora de alcance (${distance} > ${MAX_RANGE}). Player deve se aproximar.`,
+          );
+          // Emite evento para o sistema de movimento solicitar aproximação
+          worldEvents.emit(EVENT_TYPES.ITEM_OUT_OF_REACH, {
+            source,
+            slotIndex,
+            worldItemId,
+            targetPos,
+            fromPos: { x: player.x, y: player.y, z: player.z ?? 7 },
+            distance,
+            maxRange: MAX_RANGE,
+          });
+          // Não envia a ação — o player precisa se aproximar primeiro
+          return;
+        }
+      }
+    }
+
     if (source === "inventory" && slotIndex != null && worldPos) {
       this._sendAction({
         itemAction: "drop",
@@ -409,6 +486,17 @@ export class DragDropManager {
         });
       }
     }
+  }
+
+  /**
+   * Calcula distância Chebyshev entre player e target
+   */
+  _calculateDistance(player, targetPos) {
+    const playerX = Math.round(player.x);
+    const playerY = Math.round(player.y);
+    const targetX = Math.round(targetPos.x);
+    const targetY = Math.round(targetPos.y);
+    return Math.max(Math.abs(targetX - playerX), Math.abs(targetY - playerY));
   }
 
   // ---------------------------------------------------------------------------

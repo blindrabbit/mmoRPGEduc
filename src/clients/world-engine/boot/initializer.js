@@ -40,6 +40,7 @@ import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
 import { applyCameraMovement } from "../../../gameplay/inputController.js";
 import { createAnimationClock } from "../../../core/animationClock.js";
+import { initPlayerActions } from "./initPlayerActions.js";
 import {
   loadFirebaseTilesData,
   ensureWorldTilesAvailable,
@@ -123,10 +124,13 @@ export class Initializer {
     // 8. Inicializar Progression UI (FASE 4)
     this.initProgressionUI();
 
-    // 9. Watcher de world_items para renderização no canvas (independente de player)
+    // 9. Inicializar Player Actions (sistema de ações com default_action)
+    this.initPlayerActionsIntegration();
+
+    // 10. Watcher de world_items para renderização no canvas (independente de player)
     this.initWorldItemsRendering();
 
-    // 10. Inicializar Inventário + Drag & Drop
+    // 11. Inicializar Inventário + Drag & Drop
     this.initInventoryUI();
   }
 
@@ -302,6 +306,35 @@ export class Initializer {
       () => this.floorHUD?.update(),
     );
     this.zoomHandler = new ZoomHandler(this.canvas, this.worldState);
+  }
+
+  /**
+   * Integração do sistema de Player Actions
+   * Suporte a default_action (OTClient) nos itens
+   */
+  initPlayerActionsIntegration() {
+    try {
+      const { inputHandler } = initPlayerActions({
+        worldState: this.worldState,
+        canvas: this.canvas,
+        camera: this.worldState.camera,
+        onPlayerMove: (moveData) => {
+          // Movimento autowalk
+          console.log("[Initializer] Player move:", moveData);
+        },
+        onPlayerAction: (actionData) => {
+          // Ação executada
+          console.log("[Initializer] Player action:", actionData);
+        },
+      });
+
+      this.playerInputHandler = inputHandler;
+      this.logger.ok("Player Actions: sistema integrado.");
+    } catch (error) {
+      this.logger.warn(
+        `Falha ao integrar Player Actions: ${error?.message ?? error}`,
+      );
+    }
   }
 
   initUI() {
