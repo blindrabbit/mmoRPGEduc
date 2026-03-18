@@ -644,6 +644,29 @@ export function resolveVariant(spriteData, tx, ty, animClock) {
 // VARIANTE PARA STACKABLES (OTClient spec)
 // ═══════════════════════════════════════════════════════════════
 /**
+ * Retorna a chave de variante para liquid containers baseada no content_type.
+ * Mapeamento Tibia: empty→0, water→1, blood→2, beer→3, slime→4,
+ *   lemonade→5, milk→6, mana→7, lifefluid→8, urine→9, rum→10, fruitjuice→11
+ */
+const LIQUID_TYPE_VARIANT = {
+  empty: "0",
+  water: "1",
+  blood: "2",
+  beer: "3",
+  slime: "4",
+  lemonade: "5",
+  milk: "6",
+  mana: "7",
+  lifefluid: "8",
+  urine: "9",
+  rum: "10",
+  fruitjuice: "11",
+};
+export function getLiquidVariantKey(contentType) {
+  return LIQUID_TYPE_VARIANT[contentType] ?? "0";
+}
+
+/**
  * Retorna a chave de variante para itens stackables baseada na quantidade.
  * Mapeamento: 0→0  1→1  2→2  3→3  4-9→4  10-24→5  25-49→6  50+→7
  */
@@ -683,15 +706,18 @@ function _drawSpriteFromAssets(
   elevation = 0,
   count = 1,
   batchRenderer = null,
+  contentType = null,
 ) {
   const sid = String(spriteId);
   const data = nexoData?.[sid] ?? null;
 
-  // Stackables usam variante por quantidade; demais usam posição modulo
+  // Stackables usam variante por quantidade; liquid containers por content_type; demais por posição modulo
   const varKey = data
     ? data.game?.is_stackable
       ? getStackableVariantKey(count)
-      : resolveVariantKey(data, tx, ty, animClock)
+      : data.game?.is_liquid_container && contentType
+        ? getLiquidVariantKey(contentType)
+        : resolveVariantKey(data, tx, ty, animClock)
     : "0";
 
   let lookup =
@@ -1205,7 +1231,14 @@ function _renderMainPass(opts) {
 
           const projectedX = tx - floorOffsetSqm;
           const projectedY = ty - floorOffsetSqm;
+
+          // Itens do mundo (layer 99) nunca são ocluídos por andares superiores —
+          // são itens soltos no chão e devem aparecer sempre visíveis.
+          const entryTileLayer = Number.isFinite(Number(entry?.tileLayer))
+            ? Number(entry.tileLayer)
+            : -1;
           if (
+            entryTileLayer !== 99 &&
             typeof isOccludedByUpperFloor === "function" &&
             isOccludedByUpperFloor({
               projectedX,
@@ -1226,11 +1259,13 @@ function _renderMainPass(opts) {
             category,
             stackPosition: resolveStackPosition(spriteMeta, category),
             renderLayer,
-            tileLayer: Number.isFinite(Number(entry?.tileLayer))
-              ? Number(entry.tileLayer)
-              : -1,
+            tileLayer: entryTileLayer,
             count:
               typeof item === "object" && item !== null ? (item.count ?? 1) : 1,
+            contentType:
+              typeof item === "object" && item !== null
+                ? (item.content_type ?? null)
+                : null,
             tx,
             ty,
             z,
@@ -1299,6 +1334,8 @@ function _renderMainPass(opts) {
               alpha,
               elevation,
               item.count,
+              null,
+              item.contentType,
             );
           } else if (atlas && nexoData) {
             drawSprite(
@@ -1337,6 +1374,8 @@ function _renderMainPass(opts) {
               alpha,
               elevation,
               item.count,
+              null,
+              item.contentType,
             );
           } else if (atlas && nexoData) {
             drawSprite(
@@ -1375,6 +1414,8 @@ function _renderMainPass(opts) {
               alpha,
               0,
               item.count,
+              null,
+              item.contentType,
             );
           } else if (atlas && nexoData) {
             drawSprite(

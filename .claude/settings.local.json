@@ -23,7 +23,8 @@
       "Bash(python -c \"from PIL import Image; print\\(''Pillow OK''\\)\")",
       "Bash(python fix_atlas_pack.py)",
       "Bash(python -c \":*)",
-      "Bash(/tmp/trace_analysis.txt:*)"
+      "Bash(/tmp/trace_analysis.txt:*)",
+      "Bash(find 'g:/Meu Drive/SEDU/2026/RPG_Novo/canary/src' -type f \\\\\\(-name *container* -o -name *action* \\\\\\))"
     ]
   }
 }

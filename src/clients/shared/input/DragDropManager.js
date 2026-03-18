@@ -208,17 +208,9 @@ export class DragDropManager {
     const itemData = this._getItemData(source, key);
     if (!itemData) return;
 
-    // Valida via ItemDataService: itens de inventário/equipamento sempre podem
-    // ser arrastados; itens do mundo (source==='world') verificam canPickUp/canMove
-    if (source === "world" && this._itemDataService) {
-      const tileId = itemData.tileId ?? itemData.id;
-      if (
-        !this._itemDataService.canPickUp(tileId) &&
-        !this._itemDataService.canMove(tileId)
-      ) {
-        return;
-      }
-    }
+    // Nota: Não validamos canPickUp/canMove no cliente para itens do mundo.
+    // O servidor valida as regras de movimento no final.
+    // Itens de inventário/equipamento sempre podem ser arrastados.
 
     this._drag = {
       ..._emptyDrag(),
@@ -241,6 +233,10 @@ export class DragDropManager {
 
     const dx = e.clientX - this._drag.startX;
     const dy = e.clientY - this._drag.startY;
+
+    // Atualiza posição atual do cursor (para o ghost aparecer no lugar certo)
+    this._drag.currentX = e.clientX;
+    this._drag.currentY = e.clientY;
 
     // Ativa drag após threshold para distinguir de clique
     if (!this._drag.active) {
@@ -304,11 +300,19 @@ export class DragDropManager {
       this._drag;
 
     if (originEl) {
+      // Adiciona classe para indicar que está sendo arrastado
       originEl.classList.add(DRAG_CONFIG.classes.originDragging);
+      // Esconde o elemento original visualmente (mas mantém no DOM)
+      originEl.style.opacity = "0.3";
+      originEl.style.pointerEvents = "none";
     }
     document.body.classList.add(DRAG_CONFIG.classes.dragging);
 
-    this._createGhost(this._drag.startX, this._drag.startY);
+    // Cria ghost na posição ATUAL do cursor, não na posição inicial
+    this._createGhost(
+      this._drag.currentX || this._drag.startX,
+      this._drag.currentY || this._drag.startY,
+    );
 
     worldEvents.emit(EVENT_TYPES.ITEM_DRAG_START, {
       source,
@@ -317,6 +321,117 @@ export class DragDropManager {
       worldItemId,
       itemData,
     });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Validação de Tile para Drop no Chão
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Valida se um tile do mapa pode receber um item dropado.
+   * Regras (OTClient/Canary compatible):
+   *   1. Tile não pode ter bloqueio explícito (parede, obstáculo intransponível)
+   *   2. Para drops de inventário: player deve estar em alcance (≤15 SQM)
+   *   3. Para moves de item no chão: player deve estar adjacente (≤1 SQM da origem)
+   *
+   * Filosofia: validação permissiva no cliente — o servidor valida no final.
+   *
+   * @param {number} x - Tile X
+   * @param {number} y - Tile Y
+   * @param {number} z - Tile Z
+   * @param {Object} player - Player data
+   * @param {string} source - "inventory" | "world"
+   * @returns {{ valid: boolean, reason?: string }}
+   */
+  _isValidGroundDrop(x, y, z, player, source) {
+    // Obtém mapa e nexoData do contexto global (worldState)
+    const map = window.worldState?.map ?? {};
+    const nexoData = window.worldState?.mapData ?? {};
+
+    if (!map || !nexoData) {
+      // Sem dados do mapa — permite (fallback permissivo)
+      return { valid: true };
+    }
+
+    const coord = `${x},${y},${z}`;
+    const tileValue = map[coord];
+
+    // Extrai IDs do tile (suporta formato legado e compacto)
+    const ids = this._extractItemIdsFromTile(tileValue);
+
+    // Verifica se há bloqueio explícito (parede)
+    for (const itemId of ids) {
+      const meta = nexoData[String(itemId)];
+      const walkable = this._getItemWalkable(meta);
+
+      if (walkable === false) {
+        // Bloqueio explícito encontrado
+        return { valid: false, reason: "blocked-by-wall" };
+      }
+    }
+
+    // Verifica alcance do player
+    if (player) {
+      const maxRange = source === "world" ? 1 : 15; // 1 SQM para move, 15 para drop
+      const distance = this._calculateDistance(player, { x, y, z });
+      if (distance > maxRange) {
+        return { valid: false, reason: "out-of-range", distance, maxRange };
+      }
+    }
+
+    // Default: válido (fallback permissivo)
+    return { valid: true };
+  }
+
+  /**
+   * Extrai IDs de um tile (suporta formato legado array e compacto objeto).
+   * @param {*} tileValue
+   * @returns {number[]}
+   */
+  _extractItemIdsFromTile(tileValue) {
+    if (!tileValue) return [];
+    if (Array.isArray(tileValue)) {
+      return tileValue
+        .map((v) => (typeof v === "object" ? v.id : v))
+        .filter(Boolean);
+    }
+    if (typeof tileValue === "object") {
+      const ids = [];
+      for (const layer of Object.values(tileValue)) {
+        if (Array.isArray(layer)) {
+          for (const item of layer) {
+            const id = typeof item === "object" ? item.id : item;
+            if (id != null) ids.push(id);
+          }
+        }
+      }
+      return ids;
+    }
+    return [];
+  }
+
+  /**
+   * Retorna walkability de um item (true/false/null).
+   * @param {Object} meta - Metadata do item
+   * @returns {boolean|null}
+   */
+  _getItemWalkable(meta) {
+    if (!meta) return null;
+
+    // Formato novo: game.is_walkable
+    if (meta.game) {
+      if (meta.game.is_walkable === false) return false;
+      if (meta.game.is_walkable === true) return true;
+    }
+
+    // Fallback formato antigo: flags_raw.bank.waypoints > 0 = ground walkable
+    const waypoints = meta?.flags_raw?.bank?.waypoints;
+    if (typeof waypoints === "number" && waypoints > 0) return true;
+
+    // Fallback: unreadable = bloqueante
+    if (meta?.flags_raw?.unreadable === true) return false;
+
+    return null;
   }
 
   // ---------------------------------------------------------------------------
@@ -348,6 +463,33 @@ export class DragDropManager {
         action = { itemAction: "unequip", equipSlot };
       }
     } else if (source === "world" && dropZone === "inventory") {
+      // Verifica alcance antes de tentar pickup
+      const player = getPlayer(this._playerId);
+      if (player) {
+        // itemData usa coordenada como chave; worldItemId é um ID — faz lookup pela posição de tela
+        const itemData = this._drag.itemData;
+        let fromPos = null;
+        if (itemData && itemData.x != null && itemData.y != null) {
+          fromPos = { x: itemData.x, y: itemData.y, z: itemData.z ?? 7 };
+        } else {
+          fromPos = this._screenToWorld(this._drag.startX, this._drag.startY);
+        }
+        if (fromPos) {
+          const dist = this._calculateDistance(player, fromPos);
+          if (dist > 1) {
+            worldEvents.emit(EVENT_TYPES.ITEM_OUT_OF_REACH, {
+              source,
+              worldItemId,
+              fromPos,
+              targetPos: null, // destino é inventário, não tile do mundo
+              distance: dist,
+              maxRange: 1,
+              moveToTarget: false,
+            });
+            return;
+          }
+        }
+      }
       action = { itemAction: "pickUp", worldItemId };
     }
 
@@ -360,6 +502,12 @@ export class DragDropManager {
         dropSlot,
         itemData: this._drag.itemData,
       });
+
+      // Limpa elemento original após drop válido (será removido do inventário)
+      if (this._drag.originEl && source === "inventory") {
+        this._drag.originEl.style.opacity = "0.3";
+        this._drag.originEl.style.pointerEvents = "none";
+      }
     } else {
       worldEvents.emit(EVENT_TYPES.ITEM_DROP_INVALID, { source, dropZone });
     }
@@ -369,84 +517,80 @@ export class DragDropManager {
     const { source, slotIndex, equipSlot, worldItemId } = this._drag;
     const worldPos = this._screenToWorld(clientX, clientY);
 
-    // Verifica alcance do player antes de enviar ação
-    const player = getPlayer(this._playerId);
-    if (player) {
-      const targetPos = worldPos || { x: clientX, y: clientY, z: 7 };
-
-      // Para DROP de inventário: verifica alcance no DESTINO
-      // Para MOVE de item no chão: verifica alcance na ORIGEM e no DESTINO
-      let checkPos = targetPos;
-      let fromPos = targetPos;
-
-      if (source === "world" && worldItemId) {
-        // Item no mundo - usa posição atual do item como origem
-        const itemData = this._getItemData("world", worldItemId);
-        const MAX_RANGE = 1; // Alcance máximo: 1 tile adjacente
-
-        // Calcula fromPos: prefere coordenadas do itemData; fallback = posição onde o drag começou
-        let itemWorldPos = null;
-        if (itemData && itemData.x != null && itemData.y != null) {
-          itemWorldPos = { x: itemData.x, y: itemData.y, z: itemData.z ?? 7 };
-        } else {
-          // Fallback: converte posição de tela do início do drag para tile
-          itemWorldPos = this._screenToWorld(this._drag.startX, this._drag.startY);
-          console.log(
-            "[DragDropManager] itemData sem coordenadas — usando posição inicial do drag como fromPos:",
-            itemWorldPos,
-          );
-        }
-
-        if (itemWorldPos) {
-          fromPos = itemWorldPos;
-
-          // Apenas verifica se player está em alcance da ORIGEM (adjacente ao item).
-          // O destino pode ser qualquer tile visível — o servidor valida o range de lançamento.
-          const distanceFromOrigin = this._calculateDistance(player, fromPos);
-
-          if (distanceFromOrigin > MAX_RANGE) {
-            console.log(
-              `[DragDropManager] Item fora de alcance na origem (${distanceFromOrigin} > ${MAX_RANGE}). Player deve se aproximar.`,
-            );
-            worldEvents.emit(EVENT_TYPES.ITEM_OUT_OF_REACH, {
-              source,
-              slotIndex,
-              worldItemId,
-              targetPos,
-              fromPos,
-              distance: distanceFromOrigin,
-              maxRange: MAX_RANGE,
-            });
-            return;
-          }
-        }
-      } else if (source === "inventory") {
-        // Item no inventário - drop pode ser em qualquer tile adjacente ao player
-        // Verifica alcance no destino
-        const distance = this._calculateDistance(player, targetPos);
-        const MAX_RANGE = 1; // Alcance máximo: 1 tile adjacente
-
-        if (distance > MAX_RANGE) {
-          console.log(
-            `[DragDropManager] Destino fora de alcance (${distance} > ${MAX_RANGE}). Player deve se aproximar.`,
-          );
-          // Emite evento para o sistema de movimento solicitar aproximação
-          worldEvents.emit(EVENT_TYPES.ITEM_OUT_OF_REACH, {
-            source,
-            slotIndex,
-            worldItemId,
-            targetPos,
-            fromPos: { x: player.x, y: player.y, z: player.z ?? 7 },
-            distance,
-            maxRange: MAX_RANGE,
-          });
-          // Não envia a ação — o player precisa se aproximar primeiro
-          return;
-        }
-      }
+    if (!worldPos) {
+      console.warn(
+        "[DragDropManager] _executeDropOnGround: posição do mundo inválida",
+      );
+      worldEvents.emit(EVENT_TYPES.ITEM_DROP_INVALID, {
+        source,
+        reason: "invalid-world-position",
+      });
+      return;
     }
 
-    if (source === "inventory" && slotIndex != null && worldPos) {
+    // Valida tile para drop
+    const player = getPlayer(this._playerId);
+    const validation = this._isValidGroundDrop(
+      worldPos.x,
+      worldPos.y,
+      worldPos.z ?? 7,
+      player,
+      source,
+    );
+
+    if (!validation.valid) {
+      console.log(
+        `[DragDropManager] Drop inválido em (${worldPos.x},${worldPos.y},${worldPos.z ?? 7}): ${validation.reason}`,
+      );
+
+      // Emite evento específico para feedback UI
+      if (validation.reason === "blocked-by-wall") {
+        worldEvents.emit(EVENT_TYPES.ITEM_DROP_INVALID, {
+          source,
+          reason: "blocked-by-wall",
+          position: worldPos,
+        });
+      } else if (validation.reason === "out-of-range") {
+        // Para drop de inventário: fromPos = posição do player, targetPos = destino
+        // Para move de item no chão: fromPos = posição do item, targetPos = destino
+        const fromPos =
+          source === "inventory"
+            ? { x: player?.x, y: player?.y, z: player?.z ?? 7 }
+            : this._drag.itemData?.x != null
+              ? {
+                  x: this._drag.itemData.x,
+                  y: this._drag.itemData.y,
+                  z: this._drag.itemData.z ?? 7,
+                }
+              : this._screenToWorld(this._drag.startX, this._drag.startY);
+
+        worldEvents.emit(EVENT_TYPES.ITEM_OUT_OF_REACH, {
+          source,
+          slotIndex,
+          worldItemId,
+          targetPos: worldPos,
+          fromPos,
+          distance: validation.distance,
+          maxRange: validation.maxRange,
+          moveToTarget: source === "inventory", // true = vai para destino, false = vai para origem
+        });
+      } else {
+        worldEvents.emit(EVENT_TYPES.ITEM_DROP_INVALID, {
+          source,
+          reason: validation.reason,
+          position: worldPos,
+        });
+      }
+      return;
+    }
+
+    // Debug log
+    console.log(
+      `[DragDropManager] Drop válido: source=${source}, slotIndex=${slotIndex}, worldItemId=${worldItemId}, pos=${worldPos.x},${worldPos.y},${worldPos.z ?? 7}`,
+    );
+
+    // Tile válido — prossegue com o drop
+    if (source === "inventory" && slotIndex != null) {
       this._sendAction({
         itemAction: "drop",
         slotIndex,
@@ -456,7 +600,7 @@ export class DragDropManager {
       });
     } else if (source === "equipment" && equipSlot) {
       this._sendAction({ itemAction: "unequip", equipSlot });
-    } else if (source === "world" && worldItemId && worldPos) {
+    } else if (source === "world" && worldItemId) {
       const isStackable =
         this._itemDataService?.isStackable(
           this._drag.itemData?.tileId ?? this._drag.itemData?.id,
@@ -485,6 +629,10 @@ export class DragDropManager {
           toZ: worldPos.z ?? 7,
         });
       }
+    } else {
+      console.warn(
+        `[DragDropManager] Condição de drop não tratada: source=${source}, slotIndex=${slotIndex}, worldItemId=${worldItemId}`,
+      );
     }
   }
 
@@ -656,7 +804,18 @@ export class DragDropManager {
     // Atualiza o indicador de destino no canvas quando o cursor estiver sobre ele
     if (this._canvas && this._isOverCanvas(x, y)) {
       const worldPos = this._screenToWorld(x, y);
-      if (worldPos) this._showTileTarget(worldPos, x, y);
+      if (worldPos) {
+        // Valida tile para feedback visual
+        const player = getPlayer(this._playerId);
+        const validation = this._isValidGroundDrop(
+          worldPos.x,
+          worldPos.y,
+          worldPos.z ?? 7,
+          player,
+          this._drag.source,
+        );
+        this._showTileTarget(worldPos, x, y, validation);
+      }
     } else {
       this._hideTileTarget();
     }
@@ -672,9 +831,35 @@ export class DragDropManager {
   // Tile-target indicator (quadrado de destino no canvas)
   // ---------------------------------------------------------------------------
 
-  _showTileTarget(worldPos, clientX, clientY) {
+  _showTileTarget(worldPos, clientX, clientY, validation = null) {
     const canvas = this._canvas;
     if (!canvas) return;
+
+    // Determina cor baseada na validação
+    const isValid = validation?.valid ?? true;
+    const isOutOfRange = validation?.reason === "out-of-range";
+
+    // Cores: verde=válido, vermelho=bloqueado, amarelo=fora de alcance
+    const colors = isValid
+      ? {
+          border: "rgba(46, 204, 113, 0.85)", // verde
+          cross: "rgba(46, 204, 113, 0.65)",
+          corners: "rgba(46, 204, 113, 0.95)",
+          fill: "rgba(46, 204, 113, 0.15)",
+        }
+      : isOutOfRange
+        ? {
+            border: "rgba(241, 196, 15, 0.85)", // amarelo
+            cross: "rgba(241, 196, 15, 0.65)",
+            corners: "rgba(241, 196, 15, 0.95)",
+            fill: "rgba(241, 196, 15, 0.15)",
+          }
+        : {
+            border: "rgba(231, 76, 60, 0.85)", // vermelho
+            cross: "rgba(231, 76, 60, 0.65)",
+            corners: "rgba(231, 76, 60, 0.95)",
+            fill: "rgba(231, 76, 60, 0.15)",
+          };
 
     // Usa worldToScreen (câmera-aware) se disponível; senão fallback simples
     let tileScreenX, tileScreenY, tilePxW, tilePxH;
@@ -732,8 +917,14 @@ export class DragDropManager {
     const b = 1; // espessura da borda em px lógicos
     const pad = 3;
 
-    // Borda sutil branca
-    ctx.strokeStyle = "rgba(255,255,255,0.55)";
+    // Fill semi-transparente (apenas quando inválido)
+    if (!isValid) {
+      ctx.fillStyle = colors.fill;
+      ctx.fillRect(0, 0, w, h);
+    }
+
+    // Borda
+    ctx.strokeStyle = colors.border;
     ctx.lineWidth = b;
     ctx.strokeRect(b / 2, b / 2, w - b, h - b);
 
@@ -741,7 +932,7 @@ export class DragDropManager {
     const cx = w / 2;
     const cy = h / 2;
     const arm = Math.min(w, h) * 0.18;
-    ctx.strokeStyle = "rgba(255,255,255,0.45)";
+    ctx.strokeStyle = colors.cross;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(cx - arm, cy);
@@ -752,7 +943,7 @@ export class DragDropManager {
 
     // Cantos (réticos)
     const cr = Math.min(w, h) * 0.18;
-    ctx.strokeStyle = "rgba(255,255,255,0.75)";
+    ctx.strokeStyle = colors.corners;
     ctx.lineWidth = 1.5;
     // ┌
     ctx.beginPath();
@@ -983,7 +1174,10 @@ export class DragDropManager {
       return true; // Qualquer item vai para inventário
     }
     if (zone === "ground") {
-      return source !== "world"; // Não pode dropar no chão o que já está no chão
+      // Valida tile do mapa para drop
+      // Nota: esta função é usada para preview UI; a validação completa
+      // é feita em _executeDropOnGround antes de enviar a ação
+      return source !== "world"; // Não pode "dropar" no chão o que já está no chão (apenas mover)
     }
     return false;
   }
@@ -1021,9 +1215,39 @@ export class DragDropManager {
   _getWorldItemAt(x, y, z) {
     // Delegate para callback externo se disponível
     if (typeof this._getItemData === "function") {
-      return this._getItemData("world", `${x},${y},${z}`);
+      const key = `${x},${y},${z}`;
+
+      // Tenta obter todos os itens da coordenada
+      if (typeof this._getAllWorldItemsAtCoord === "function") {
+        const allItems = this._getAllWorldItemsAtCoord(key);
+        if (allItems && allItems.length > 0) {
+          // Retorna o item do TOPO (último da pilha)
+          // Shift+click poderia ser usado para selecionar itens específicos
+          return allItems[allItems.length - 1];
+        }
+      }
+
+      // Fallback: retorna apenas um item
+      return this._getItemData("world", key);
     }
     return null;
+  }
+
+  /**
+   * Retorna o índice do item na pilha de uma coordenada.
+   * @param {string} key - Coordenada "x,y,z"
+   * @param {string} worldItemId - ID do item
+   * @returns {number} Índice do item na pilha (-1 se não encontrado)
+   */
+  _getWorldItemStackIndex(key, worldItemId) {
+    if (typeof this._getAllWorldItemsAtCoord === "function") {
+      const allItems = this._getAllWorldItemsAtCoord(key);
+      if (allItems && allItems.length > 0) {
+        const index = allItems.findIndex((item) => item.id === worldItemId);
+        return index >= 0 ? index : -1;
+      }
+    }
+    return -1;
   }
 
   // ---------------------------------------------------------------------------
@@ -1031,11 +1255,19 @@ export class DragDropManager {
   // ---------------------------------------------------------------------------
 
   _cancelDrag() {
-    this._drag.originEl?.classList.remove(DRAG_CONFIG.classes.originDragging);
-    this._currentHighlight?.classList.remove(
-      DRAG_CONFIG.classes.dropValid,
-      DRAG_CONFIG.classes.dropInvalid,
-    );
+    // Restaura elemento original
+    if (this._drag.originEl) {
+      this._drag.originEl.classList.remove(DRAG_CONFIG.classes.originDragging);
+      this._drag.originEl.style.opacity = "";
+      this._drag.originEl.style.pointerEvents = "";
+    }
+
+    if (this._currentHighlight) {
+      this._currentHighlight.classList.remove(
+        DRAG_CONFIG.classes.dropValid,
+        DRAG_CONFIG.classes.dropInvalid,
+      );
+    }
     this._currentHighlight = null;
 
     this._clearDropPreview();

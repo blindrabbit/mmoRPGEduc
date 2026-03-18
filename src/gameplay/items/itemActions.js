@@ -17,7 +17,14 @@
 // Dependências: db.js, schema.js, events.js, worldStore.js, progressionSystem.js
 // =============================================================================
 
-import { batchWrite, dbGet, dbRemove, PATHS, TILE_CHUNK_SIZE } from "../../core/db.js";
+import {
+  batchWrite,
+  dbGet,
+  dbSet,
+  dbRemove,
+  PATHS,
+  TILE_CHUNK_SIZE,
+} from "../../core/db.js";
 import { RuntimeConfig } from "../../core/runtimeConfig.js";
 import { makeItem, validateItem, ITEM_SCHEMA } from "../../core/schema.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
@@ -144,6 +151,64 @@ async function _isBlockedByWallAt(x, y, z) {
     flatTiles[`${xy},${z}`] = layers;
   }
   return isTileBlockedByWall(x, y, z, flatTiles, mapData);
+}
+
+/**
+ * Verifica se um tile pode receber itens dropados em cima.
+ * Regras (OTClient/Canary compatible):
+ *   - Chão walkable → SIM
+ *   - Mesas, bancadas, containers → SIM
+ *   - Paredes, objetos altos → NÃO
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @returns {Promise<{canReceive: boolean, reason?: string}>}
+ */
+async function _canReceiveItemsAt(x, y, z) {
+  const ids = getItemDataService();
+  if (!ids) return { canReceive: true }; // Sem dados → permite (fallback)
+
+  // Busca o tile no Firebase
+  const cx = Math.floor(x / TILE_CHUNK_SIZE);
+  const cy = Math.floor(y / TILE_CHUNK_SIZE);
+  const chunkData = await dbGet(`${PATHS.tiles}/${z}/${cx},${cy}`);
+
+  if (!chunkData || typeof chunkData !== "object") {
+    return { canReceive: true }; // Sem dados → permite
+  }
+
+  const coordKey = `${x},${y}`;
+  const layers = chunkData[coordKey];
+
+  if (!layers || typeof layers !== "object") {
+    return { canReceive: true }; // Tile vazio → permite (chão padrão)
+  }
+
+  // Verifica cada layer do tile
+  for (const [layerKey, items] of Object.entries(layers)) {
+    if (!Array.isArray(items)) continue;
+
+    for (const item of items) {
+      const tileId = item.id ?? item.tileId ?? item.spriteId;
+      if (!tileId) continue;
+
+      // Verifica se é parede/bloqueio
+      const walkability = ids.getWalkability(tileId);
+      if (walkability === "not_walkable" && layerKey === "0") {
+        // Layer 0 é ground/border - se não é walkable, não pode dropar
+        return { canReceive: false, reason: "blocked-by-wall" };
+      }
+
+      // Verifica se pode receber itens (para layers superiores)
+      const canReceive = ids.canReceiveItems(tileId);
+      if (canReceive === "no" && Number(layerKey) >= 1) {
+        // Item em layer superior que não recebe itens
+        return { canReceive: false, reason: "no-surface" };
+      }
+    }
+  }
+
+  return { canReceive: true };
 }
 
 function _normalizeInventory(raw) {
@@ -340,8 +405,14 @@ export async function pickUpItem(playerId, worldItemId) {
     inventoryItem.stackable;
   const currentAtSlotRaw = await dbGet(P.inventorySlot(playerId, slotIndex));
   if (isStackMerge) {
-    if (!currentAtSlotRaw || !_sameItemForStack(currentAtSlotRaw, inventoryItem)) {
-      return { success: false, error: "Slot modificado durante a operação. Tente novamente." };
+    if (
+      !currentAtSlotRaw ||
+      !_sameItemForStack(currentAtSlotRaw, inventoryItem)
+    ) {
+      return {
+        success: false,
+        error: "Slot modificado durante a operação. Tente novamente.",
+      };
     }
   } else {
     if (currentAtSlotRaw && typeof currentAtSlotRaw === "object") {
@@ -392,7 +463,42 @@ export async function pickUpItem(playerId, worldItemId) {
       );
     }
   }
-  await batchWrite(updates);
+
+  // Salva snapshot do item para rollback em caso de falha
+  const worldItemSnapshot = { ...worldItem };
+
+  try {
+    await batchWrite(updates);
+  } catch (err) {
+    console.error("[pickUpItem] batchWrite failed:", err);
+    // Rollback: item volta para o mundo
+    if (worldItemSnapshot.x != null && worldItemSnapshot.y != null) {
+      try {
+        await dbSet(P.worldItem(worldItemId), worldItemSnapshot);
+      } catch (rollbackErr) {
+        console.error("[pickUpItem] rollback failed:", rollbackErr);
+      }
+    }
+    return { success: false, error: "Falha ao mover item. Tente novamente." };
+  }
+
+  // Verifica se o item foi realmente adicionado ao inventário
+  const verifySlot = await dbGet(P.inventorySlot(playerId, slotIndex));
+  if (!verifySlot || !verifySlot.tileId) {
+    // Rollback: item volta para o mundo
+    console.warn(
+      "[pickUpItem] Item não apareceu no inventário, fazendo rollback",
+    );
+    try {
+      await dbSet(P.worldItem(worldItemId), worldItemSnapshot);
+    } catch (rollbackErr) {
+      console.error("[pickUpItem] rollback failed:", rollbackErr);
+    }
+    return {
+      success: false,
+      error: "Item não foi para inventário. Tente novamente.",
+    };
+  }
 
   // Atualizar cache local
   const newInventory = { ...inventory };
@@ -496,6 +602,22 @@ export async function dropItem(
     (await _isBlockedByWallAt(targetX, targetY, targetZ))
   ) {
     return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
+  }
+
+  // Verifica se o tile pode receber itens (mesas, bancadas, chão, etc.)
+  if (!bypassRestrictions) {
+    const surfaceCheck = await _canReceiveItemsAt(targetX, targetY, targetZ);
+    if (!surfaceCheck.canReceive) {
+      if (surfaceCheck.reason === "blocked-by-wall") {
+        return { success: false, error: "Não é possível dropar aqui (parede)" };
+      } else if (surfaceCheck.reason === "no-surface") {
+        return {
+          success: false,
+          error: "Não é possível dropar aqui (sem superfície)",
+        };
+      }
+      return { success: false, error: "Não é possível dropar aqui" };
+    }
   }
 
   const worldItemId = `item_${playerId}_${Date.now()}`;

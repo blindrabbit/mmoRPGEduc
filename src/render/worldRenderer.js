@@ -563,17 +563,26 @@ export function renderWorld({
     spriteMeta?.game?.is_walkable === false ||
     spriteMeta?.flags_raw?.unpass === true ||
     spriteMeta?.game?.category_type === "wall";
+  // isOccluder: sprites que devem ser redesenhados APÓS o player (y-sort).
+  // Paredes/edifícios são itens "bottom" no OTClient — desenhados ANTES das criaturas.
+  // Árvores/vegetação (obstacle com clip) são "top" — desenhados APÓS, cobrindo o player.
+  const _wallCategories = new Set(["wall", "building"]);
+  const _vegetationCategories = new Set([
+    "tree",
+    "vegetation",
+    "flora",
+    "foliage",
+    "obstacle",
+  ]);
   const isOccluder = (spriteMeta) => {
     const category = String(
       spriteMeta?.game?.category_type ?? "",
     ).toLowerCase();
-    if (blocksPlayer(spriteMeta)) return true;
-    if (
-      ["wall", "tree", "vegetation", "flora", "foliage", "building"].includes(
-        category,
-      )
-    )
-      return true;
+    // Paredes e edifícios nunca cobrem criaturas (são bottom items)
+    if (_wallCategories.has(category)) return false;
+    // Vegetação/árvores/obstáculos sempre são occluders (são top items)
+    if (_vegetationCategories.has(category)) return true;
+    // Sprites altos (maiores que 1 tile) são occluders por default
     return (spriteMeta?.grid_size ?? TILE_SIZE) > TILE_SIZE;
   };
 
@@ -587,24 +596,13 @@ export function renderWorld({
     return !isFlat(spriteMeta) && !isOccluder(spriteMeta);
   };
 
-
-  // Predicate para step 6.25: redesenhá tiles occluders APÓS as entidades.
-  // Não usa info.renderLayer (nunca é setado pelo mapRenderer).
-  // Y-sort: só redesenha tiles cujo ty > focusTileY (na frente do player).
-  // Em view admin (focusTileY=null), redesenha todos os occluders após entidades.
-  const drawOccluderAfterEntities = (_spriteId, spriteMeta, info) => {
-    if (isFlat(spriteMeta) || !isOccluder(spriteMeta)) return false;
-    if (focusTileY === null) return true;
-    return (info?.ty ?? 0) > focusTileY;
-  };
-
   const drawLayer3Pre = (_spriteId, spriteMeta, info) => {
     if (info?.renderLayer !== 3) return true;
     return !isOccluder(spriteMeta);
   };
 
   const drawLayer3Post = (_spriteId, spriteMeta, info) => {
-    if (info?.renderLayer !== 3) return false; // ← era true (bug: desenhava tudo)
+    if (info?.renderLayer !== 3) return false;
     return isOccluder(spriteMeta);
   };
 
@@ -650,7 +648,7 @@ export function renderWorld({
         layerMax: 3,
         zPredicate: (fz) => fz === activeZ,
         spritePredicate: enforceStrictFloorPriority
-          ? null  // Desenha tudo — top items redesenhados após entidades no step 5
+          ? null // Desenha tudo — top items redesenhados após entidades no step 5
           : drawLayer2IfFlat,
       });
     });
@@ -662,7 +660,7 @@ export function renderWorld({
       layerMax: 3,
       zPredicate: (fz) => fz === activeZ,
       spritePredicate: enforceStrictFloorPriority
-        ? null  // Desenha tudo — top items redesenhados após entidades no step 5
+        ? null // Desenha tudo — top items redesenhados após entidades no step 5
         : drawLayer2IfFlat,
     });
   }
@@ -815,58 +813,62 @@ export function renderWorld({
     );
   }
 
-  // ── 4.6 / 5.5 Y-sort: sprites altos redesenhados APÓS entidades ─────────────
-  // Sprites não-planos no tile do player ou ao sul cobrem a entidade (y-sort).
-  // Usa isFlat para excluir itens decorativos planos; NÃO filtra por isOccluder —
-  // troncos de árvore e outras plantas altas que não são "occluders" formais
-  // também precisam cobrir o player quando estão no mesmo tile (ty >= focusTileY).
+  // ── 4.6 / 5.5 Y-sort: occluders redesenhados APÓS entidades ────────────────
+  // Apenas ocluders (árvores, vegetação) são redesenhados por y-sort.
+  // Paredes/edifícios NÃO são ocluders — desenhados apenas no step 1 (ANTES do player).
+  // Y-sort: só redesenha tiles cujo ty >= focusTileY (tile do player ou ao sul).
   // Funciona em ambos os modos: focusTileY=null → redesenha tudo (view admin).
-  // Multi-floor: usa >= (inclui tile do player); single-floor: usa > (original).
+  // Predicate especial: verifica isOccluder independente da render_layer do sprite.
+  const drawOccludersYSort = (_spriteId, spriteMeta, info) => {
+    // Apenas ocluders visuais (árvores, vegetação) — paredes NÃO entram aqui
+    if (!isOccluder(spriteMeta)) return false;
+    // Y-sort: apenas tiles na frente ou na mesma linha do player (ty >= focusTileY)
+    if (focusTileY === null) return true; // view admin: redesenha todos os ocluders
+    return (info?.ty ?? 0) >= focusTileY;
+  };
+
   if (perfEnabled) {
     perfStep(perf, "mapTall", () => {
       renderMap({
         ..._mapBase,
-        layerMin: 2,
-        layerMax: 2,
+        layerMin: 0,
+        layerMax: 3,
         clearCanvas: false,
         skipGroundPass: true,
         zPredicate: (z, _dz, aZ) => z === aZ,
         spritePredicate: enforceStrictFloorPriority
           ? (_id, spriteMeta, info) => {
-              if (isFlat(spriteMeta)) return false;
+              if (!isOccluder(spriteMeta)) return false;
               if (focusTileY === null) return true;
               return (info?.ty ?? 0) >= focusTileY;
             }
-          : drawOccluderAfterEntities,
+          : drawOccludersYSort,
       });
     });
   } else {
     renderMap({
       ..._mapBase,
-      layerMin: 2,
-      layerMax: 2,
+      layerMin: 0,
+      layerMax: 3,
       clearCanvas: false,
       skipGroundPass: true,
       zPredicate: (z, _dz, aZ) => z === aZ,
       spritePredicate: enforceStrictFloorPriority
         ? (_id, spriteMeta, info) => {
-            if (isFlat(spriteMeta)) return false;
+            if (!isOccluder(spriteMeta)) return false;
             if (focusTileY === null) return true;
             return (info?.ty ?? 0) >= focusTileY;
           }
-        : drawOccluderAfterEntities,
+        : drawOccludersYSort,
     });
   }
 
   // ── 5. Redraw top items do andar ativo APÓS entidades — ANTES dos andares superiores
   // ─────────────────────────────────────────────────────────────────────────────
-  // Top items foram desenhados no step 1 (antes do player), mas precisam aparecer
-  // ACIMA do player. Ao redesenhá-los AQUI, após renderEntitiesFull, o segundo
-  // desenho sobrepõe os pixels do player — resultado final: copa > player.
-  //
-  // O step 6 (andares superiores) ocorre DEPOIS, garantindo: Z=6 ground > Z=7 top.
-  //
-  // Captura tanto renderLayer=3 quanto category="top" com renderLayer=2 (edge case).
+  // Top items (copas de árvore, decoração) são redesenhados AQUI, após entidades.
+  // SEM y-sort: toda folhagem do andar ativo aparece ACIMA do player, independente
+  // da posição relativa. Isso garante que ao passarmos ao lado de uma árvore, a
+  // copa sempre cobre o player — comportamento visual esperado no RPG.
   if (showTopDecor && !topDecorBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapTop", () => {
@@ -877,10 +879,7 @@ export function renderWorld({
           clearCanvas: false,
           skipGroundPass: true,
           zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: (_id, _meta, info) => {
-            if (info?.renderLayer === 3) return true;
-            return info?.category === "top" && info?.renderLayer === 2;
-          },
+          spritePredicate: (_id, _meta, info) => info?.category === "top",
         });
       });
     } else {
@@ -891,24 +890,14 @@ export function renderWorld({
         clearCanvas: false,
         skipGroundPass: true,
         zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: (_id, _meta, info) => {
-          if (info?.renderLayer === 3) return true;
-          return info?.category === "top" && info?.renderLayer === 2;
-        },
+        spritePredicate: (_id, _meta, info) => info?.category === "top",
       });
     }
   }
 
-  // ── 5.6 World items (tileLayer=99) APÓS top items, ANTES dos andares sup. ──
-  renderMap({
-    ..._mapBase,
-    layerMin: 2,
-    layerMax: 2,
-    clearCanvas: false,
-    skipGroundPass: true,
-    zPredicate: (z, _dz, aZ) => z === aZ,
-    spritePredicate: (_spriteId, _spriteMeta, info) => info?.tileLayer === 99,
-  });
+  // ── 5.6 REMOVIDO ─────────────────────────────────────────────────────────────
+  // World items (tileLayer=99) são desenhados no step 1 (antes das entidades).
+  // Redesenhá-los aqui causava player aparecer atrás de itens movidos — removido.
 
   // ── 6. Andares superiores (painter's algorithm — cobrem conteúdo do andar ativo)
   // ─────────────────────────────────────────────────────────────────────────────
@@ -927,8 +916,7 @@ export function renderWorld({
             layerMin: 0,
             layerMax: 3,
             zPredicate: (fz) => fz === z,
-            spritePredicate: (_id, _meta, info) =>
-              info?.category !== "top",
+            spritePredicate: (_id, _meta, info) => info?.category !== "top",
           });
         });
       });
@@ -940,8 +928,7 @@ export function renderWorld({
           layerMin: 0,
           layerMax: 3,
           zPredicate: (fz) => fz === z,
-          spritePredicate: (_id, _meta, info) =>
-            info?.category !== "top",
+          spritePredicate: (_id, _meta, info) => info?.category !== "top",
         });
       });
     }

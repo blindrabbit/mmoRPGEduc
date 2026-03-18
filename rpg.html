@@ -1327,6 +1327,7 @@
       import {
         buildFloorIndex,
         setupCanvas,
+        getLiquidVariantKey,
       } from "./src/render/mapRenderer.js";
       import { renderWorld } from "./src/render/worldRenderer.js";
       import { createAnimationClock } from "./src/core/animationClock.js";
@@ -1588,7 +1589,9 @@
           const qty = Number(item.quantity ?? 1);
           const variantKey = item.stackable
             ? (itemDataService?.getVariantForQuantity(tileId, qty) ?? "0")
-            : "0";
+            : item.content_type != null
+              ? getLiquidVariantKey(item.content_type)
+              : "0";
           const sprite = Number.isFinite(tileId)
             ? assets.getMapSprite(tileId, variantKey)
             : null;
@@ -1649,8 +1652,11 @@
           slot.dataset.itemEquipSlot = equipSlot;
 
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
+          const equipVariantKey = item?.content_type != null
+            ? getLiquidVariantKey(item.content_type)
+            : "0";
           const sprite = Number.isFinite(tileId)
-            ? assets.getMapSprite(tileId)
+            ? assets.getMapSprite(tileId, equipVariantKey)
             : null;
           if (sprite?.sheet) {
             const cvs = document.createElement("canvas");
@@ -1728,7 +1734,13 @@
       }
 
       function _applyRenderedWorldItem(worldItemId, item) {
-        const tileId = Number(item?.tileId ?? item?.id);
+        const tileId = Number(
+          item?.tileId ??
+            item?.spriteId ??
+            item?.sourceTileId ??
+            item?.originalItemId ??
+            item?.id,
+        );
         const x = Number(item?.x);
         const y = Number(item?.y);
         const z = Number(item?.z ?? 7);
@@ -1753,11 +1765,13 @@
         const layerKey = String(WORLD_ITEM_LAYER);
         if (!Array.isArray(map[coord][layerKey])) map[coord][layerKey] = [];
 
-        map[coord][layerKey].push({
+        const _rendTile = {
           id: tileId,
           count: Number(item?.quantity ?? 1),
           __worldItemId: worldItemId,
-        });
+        };
+        if (item?.content_type != null) _rendTile.content_type = item.content_type;
+        map[coord][layerKey].push(_rendTile);
 
         _worldItemRenderById[worldItemId] = {
           coord,
@@ -1800,14 +1814,19 @@
             item?.sourceTileId != null
           ) {
             const sourceKey = `${item.sourceCoord}|${item.sourceLayer}|${item.sourceTileId}`;
-            if (!_removedMapSourceKeys.has(sourceKey)) {
+            // Only remove if this pickup hasn't already been handled by a claim
+            // (claimedBefore tiles were already removed; only remove another if
+            //  the total removals so far don't yet cover this temp item's pickup)
+            const removedBefore = _removedMapSourceKeys.get(sourceKey) ?? 0;
+            const claimedBefore = _claimedMapSourceKeys.get(sourceKey) ?? 0;
+            if (removedBefore <= claimedBefore) {
               const removedSource = _removeTileFromLayer(
                 String(item.sourceCoord),
                 String(item.sourceLayer),
                 (t) => Number(t?.id) === Number(item.sourceTileId),
               );
               if (removedSource) {
-                _removedMapSourceKeys.add(sourceKey);
+                _removedMapSourceKeys.set(sourceKey, removedBefore + 1);
                 dirty = true;
               }
             }
@@ -1835,16 +1854,27 @@
             continue;
 
           const sourceKey = _buildMapSourceKey(coord, layer, tileId);
-          if (_claimedMapSourceKeys.has(sourceKey)) continue;
+          const claimedBefore = _claimedMapSourceKeys.get(sourceKey) ?? 0;
+          const removedBefore = _removedMapSourceKeys.get(sourceKey) ?? 0;
 
-          _claimedMapSourceKeys.add(sourceKey);
-          _removedMapSourceKeys.add(sourceKey);
-          const removed = _removeTileFromLayer(
-            coord,
-            String(layer),
-            (t) => Number(t?.id) === tileId,
-          );
-          dirty = removed || dirty;
+          // Always register the claim (permanent ownership)
+          _claimedMapSourceKeys.set(sourceKey, claimedBefore + 1);
+
+          // Only physically remove a tile if a temp world_item hasn't already
+          // removed one on behalf of this claim (claimedBefore+1 > removedBefore).
+          // This prevents the claim from consuming the NEXT stacked tile when a
+          // temp item already handled the visual removal for this same pickup.
+          if (claimedBefore + 1 > removedBefore) {
+            const removed = _removeTileFromLayer(
+              coord,
+              String(layer),
+              (t) => Number(t?.id) === tileId,
+            );
+            if (removed) {
+              _removedMapSourceKeys.set(sourceKey, removedBefore + 1);
+              dirty = true;
+            }
+          }
         }
 
         if (dirty) {
@@ -1963,8 +1993,8 @@
       const _worldItemRenderById = {};
       const _worldItemsById = {};
       const _worldItemsByCoord = {};
-      const _removedMapSourceKeys = new Set();
-      const _claimedMapSourceKeys = new Set();
+      const _removedMapSourceKeys = new Map(); // sourceKey → count of visual removals
+      const _claimedMapSourceKeys = new Map(); // sourceKey → count of permanent claims
       let _dragDropManager = null;
       const _dragUiUnsubs = [];
 
@@ -1973,6 +2003,13 @@
 
       const BASIC_ATTACK_CD_KEY = "cdBasicAttack";
       const AUTO_ATTACK_TICK_MS = 2000;
+
+      function _findFreeInvSlot(inventory) {
+        for (let i = 0; i < 20; i++) {
+          if (!inventory[i]) return i;
+        }
+        return -1;
+      }
 
       function _numOr(value, fallback) {
         // Trata null/undefined como falsy (deve usar fallback)
@@ -2052,8 +2089,30 @@
         );
 
         _dragUiUnsubs.push(
-          worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, () => {
-            _setDragPreviewHint(DRAG_PREVIEW_TEXT.invalid, "invalid");
+          worldEvents.subscribe(EVENT_TYPES.ITEM_DROP_INVALID, (evt) => {
+            // Mensagens específicas baseadas na razão da falha
+            let msg = DRAG_PREVIEW_TEXT.invalid;
+            if (evt?.reason === "blocked-by-wall") {
+              msg = "Não é possível dropar aqui (obstáculo)";
+            } else if (evt?.reason === "no-ground") {
+              msg = "Não é possível dropar aqui (sem chão)";
+            } else if (evt?.reason === "out-of-range") {
+              msg = `Fora de alcance (${evt.distance} SQM)`;
+            } else if (evt?.reason === "no-walkable-ground") {
+              msg = "Não é possível dropar aqui (terreno inválido)";
+            }
+            _setDragPreviewHint(msg, "invalid");
+          }),
+        );
+
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ITEM_OUT_OF_REACH, (evt) => {
+            // Feedback visual para item fora de alcance
+            let msg = `Item fora de alcance (${evt?.distance ?? "?"} SQM)`;
+            if (evt?.maxRange === 1) {
+              msg = "Muito longe para mover (1 SQM)";
+            }
+            _setDragPreviewHint(msg, "invalid");
           }),
         );
 
@@ -2417,6 +2476,58 @@
         subscribe("players", (data) => handleStatsChanges("players", data));
         blog("WorldStore inicializado.", "ok");
 
+        // ── Debug helper — inspeciona metadados de sprite no console ──────────
+        // Uso: debugSprite(spriteId)  →  mostra category, renderLayer, flags_raw
+        window.debugSprite = function (id) {
+          const meta = mapData?.[String(id)] ?? mapData?.[Number(id)];
+          if (!meta) {
+            console.warn(
+              "[debugSprite] sprite",
+              id,
+              "não encontrado em mapData",
+            );
+            return;
+          }
+          const flags = meta.flags_raw ?? {};
+          const game = meta.game ?? {};
+          const isBank = flags.bank || game.render_layer === 0;
+          const isClip = flags.clip && !flags.bottom;
+          const isBot = flags.bottom;
+          const isTop = flags.top || flags.topeffect;
+          const cat = isBank
+            ? game.category_type === "wall"
+              ? "bottom"
+              : "ground"
+            : isClip
+              ? "groundBorder"
+              : isBot
+                ? "bottom"
+                : isTop
+                  ? "top"
+                  : "common";
+          const rawRL = Number(game.render_layer);
+          const rl = Number.isFinite(rawRL)
+            ? Math.max(0, Math.min(3, Math.floor(rawRL)))
+            : cat === "ground"
+              ? 0
+              : cat === "groundBorder"
+                ? 1
+                : cat === "top"
+                  ? 3
+                  : 2;
+          console.table({
+            id,
+            category: cat,
+            renderLayer: rl,
+            "flags.top": flags.top,
+            "flags.bank": flags.bank,
+            "game.render_layer": game.render_layer,
+            "game.category_type": game.category_type,
+            grid_size: meta.grid_size,
+          });
+          return { meta, category: cat, renderLayer: rl };
+        };
+
         return true;
       }
 
@@ -2533,13 +2644,33 @@
                   const MAP_SYNC_GRACE_MS = 120;
                   const withoutPrefix = payload.worldItemId.slice(4);
                   const parts = withoutPrefix.split("_");
+                  // ID format: "x,y,z_layer_tileId_occIdx" — pop occIdx first
+                  parts.pop(); // occIdx (occurrence index for stacked same-type items)
                   const tileId = parseInt(parts.pop(), 10);
                   const mapLayer = parts.pop();
                   const coord = parts.join("_");
                   const [tx, ty, tz] = coord.split(",").map(Number);
 
+                  // Busca o tile original para preservar quantity e campos extras
+                  // (ex: content_type em liquid containers, count em stackables)
+                  const _srcTileArr = map?.[coord]?.[mapLayer];
+                  const _srcTile = Array.isArray(_srcTileArr)
+                    ? _srcTileArr.find((t) => Number(t.id) === tileId)
+                    : null;
+                  const {
+                    id: _stId,
+                    count: _stCount,
+                    action_id: _stAid,
+                    unique_id: _stUid,
+                    ...srcTileExtraFields
+                  } = _srcTile ?? {};
+                  const tileQuantity = _srcTile?.count ?? 1;
+
                   const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${Date.now()}`;
                   await dbSet(`world_items/${tempId}`, {
+                    // Campos extras do tile original (ex: content_type)
+                    ...srcTileExtraFields,
+
                     id: tempId,
                     tileId,
                     name:
@@ -2548,10 +2679,11 @@
                     x: tx,
                     y: ty,
                     z: tz,
-                    type: "item",
-                    quantity: 1,
+                    type: itemDataService?.getEntry?.(tileId)?.game?.category_type ?? "material",
+                    quantity: tileQuantity,
+                    count: tileQuantity,
                     stackable: itemDataService?.isStackable?.(tileId) ?? false,
-                    fromMap: false,
+                    fromMap: true,
                     sourceCoord: coord,
                     sourceLayer: Number(mapLayer),
                     sourceTileId: Number(tileId),
@@ -2565,8 +2697,13 @@
                     setTimeout(resolve, MAP_SYNC_GRACE_MS),
                   );
 
-                  payload = { ...payload, worldItemId: tempId };
+                  payload = { ...payload, worldItemId: tempId, tileId };
                 }
+
+                // Sem atualizações otimistas: Firebase/watchPlayerData é autoritativo.
+                // Evita sumiço de itens causado por watchPlayerData sobrescrevendo
+                // estado otimista quando o jogador move antes do worldEngine processar.
+                const _optimisticRollback = null;
 
                 await submitPlayerAction(uid, {
                   type: action.type,
@@ -2584,6 +2721,7 @@
                 }
                 return { success: true };
               } catch (err) {
+                _optimisticRollback?.();
                 return {
                   success: false,
                   error: err?.message ?? "Falha ao enviar ação",
@@ -2625,47 +2763,91 @@
             if (source === "inventory") return myPos?.inventory?.[key] ?? null;
             if (source === "equipment") return myPos?.equipment?.[key] ?? null;
             if (source === "world") {
+              // 1. Firebase world_items (itens já movidos/colocados no chão)
               const bucket = _worldItemsByCoord[key];
               if (Array.isArray(bucket) && bucket.length) {
-                return bucket[bucket.length - 1];
+                // Retorna todos os itens da pilha para permitir seleção
+                return bucket[bucket.length - 1]; // Retorna o topo por default
               }
 
+              // 2. Itens estáticos do mapa (map_compacto.json)
               const mapTile = map?.[key];
               if (!mapTile) return null;
+
               const layers = Object.keys(mapTile)
                 .map(Number)
                 .sort((a, b) => b - a);
+
               for (const layer of layers) {
                 const tiles = mapTile[layer];
                 if (!Array.isArray(tiles)) continue;
-                for (const tile of tiles) {
-                  const sourceKey = _buildMapSourceKey(key, layer, tile.id);
-                  if (
-                    _claimedMapSourceKeys.has(sourceKey) ||
-                    _removedMapSourceKeys.has(sourceKey)
-                  ) {
-                    continue;
-                  }
 
+                // Track occurrence index per tile type so stacked same-type
+                // items get unique IDs (e.g. two caixas on the same layer).
+                const _occSeen = {};
+                for (const tile of tiles) {
+                  // Verifica se é pegável ou movível
                   if (
                     itemDataService?.canPickUp?.(tile.id) ||
                     itemDataService?.canMove?.(tile.id)
                   ) {
+                    const occIdx = _occSeen[tile.id] ?? 0;
+                    _occSeen[tile.id] = occIdx + 1;
+
                     const [x, y, z] = key.split(",").map(Number);
+
+                    // Obtém todas as propriedades do item do map_data.json
+                    const itemEntry = itemDataService?.getEntry?.(tile.id);
+
+                    // Extrair campos extras do tile (ex: content_type para
+                    // liquid containers) — preservados sem alteração
+                    const {
+                      id: _tId,
+                      count: _cnt,
+                      action_id: _aid,
+                      unique_id: _uid,
+                      ...extraTileFields
+                    } = tile;
+
                     return {
-                      id: `map_${key}_${layer}_${tile.id}`,
+                      // Campos extras do tile (content_type, etc.) — primeiro
+                      // para que os campos explícitos abaixo possam sobrescrever
+                      ...extraTileFields,
+
+                      // Identificação — inclui occIdx para distinguir instâncias empilhadas
+                      id: `map_${key}_${layer}_${tile.id}_${occIdx}`,
                       tileId: tile.id,
+
+                      // Propriedades básicas (preservadas do tile original)
+                      count: tile.count ?? 1,
+                      quantity: tile.count ?? 1,
+                      action_id: tile.action_id ?? null,
+                      unique_id: tile.unique_id ?? null,
+
+                      // Propriedades do map_data.json
                       name:
                         itemDataService?.getItemName?.(tile.id) ??
                         `Item #${tile.id}`,
-                      x,
-                      y,
-                      z,
-                      type: "item",
-                      quantity: tile.count ?? 1,
+                      type: itemEntry?.game?.category_type ?? "item",
+                      slot:
+                        itemDataService?.getEquipmentSlotName?.(tile.id) ??
+                        null,
                       stackable:
                         itemDataService?.isStackable?.(tile.id) ?? false,
+
+                      // Propriedades de renderização
+                      render_layer: itemEntry?.game?.render_layer ?? 2,
+
+                      // Localização
+                      x,
+                      y,
+                      z: z ?? 7,
+
+                      // Metadados de origem (para rollback)
                       fromMap: true,
+                      sourceCoord: key,
+                      sourceLayer: layer,
+                      sourceTileId: tile.id,
                     };
                   }
                 }
@@ -2674,11 +2856,96 @@
             }
             return null;
           },
+
+          /**
+           * Retorna TODOS os itens de uma coordenada (para seleção de itens empilhados).
+           * @param {string} key - Coordenada "x,y,z"
+           * @returns {Array} Lista de itens na coordenada
+           */
+          getAllWorldItemsAtCoord: (key) => {
+            const items = [];
+
+            // 1. Firebase world_items
+            const bucket = _worldItemsByCoord[key];
+            if (Array.isArray(bucket) && bucket.length) {
+              items.push(...bucket);
+            }
+
+            // 2. Itens estáticos do mapa
+            const mapTile = map?.[key];
+            if (mapTile) {
+              const layers = Object.keys(mapTile)
+                .map(Number)
+                .sort((a, b) => b - a);
+
+              for (const layer of layers) {
+                const tiles = mapTile[layer];
+                if (!Array.isArray(tiles)) continue;
+
+                // Track occurrence index per tile type (stacked same-type tiles)
+                const _occSeen = {};
+                for (const tile of tiles) {
+                  if (
+                    itemDataService?.canPickUp?.(tile.id) ||
+                    itemDataService?.canMove?.(tile.id)
+                  ) {
+                    const occIdx = _occSeen[tile.id] ?? 0;
+                    _occSeen[tile.id] = occIdx + 1;
+
+                    const [x, y, z] = key.split(",").map(Number);
+                    const itemEntry = itemDataService?.getEntry?.(tile.id);
+
+                    const {
+                      id: _tId2,
+                      count: _cnt2,
+                      action_id: _aid2,
+                      unique_id: _uid2,
+                      ...extraTileFields2
+                    } = tile;
+
+                    items.push({
+                      // Campos extras do tile primeiro (ex: content_type)
+                      ...extraTileFields2,
+
+                      id: `map_${key}_${layer}_${tile.id}_${occIdx}`,
+                      tileId: tile.id,
+                      count: tile.count ?? 1,
+                      quantity: tile.count ?? 1,
+                      action_id: tile.action_id ?? null,
+                      unique_id: tile.unique_id ?? null,
+                      name:
+                        itemDataService?.getItemName?.(tile.id) ??
+                        `Item #${tile.id}`,
+                      type: itemEntry?.game?.category_type ?? "item",
+                      slot:
+                        itemDataService?.getEquipmentSlotName?.(tile.id) ??
+                        null,
+                      stackable:
+                        itemDataService?.isStackable?.(tile.id) ?? false,
+                      render_layer: itemEntry?.game?.render_layer ?? 2,
+                      x,
+                      y,
+                      z: z ?? 7,
+                      fromMap: true,
+                      sourceCoord: key,
+                      sourceLayer: layer,
+                      sourceTileId: tile.id,
+                    });
+                  }
+                }
+              }
+            }
+
+            return items;
+          },
           itemDataService,
           createGhostElement: (itemData) => {
             const tileId =
               itemData?.tileId ?? itemData?.spriteId ?? itemData?.id;
-            const sprite = tileId != null ? assets.getMapSprite(tileId) : null;
+            const ghostVariantKey = itemData?.content_type != null
+              ? getLiquidVariantKey(itemData.content_type)
+              : "0";
+            const sprite = tileId != null ? assets.getMapSprite(tileId, ghostVariantKey) : null;
             if (!sprite?.sheet) return null;
 
             const cvs = document.createElement("canvas");

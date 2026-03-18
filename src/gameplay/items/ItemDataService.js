@@ -2,52 +2,48 @@
 // ItemDataService.js — mmoRPGEduc
 // Serviço de consulta de propriedades de itens a partir do map_data.json.
 //
-// Responsabilidades:
-//   • Responder se um tile/item pode ser movido (is_movable)
-//   • Responder se um tile/item pode ser pego (is_pickupable)
-//   • Expor metadados do item (categoria, sprite, etc.)
-//   • Servir como fonte da verdade para drag & drop e itemActions
-//
 // Fonte de dados: worldState.mapData (carregado no boot via map_data.json)
 // Nenhuma chamada Firebase — apenas consulta do cache em memória.
-//
-// Estrutura esperada em map_data.json por entrada:
-//   {
-//     "3349": {
-//       "id": 3349,
-//       "variants": { "0": { "x":1808,"y":0,"w":31,"h":31,"atlas_name":"atlas_items","atlas_index":2 } },
-//       "game": {
-//         "is_movable": true,
-//         "is_pickupable": true,
-//         "is_stackable": false,
-//         "is_usable": false,
-//         "category_type": "item",
-//         "render_layer": 2
-//       },
-//       "flags_raw": {
-//         "take": true,
-//         "clothes": { "slot": 0 },
-//         "item_name": null
-//       }
-//     }
-//   }
 // =============================================================================
 
+import {
+  isWalkableById,
+  canReceiveItemsById,
+  ITEM_CLASSIFICATION,
+} from "./itemClassification.js";
+
 // Mapeamento de slot numérico (flags_raw.clothes.slot) para nome canônico
-// Baseado nos dados observados em map_data.json (slots 0 e 6 encontrados)
-// Expandir conforme mais itens forem catalogados
 const SLOT_NUMBER_TO_NAME = Object.freeze({
-  0: 'weapon',
-  1: 'shield',
-  2: 'head',
-  3: 'chest',
-  4: 'legs',
-  5: 'feet',
-  6: 'ring',
-  7: 'amulet',
-  8: 'back',
-  9: 'gloves',
+  0: "weapon",
+  1: "shield",
+  2: "head",
+  3: "chest",
+  4: "legs",
+  5: "feet",
+  6: "ring",
+  7: "amulet",
+  8: "back",
+  9: "gloves",
 });
+
+// Categorias de walkability (OTClient/Canary compatible)
+const WALKABILITY = {
+  WALKABLE: "walkable", // Pode andar (chão, grama, água rasa)
+  NOT_WALKABLE: "not_walkable", // Não pode andar (parede, móvel, obstáculo)
+  SURFACE: "surface", // Superfície para itens (mesa, bancada, chão)
+};
+
+// Categorias de stack (empilhamento de itens)
+const STACKABILITY = {
+  STACKABLE: "stackable", // Pode empilhar (moedas, alimentos)
+  NOT_STACKABLE: "not_stackable", // Não empilha (equipamentos, ferramentas)
+};
+
+// Categorias de "allow pickupable" (pode receber itens em cima)
+const ALLOW_PICKUPABLE = {
+  YES: "yes", // Pode receber itens (chão, mesas, bancadas)
+  NO: "no", // Não recebe itens (parede, ar, água profunda)
+};
 
 export class ItemDataService {
   /**
@@ -55,6 +51,7 @@ export class ItemDataService {
    */
   constructor(mapData) {
     this._data = mapData ?? {};
+    this._cache = new Map();
   }
 
   // ---------------------------------------------------------------------------
@@ -90,7 +87,7 @@ export class ItemDataService {
    */
   isItem(tileId) {
     const entry = this._get(tileId);
-    return entry?.game?.category_type === 'item';
+    return entry?.game?.category_type === "item";
   }
 
   /**
@@ -107,6 +104,136 @@ export class ItemDataService {
    */
   isUsable(tileId) {
     return !!this._get(tileId)?.game?.is_usable;
+  }
+
+  // ---------------------------------------------------------------------------
+  // NOVO: Walkability e Superfícies (OTClient/Canary compatible)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Classifica se um tile é walkable (pode ser pisado por creatures).
+   * Regras (OTClient/Canary compatible):
+   *   1. Verifica classificação específica por ID (itemClassification.js)
+   *   2. is_walkable = true → WALKABLE
+   *   3. is_walkable = false → NOT_WALKABLE
+   *   4. Fallback: flags_raw (bank.waypoints, unpass)
+   *   5. Sem flag → assume NOT_WALKABLE (seguro)
+   * @param {number|string} tileId
+   * @returns {string} 'walkable' | 'not_walkable'
+   */
+  getWalkability(tileId) {
+    const id = Number(tileId);
+
+    // 1. Verifica classificação específica por ID
+    const byId = isWalkableById(id);
+    if (byId !== null) {
+      return byId ? WALKABILITY.WALKABLE : WALKABILITY.NOT_WALKABLE;
+    }
+
+    // 2. Verifica metadata do item
+    const entry = this._get(tileId);
+    if (!entry) return WALKABILITY.NOT_WALKABLE;
+
+    if (entry.game?.is_walkable === true) return WALKABILITY.WALKABLE;
+    if (entry.game?.is_walkable === false) return WALKABILITY.NOT_WALKABLE;
+
+    // 3. Fallback: flags_raw
+    if (entry.flags_raw?.bank?.waypoints > 0) return WALKABILITY.WALKABLE;
+    if (entry.flags_raw?.unpass === true) return WALKABILITY.NOT_WALKABLE;
+
+    return WALKABILITY.NOT_WALKABLE;
+  }
+
+  /**
+   * Verifica se um tile pode receber itens em cima (allow pickupable).
+   * Regras (OTClient/Canary compatible):
+   *   1. Verifica classificação específica por ID
+   *   2. Chão (render_layer=0, is_walkable=true) → SIM
+   *   3. Containers (baús, barris, armários) → SIM
+   *   4. Mobília/superfícies (mesas, bancadas) → SIM
+   *   5. Paredes → NÃO
+   *   6. Itens altos não-walkable → NÃO
+   * @param {number|string} tileId
+   * @returns {string} 'yes' | 'no'
+   */
+  canReceiveItems(tileId) {
+    const id = Number(tileId);
+
+    // 1. Verifica classificação específica por ID
+    const byId = canReceiveItemsById(id);
+    if (byId !== null) {
+      return byId ? ALLOW_PICKUPABLE.YES : ALLOW_PICKUPABLE.NO;
+    }
+
+    // 2. Verifica metadata do item
+    const entry = this._get(tileId);
+    if (!entry) return ALLOW_PICKUPABLE.NO;
+
+    const game = entry.game || {};
+    const flags = entry.flags_raw || {};
+
+    // Chão walkable sempre pode receber itens
+    if (game.is_walkable === true && game.render_layer === 0) {
+      return ALLOW_PICKUPABLE.YES;
+    }
+
+    // Containers (baús, barris, armários) podem receber itens
+    if (game.category_type === "container" || game.is_container) {
+      return ALLOW_PICKUPABLE.YES;
+    }
+
+    // Mobília/superfícies (mesas, bancadas, prateleiras)
+    if (
+      ["furniture", "surface", "table", "counter"].includes(game.category_type)
+    ) {
+      return ALLOW_PICKUPABLE.YES;
+    }
+
+    // Paredes NÃO podem receber itens
+    if (game.category_type === "wall" || flags.bottom) {
+      return ALLOW_PICKUPABLE.NO;
+    }
+
+    // Itens altos (render_layer >= 2) que não são walkable → NÃO
+    if (game.render_layer >= 2 && game.is_walkable !== true) {
+      return ALLOW_PICKUPABLE.NO;
+    }
+
+    // Default: NÃO (seguro)
+    return ALLOW_PICKUPABLE.NO;
+  }
+
+  /**
+   * Verifica se um tile é uma superfície para itens (mesa, bancada, chão).
+   * Similar a canReceiveItems, mas mais restritivo.
+   * @param {number|string} tileId
+   * @returns {boolean}
+   */
+  isSurface(tileId) {
+    const entry = this._get(tileId);
+    if (!entry) return false;
+
+    const game = entry.game || {};
+
+    // Chão é superfície
+    if (game.is_walkable === true && game.render_layer === 0) {
+      return true;
+    }
+
+    // Mobília específica
+    const surfaceTypes = [
+      "furniture",
+      "surface",
+      "table",
+      "counter",
+      "desk",
+      "shelf",
+    ];
+    if (surfaceTypes.includes(game.category_type)) {
+      return true;
+    }
+
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -130,7 +257,7 @@ export class ItemDataService {
    */
   getVariant(tileId, variantIdx = 0) {
     const entry = this._get(tileId);
-    return entry?.variants?.[variantIdx] ?? entry?.variants?.['0'] ?? null;
+    return entry?.variants?.[variantIdx] ?? entry?.variants?.["0"] ?? null;
   }
 
   /**

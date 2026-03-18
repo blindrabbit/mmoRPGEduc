@@ -75,6 +75,18 @@ export function initRPGPlayerActions({
     // Se moveToTarget=false, vai para a ORIGEM (para pegar o item)
     const posToMoveTo = moveToTarget ? targetPos : fromPos;
 
+    // Valida posToMoveTo antes de usar
+    if (!posToMoveTo || posToMoveTo.x == null || posToMoveTo.y == null) {
+      console.warn(
+        "[RPG PlayerActions] posToMoveTo inválido:",
+        posToMoveTo,
+        "moveToTarget:",
+        moveToTarget,
+      );
+      showFloatingText("Posição inválida", "error");
+      return;
+    }
+
     console.log(
       "[RPG PlayerActions] moveToTarget:",
       moveToTarget,
@@ -653,6 +665,22 @@ function showRPGMessage(message, type = "system") {
  * Encontra posição adjacente walkável ao target
  */
 function findAdjacentPosition(player, targetPos, map, nexoData) {
+  // Valida player
+  if (!player) {
+    console.warn("[findAdjacentPosition] Player undefined");
+    return null;
+  }
+
+  // Valida targetPos
+  if (!targetPos || targetPos.x == null || targetPos.y == null) {
+    console.warn("[findAdjacentPosition] targetPos inválido:", targetPos);
+    return {
+      x: Math.round(player.x),
+      y: Math.round(player.y),
+      z: player.z ?? 7,
+    };
+  }
+
   const targetX = Math.round(targetPos.x);
   const targetY = Math.round(targetPos.y);
   const targetZ = targetPos.z ?? player.z ?? 7;
@@ -697,6 +725,15 @@ function retryItemMove(pendingMove, onPlayerAction) {
         toX: Math.round(targetPos.x),
         toY: Math.round(targetPos.y),
         toZ: targetPos.z ?? 7,
+      },
+    });
+  } else if (source === "world" && worldItemId && !targetPos) {
+    // Pegar item do mundo para o inventário
+    onPlayerAction({
+      type: "item",
+      payload: {
+        itemAction: "pickUp",
+        worldItemId,
       },
     });
   } else if (source === "world" && worldItemId) {
