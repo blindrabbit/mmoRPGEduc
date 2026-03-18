@@ -608,48 +608,63 @@ export function renderWorld({
     return isOccluder(spriteMeta);
   };
 
-  // ── 1. Floors — isolamento explícito, back-to-front (painter's algorithm) ──
-  // Cada floor renderiza completamente (layers 0–3) antes do próximo.
-  // getVisibleFloors() retorna em ordem decrescente: Z maior (mais fundo) primeiro.
-  //   Ex: activeZ=7 → [7, 6, 5, 4, 3, 2, 1, 0]
-  //   Z=7 renderiza primeiro (fundo do canvas), Z=0 por último (topo visual).
+  // ── Pipeline de Renderização — Ordem OTClient ──────────────────────────────
   //
-  // Upper floors (z < activeZ):  spritePredicate bloqueia category="top" — andares
-  //   superiores não exibem copas de árvore/telhado (cobrem o andar ativo, não o contrário).
+  // OTClient renderiza por andar (painter's algorithm), por tile, nesta ordem:
+  //   ground → groundBorder → bottom → common (reverse stack) → creature → top
   //
-  // Andar ativo em multi-floor (enforceStrictFloorPriority=true):
-  //   predicate=undefined → renderiza TUDO (layers 0–3). O painter's algorithm garante
-  //   que Z=6/Z=5 pintam por cima. Steps 4 e 6.25 NÃO redesenham layer 2 neste modo.
+  // Regras fundamentais:
+  //   • Top items do andar ativo ficam ACIMA das entidades (creatures)
+  //   • Qualquer tile do andar superior (Z-1) fica ACIMA de tudo do andar ativo
   //
-  // Andar ativo em single-floor (enforceStrictFloorPriority=false):
-  //   drawLayer2IfFlat → layer 2 tall fica para step 4 (y-sort antes do player)
-  //   e step 6.25 (y-sort após entidades).
-  const _floorsToRender = showUpperFloors
-    ? getVisibleFloors(activeZ)
-    : getVisibleFloors(activeZ).filter((z) => z >= activeZ);
+  // Nossa implementação replica isso com a seguinte ordem:
+  //   1. Andar ativo (Z=7): TUDO incluindo top items (desenho inicial)
+  //   2. Cadáveres, efeitos de chão
+  //   3. Entidades (player/monstros)
+  //   4. Y-sort: occluders na frente do player (redesenhados após entidades)
+  //   5. REDRAW top items do andar ativo ← segundo desenho, APÓS entidades
+  //      (sobrepõe pixels do step 1 para garantir copa > player)
+  //   6. World items (tileLayer=99)
+  //   7. Andares superiores (Z=6, Z=5…) ← COBREM top items via painter's algorithm
+  //   8. Efeitos de topo, textos flutuantes
+  //
+  // Isso garante: Z=7 top items > Z=7 entities E Z=6 ground > Z=7 top items.
 
-  const _renderFloorComplete = (z, clearCanvas) => {
-    renderMap({
-      ..._mapBase,
-      clearCanvas,
-      layerMin: 0,
-      layerMax: 3,
-      zPredicate: (fz) => fz === z,
-      spritePredicate:
-        z < activeZ
-          ? (_id, _meta, info) => info?.category !== "top" // upper floors: bloqueia top items
-          : enforceStrictFloorPriority
-          ? undefined // multi-floor: render tudo — painter's algorithm garante que Z=6/Z=5 cobrem Z=7
-          : drawLayer2IfFlat, // single-floor: layer 2 tall fica para steps 4/6.25 (y-sort)
-    });
-  };
+  const _upperFloors = showUpperFloors
+    ? getVisibleFloors(activeZ).filter((z) => z < activeZ)
+    : [];
 
+  // ── 1. Andar ativo — todos os itens (incluindo top items) ────────────────
+  // Top items (category="top" / renderLayer=3) são desenhados aqui E depois
+  // redesenhados no step 5, APÓS entidades. O segundo desenho no step 5 sobrepõe
+  // os pixels do step 1, mas ocorre DEPOIS do player → copa aparece SOBRE o player.
+  // Esta abordagem replica o OTClient: tiles desenhados inteiros, depois creature,
+  // depois top items novamente por cima de tudo.
+  // Single-floor usa drawLayer2IfFlat para y-sort de items altos (steps 4/6.25).
   if (perfEnabled) {
     perfStep(perf, "mapBase", () => {
-      _floorsToRender.forEach((z, idx) => _renderFloorComplete(z, idx === 0));
+      renderMap({
+        ..._mapBase,
+        clearCanvas: true,
+        layerMin: 0,
+        layerMax: 3,
+        zPredicate: (fz) => fz === activeZ,
+        spritePredicate: enforceStrictFloorPriority
+          ? null  // Desenha tudo — top items redesenhados após entidades no step 5
+          : drawLayer2IfFlat,
+      });
     });
   } else {
-    _floorsToRender.forEach((z, idx) => _renderFloorComplete(z, idx === 0));
+    renderMap({
+      ..._mapBase,
+      clearCanvas: true,
+      layerMin: 0,
+      layerMax: 3,
+      zPredicate: (fz) => fz === activeZ,
+      spritePredicate: enforceStrictFloorPriority
+        ? null  // Desenha tudo — top items redesenhados após entidades no step 5
+        : drawLayer2IfFlat,
+    });
   }
 
   // ── 2. Cadáveres ──────────────────────────────────────────────
@@ -670,12 +685,11 @@ export function renderWorld({
     drawVisualEffects?.(ctx, assets, camXWorld, camYWorld, "ground");
   }
 
-  // ── 4. Layer 2 alta (paredes/árvores altas) — apenas single-floor ────────
-  // Em multi-floor (enforceStrictFloorPriority=true), todo o layer 2 do andar ativo
-  // já foi renderizado no step 1 (predicate=undefined, render tudo). Steps 4 e 4.5
-  // que redesenham layer 2 tall após os upper floors causariam os sprites de Z=7
-  // aparecendo sobre os tiles de Z=6/Z=5.
-  // Em single-floor, mantém o y-sort: drawOnlyLayer2IfTallPre (antes do player).
+  // ── 4. Layer 2 alta antes das entidades (single-floor, y-sort) ───────────
+  // Em multi-floor o step 1 usa category!="top", que ainda inclui renderLayer=2
+  // tall items — eles serão redesenhados com y-sort no step 4.5.
+  // Em single-floor, drawLayer2IfFlat bloqueou tall items no step 1; aqui
+  // desenhamos apenas os que devem aparecer ANTES do player (drawOnlyLayer2IfTallPre).
   if (!enforceStrictFloorPriority && mapTallBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapTall", () => {
@@ -700,11 +714,7 @@ export function renderWorld({
     }
   }
 
-  // ── 4.5 Mapa — layer 3 do andar ativo (topDecorBeforeEntities=true) ──────
-  // Quando topDecorBeforeEntities=true, renderiza layer 3 aqui (antes das entidades).
-  // Quando enforceStrictFloorPriority=true (andares superiores visíveis), layer 3
-  // já está incluído no step 1 via layerMax=3 — o painter's algorithm garante que
-  // Z=6/Z=5 pintam por cima dos top items de Z=7. Não precisa de passo separado.
+  // ── 4.5 Top items antes das entidades (topDecorBeforeEntities=true) ───────
   if (showTopDecor && topDecorBeforeEntities) {
     if (perfEnabled) {
       perfStep(perf, "mapTop", () => {
@@ -729,11 +739,7 @@ export function renderWorld({
     }
   }
 
-  // [step 4.6 removido] — upper floors já renderizados no step 1 (isolamento explícito)
-
   // ── 5. Entidades (players, monstros) ─────────────────────────
-  // REORDENADO: Agora renderiza DEPOIS do mapTall
-  // para que players fiquem ACIMA dos tiles altos
   let allEntities;
   if (Object.keys(extraEntities).length > 0) {
     allEntities = extraEntities;
@@ -809,7 +815,136 @@ export function renderWorld({
     );
   }
 
-  // ── 6. Efeitos de topo (magias, sangue) ──────────────────────
+  // ── 4.6 / 5.5 Y-sort: occluders altos redesenhados APÓS entidades ─────────
+  // Occluders (paredes, troncos) na frente do player cobrem a entidade.
+  // Funciona em ambos os modos: focusTileY=null → redesenha tudo (view admin).
+  // Multi-floor: usa >= (inclui tile do player); single-floor: usa > (original).
+  if (perfEnabled) {
+    perfStep(perf, "mapTall", () => {
+      renderMap({
+        ..._mapBase,
+        layerMin: 2,
+        layerMax: 2,
+        clearCanvas: false,
+        skipGroundPass: true,
+        zPredicate: (z, _dz, aZ) => z === aZ,
+        spritePredicate: enforceStrictFloorPriority
+          ? (_id, spriteMeta, info) => {
+              if (isFlat(spriteMeta) || !isOccluder(spriteMeta)) return false;
+              if (focusTileY === null) return true;
+              return (info?.ty ?? 0) >= focusTileY;
+            }
+          : drawOccluderAfterEntities,
+      });
+    });
+  } else {
+    renderMap({
+      ..._mapBase,
+      layerMin: 2,
+      layerMax: 2,
+      clearCanvas: false,
+      skipGroundPass: true,
+      zPredicate: (z, _dz, aZ) => z === aZ,
+      spritePredicate: enforceStrictFloorPriority
+        ? (_id, spriteMeta, info) => {
+            if (isFlat(spriteMeta) || !isOccluder(spriteMeta)) return false;
+            if (focusTileY === null) return true;
+            return (info?.ty ?? 0) >= focusTileY;
+          }
+        : drawOccluderAfterEntities,
+    });
+  }
+
+  // ── 5. Redraw top items do andar ativo APÓS entidades — ANTES dos andares superiores
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Top items foram desenhados no step 1 (antes do player), mas precisam aparecer
+  // ACIMA do player. Ao redesenhá-los AQUI, após renderEntitiesFull, o segundo
+  // desenho sobrepõe os pixels do player — resultado final: copa > player.
+  //
+  // O step 6 (andares superiores) ocorre DEPOIS, garantindo: Z=6 ground > Z=7 top.
+  //
+  // Captura tanto renderLayer=3 quanto category="top" com renderLayer=2 (edge case).
+  if (showTopDecor && !topDecorBeforeEntities) {
+    if (perfEnabled) {
+      perfStep(perf, "mapTop", () => {
+        renderMap({
+          ..._mapBase,
+          layerMin: 2,
+          layerMax: 3,
+          clearCanvas: false,
+          skipGroundPass: true,
+          zPredicate: (z, _dz, aZ) => z === aZ,
+          spritePredicate: (_id, _meta, info) => {
+            if (info?.renderLayer === 3) return true;
+            return info?.category === "top" && info?.renderLayer === 2;
+          },
+        });
+      });
+    } else {
+      renderMap({
+        ..._mapBase,
+        layerMin: 2,
+        layerMax: 3,
+        clearCanvas: false,
+        skipGroundPass: true,
+        zPredicate: (z, _dz, aZ) => z === aZ,
+        spritePredicate: (_id, _meta, info) => {
+          if (info?.renderLayer === 3) return true;
+          return info?.category === "top" && info?.renderLayer === 2;
+        },
+      });
+    }
+  }
+
+  // ── 5.6 World items (tileLayer=99) APÓS top items, ANTES dos andares sup. ──
+  renderMap({
+    ..._mapBase,
+    layerMin: 2,
+    layerMax: 2,
+    clearCanvas: false,
+    skipGroundPass: true,
+    zPredicate: (z, _dz, aZ) => z === aZ,
+    spritePredicate: (_spriteId, _spriteMeta, info) => info?.tileLayer === 99,
+  });
+
+  // ── 6. Andares superiores (painter's algorithm — cobrem conteúdo do andar ativo)
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Renderizados AQUI, após entidades e top items do andar ativo.
+  // Isso garante que Z=6 ground fica acima de Z=7 top items (copas de árvore),
+  // replicando o comportamento exato do OTClient.
+  // Top items dos andares superiores são bloqueados (telhados não exibidos
+  // por padrão — evita visual incorreto visto de fora do edifício).
+  if (enforceStrictFloorPriority && _upperFloors.length > 0) {
+    if (perfEnabled) {
+      perfStep(perf, "mapAbove", () => {
+        _upperFloors.forEach((z) => {
+          renderMap({
+            ..._mapBase,
+            clearCanvas: false,
+            layerMin: 0,
+            layerMax: 3,
+            zPredicate: (fz) => fz === z,
+            spritePredicate: (_id, _meta, info) =>
+              info?.category !== "top",
+          });
+        });
+      });
+    } else {
+      _upperFloors.forEach((z) => {
+        renderMap({
+          ..._mapBase,
+          clearCanvas: false,
+          layerMin: 0,
+          layerMax: 3,
+          zPredicate: (fz) => fz === z,
+          spritePredicate: (_id, _meta, info) =>
+            info?.category !== "top",
+        });
+      });
+    }
+  }
+
+  // ── 7. Efeitos de topo (magias, sangue) — após andares superiores ─────────
   if (perfEnabled) {
     perfStep(perf, "fxTop", () => {
       drawVisualEffects?.(ctx, assets, camXWorld, camYWorld, "top");
@@ -818,79 +953,14 @@ export function renderWorld({
     drawVisualEffects?.(ctx, assets, camXWorld, camYWorld, "top");
   }
 
-  // ── 6.25 Occluders altos (paredes/árvores) redesenhados APÓS entidades ──
-  // skipGroundPass=true evita que o ground pass do renderMap redesenhe tiles
-  // de chão por cima do player (o ground já foi desenhado no step 1).
-  // Y-sort via drawOccluderAfterEntities: só redesenha occluders cujo
-  // ty > focusTileY (visualmente na frente do player).
-  if (!enforceStrictFloorPriority) {
-    if (perfEnabled) {
-      perfStep(perf, "mapTall", () => {
-        renderMap({
-          ..._mapBase,
-          layerMin: 2,
-          layerMax: 2,
-          clearCanvas: false,
-          skipGroundPass: true,
-          zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: drawOccluderAfterEntities,
-        });
-      });
-    } else {
-      renderMap({
-        ..._mapBase,
-        layerMin: 2,
-        layerMax: 2,
-        clearCanvas: false,
-        skipGroundPass: true,
-        zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: drawOccluderAfterEntities,
-      });
-    }
-  }
-
-  // [step 6.5 removido] — upper floors já renderizados no step 1 (isolamento explícito)
-
-  // ── 7. Textos flutuantes ─────────────────────────────────────
+  // ── 8. Textos flutuantes ──────────────────────────────────────
   if (perfEnabled) {
     perfStep(perf, "floating", () => {
       drawFloatingTexts?.(ctx, camXWorld, camYWorld);
     });
-  } else {
-    drawFloatingTexts?.(ctx, camXWorld, camYWorld);
-  }
-
-  // ── 8. Mapa — layer 3 (top_decoration: copas, telhados) ──────
-  // skipGroundPass=true: evita que o ground pass redesenhe tiles de chão
-  // por cima do player (já desenhados no step 1).
-  if (showTopDecor && !topDecorBeforeEntities && !enforceStrictFloorPriority) {
-    if (perfEnabled) {
-      perfStep(perf, "mapTop", () => {
-        renderMap({
-          ..._mapBase,
-          layerMin: 3,
-          layerMax: 3,
-          clearCanvas: false,
-          skipGroundPass: true,
-          zPredicate: (z, _dz, aZ) => z === aZ,
-          spritePredicate: drawLayer3Post,
-        });
-      });
-      perf.total += performance.now() - frameStart;
-      perfFlush(perf);
-    } else {
-      renderMap({
-        ..._mapBase,
-        layerMin: 3,
-        layerMax: 3,
-        clearCanvas: false,
-        skipGroundPass: true,
-        zPredicate: (z, _dz, aZ) => z === aZ,
-        spritePredicate: drawLayer3Post,
-      });
-    }
-  } else if (perfEnabled) {
     perf.total += performance.now() - frameStart;
     perfFlush(perf);
+  } else {
+    drawFloatingTexts?.(ctx, camXWorld, camYWorld);
   }
 }
