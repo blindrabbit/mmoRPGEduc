@@ -815,8 +815,11 @@ export function renderWorld({
     );
   }
 
-  // ── 4.6 / 5.5 Y-sort: occluders altos redesenhados APÓS entidades ─────────
-  // Occluders (paredes, troncos) na frente do player cobrem a entidade.
+  // ── 4.6 / 5.5 Y-sort: sprites altos redesenhados APÓS entidades ─────────────
+  // Sprites não-planos no tile do player ou ao sul cobrem a entidade (y-sort).
+  // Usa isFlat para excluir itens decorativos planos; NÃO filtra por isOccluder —
+  // troncos de árvore e outras plantas altas que não são "occluders" formais
+  // também precisam cobrir o player quando estão no mesmo tile (ty >= focusTileY).
   // Funciona em ambos os modos: focusTileY=null → redesenha tudo (view admin).
   // Multi-floor: usa >= (inclui tile do player); single-floor: usa > (original).
   if (perfEnabled) {
@@ -830,7 +833,7 @@ export function renderWorld({
         zPredicate: (z, _dz, aZ) => z === aZ,
         spritePredicate: enforceStrictFloorPriority
           ? (_id, spriteMeta, info) => {
-              if (isFlat(spriteMeta) || !isOccluder(spriteMeta)) return false;
+              if (isFlat(spriteMeta)) return false;
               if (focusTileY === null) return true;
               return (info?.ty ?? 0) >= focusTileY;
             }
@@ -847,7 +850,7 @@ export function renderWorld({
       zPredicate: (z, _dz, aZ) => z === aZ,
       spritePredicate: enforceStrictFloorPriority
         ? (_id, spriteMeta, info) => {
-            if (isFlat(spriteMeta) || !isOccluder(spriteMeta)) return false;
+            if (isFlat(spriteMeta)) return false;
             if (focusTileY === null) return true;
             return (info?.ty ?? 0) >= focusTileY;
           }
