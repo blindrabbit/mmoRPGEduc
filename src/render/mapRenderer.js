@@ -712,13 +712,17 @@ function _drawSpriteFromAssets(
   const data = nexoData?.[sid] ?? null;
 
   // Stackables usam variante por quantidade; liquid containers por content_type; demais por posição modulo
-  const varKey = data
-    ? data.game?.is_stackable
-      ? getStackableVariantKey(count)
-      : data.game?.is_liquid_container && contentType
-        ? getLiquidVariantKey(contentType)
-        : resolveVariantKey(data, tx, ty, animClock)
-    : "0";
+  let varKey;
+  if (data?.game?.is_stackable) {
+    varKey = getStackableVariantKey(count);
+  } else if (data?.game?.is_liquid_container) {
+    // Liquid containers SEMPRE usam content_type para variante
+    // Se content_type for null/undefined/"", usa "0" (empty)
+    const liquidType = contentType ?? "empty";
+    varKey = getLiquidVariantKey(liquidType);
+  } else {
+    varKey = resolveVariantKey(data, tx, ty, animClock);
+  }
 
   let lookup =
     assets.mapAtlasLookup?.get(`${sid}_${varKey}`) ??
@@ -1253,6 +1257,33 @@ function _renderMainPass(opts) {
           // Ignorar ground e groundBorder (já renderizados)
           if (category === "ground" || category === "groundBorder") continue;
 
+          // Para liquid containers, converter count → content_type se necessário
+          let itemCount =
+            typeof item === "object" && item !== null ? (item.count ?? 1) : 1;
+          let itemContentType =
+            typeof item === "object" && item !== null
+              ? (item.content_type ?? null)
+              : null;
+
+          // Se não tem content_type mas é liquid container, usa count como índice do líquido
+          if (!itemContentType && data?.game?.is_liquid_container) {
+            const LIQUID_TYPES = [
+              "empty",
+              "water",
+              "blood",
+              "beer",
+              "slime",
+              "lemonade",
+              "milk",
+              "mana",
+              "lifefluid",
+              "urine",
+              "rum",
+              "fruitjuice",
+            ];
+            itemContentType = LIQUID_TYPES[itemCount] ?? "empty";
+          }
+
           const info = {
             spriteId,
             spriteMeta,
@@ -1260,12 +1291,8 @@ function _renderMainPass(opts) {
             stackPosition: resolveStackPosition(spriteMeta, category),
             renderLayer,
             tileLayer: entryTileLayer,
-            count:
-              typeof item === "object" && item !== null ? (item.count ?? 1) : 1,
-            contentType:
-              typeof item === "object" && item !== null
-                ? (item.content_type ?? null)
-                : null,
+            count: itemCount,
+            contentType: itemContentType,
             tx,
             ty,
             z,

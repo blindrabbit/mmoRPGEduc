@@ -1652,9 +1652,10 @@
           slot.dataset.itemEquipSlot = equipSlot;
 
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
-          const equipVariantKey = item?.content_type != null
-            ? getLiquidVariantKey(item.content_type)
-            : "0";
+          const equipVariantKey =
+            item?.content_type != null
+              ? getLiquidVariantKey(item.content_type)
+              : "0";
           const sprite = Number.isFinite(tileId)
             ? assets.getMapSprite(tileId, equipVariantKey)
             : null;
@@ -1770,7 +1771,35 @@
           count: Number(item?.quantity ?? 1),
           __worldItemId: worldItemId,
         };
-        if (item?.content_type != null) _rendTile.content_type = item.content_type;
+        // Para liquid containers, o count do mapa indica o tipo de líquido
+        // Mapeamento: 0→empty, 1→water, 2→blood, 3→beer, 4→slime, 5→lemonade, 6→milk, 7→mana, 8→lifefluid, 9→urine, 10→rum, 11→fruitjuice
+        const LIQUID_TYPES = [
+          "empty",
+          "water",
+          "blood",
+          "beer",
+          "slime",
+          "lemonade",
+          "milk",
+          "mana",
+          "lifefluid",
+          "urine",
+          "rum",
+          "fruitjuice",
+        ];
+        let contentType = item?.content_type;
+        if (contentType === undefined || contentType === null) {
+          // Verifica se é um liquid container para converter count → content_type
+          const itemEntry = itemDataService?.getEntry?.(tileId);
+          if (itemEntry?.game?.is_liquid_container) {
+            // Usa o count do tile original como índice do tipo de líquido
+            const liquidIndex = item?.count ?? 0;
+            contentType = LIQUID_TYPES[liquidIndex] ?? "empty";
+          }
+        }
+        if (contentType !== undefined && contentType !== null) {
+          _rendTile.content_type = contentType;
+        }
         map[coord][layerKey].push(_rendTile);
 
         _worldItemRenderById[worldItemId] = {
@@ -2666,10 +2695,38 @@
                   } = _srcTile ?? {};
                   const tileQuantity = _srcTile?.count ?? 1;
 
+                  // Para liquid containers, o count do mapa indica o tipo de líquido
+                  // Mapeamento: 0→empty, 1→water, 2→blood, 3→beer, 4→slime, 5→lemonade, 6→milk, 7→mana, 8→lifefluid, 9→urine, 10→rum, 11→fruitjuice
+                  const LIQUID_TYPES = [
+                    "empty",
+                    "water",
+                    "blood",
+                    "beer",
+                    "slime",
+                    "lemonade",
+                    "milk",
+                    "mana",
+                    "lifefluid",
+                    "urine",
+                    "rum",
+                    "fruitjuice",
+                  ];
+                  const itemEntry = itemDataService?.getEntry?.(tileId);
+                  let extraFields = { ...srcTileExtraFields };
+                  if (
+                    itemEntry?.game?.is_liquid_container &&
+                    !extraFields.content_type
+                  ) {
+                    // Converte count → content_type
+                    const liquidIndex = _stCount ?? 0;
+                    extraFields.content_type =
+                      LIQUID_TYPES[liquidIndex] ?? "empty";
+                  }
+
                   const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${Date.now()}`;
                   await dbSet(`world_items/${tempId}`, {
                     // Campos extras do tile original (ex: content_type)
-                    ...srcTileExtraFields,
+                    ...extraFields,
 
                     id: tempId,
                     tileId,
@@ -2679,7 +2736,9 @@
                     x: tx,
                     y: ty,
                     z: tz,
-                    type: itemDataService?.getEntry?.(tileId)?.game?.category_type ?? "material",
+                    type:
+                      itemDataService?.getEntry?.(tileId)?.game
+                        ?.category_type ?? "material",
                     quantity: tileQuantity,
                     count: tileQuantity,
                     stackable: itemDataService?.isStackable?.(tileId) ?? false,
@@ -2809,10 +2868,37 @@
                       ...extraTileFields
                     } = tile;
 
+                    // Para liquid containers, o count do mapa indica o tipo de líquido
+                    // Mapeamento: 0→empty, 1→water, 2→blood, 3→beer, 4→slime, 5→lemonade, 6→milk, 7→mana, 8→lifefluid, 9→urine, 10→rum, 11→fruitjuice
+                    const LIQUID_TYPES = [
+                      "empty",
+                      "water",
+                      "blood",
+                      "beer",
+                      "slime",
+                      "lemonade",
+                      "milk",
+                      "mana",
+                      "lifefluid",
+                      "urine",
+                      "rum",
+                      "fruitjuice",
+                    ];
+                    let tileExtraFields = { ...extraTileFields };
+                    if (
+                      itemEntry?.game?.is_liquid_container &&
+                      !tileExtraFields.content_type
+                    ) {
+                      // Converte count → content_type
+                      const liquidIndex = _cnt ?? 0;
+                      tileExtraFields.content_type =
+                        LIQUID_TYPES[liquidIndex] ?? "empty";
+                    }
+
                     return {
                       // Campos extras do tile (content_type, etc.) — primeiro
                       // para que os campos explícitos abaixo possam sobrescrever
-                      ...extraTileFields,
+                      ...tileExtraFields,
 
                       // Identificação — inclui occIdx para distinguir instâncias empilhadas
                       id: `map_${key}_${layer}_${tile.id}_${occIdx}`,
@@ -2942,10 +3028,14 @@
           createGhostElement: (itemData) => {
             const tileId =
               itemData?.tileId ?? itemData?.spriteId ?? itemData?.id;
-            const ghostVariantKey = itemData?.content_type != null
-              ? getLiquidVariantKey(itemData.content_type)
-              : "0";
-            const sprite = tileId != null ? assets.getMapSprite(tileId, ghostVariantKey) : null;
+            const ghostVariantKey =
+              itemData?.content_type != null
+                ? getLiquidVariantKey(itemData.content_type)
+                : "0";
+            const sprite =
+              tileId != null
+                ? assets.getMapSprite(tileId, ghostVariantKey)
+                : null;
             if (!sprite?.sheet) return null;
 
             const cvs = document.createElement("canvas");
