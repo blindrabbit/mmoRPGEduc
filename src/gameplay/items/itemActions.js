@@ -133,9 +133,11 @@ async function _isBlockedByWallAt(x, y, z) {
   const cx = Math.floor(x / TILE_CHUNK_SIZE);
   const cy = Math.floor(y / TILE_CHUNK_SIZE);
   const chunkData = await dbGet(`${PATHS.tiles}/${z}/${cx},${cy}`);
-  const mapData = await dbGet(PATHS.tilesData);
 
   if (!chunkData || typeof chunkData !== "object") return false;
+
+  // Usa ItemDataService (map_data.json em memória) em vez de buscar world_tiles_data do Firebase
+  const mapData = getItemDataService()?._data;
   if (!mapData || typeof mapData !== "object") return false;
 
   // Converte o chunk para o formato flat esperado por isTileBlockedByWall

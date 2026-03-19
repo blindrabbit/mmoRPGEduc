@@ -1266,7 +1266,7 @@ function _renderMainPass(opts) {
               : null;
 
           // Se não tem content_type mas é liquid container, usa count como índice do líquido
-          if (!itemContentType && data?.game?.is_liquid_container) {
+          if (!itemContentType && spriteMeta?.game?.is_liquid_container) {
             const LIQUID_TYPES = [
               "empty",
               "water",

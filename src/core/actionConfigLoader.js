@@ -5,6 +5,12 @@
 
 import { getActionSystem } from "./actionSystem.js";
 import { PlayerAction } from "./playerAction.js";
+import { dbSet, PATHS } from "./db.js";
+
+// Função para acessar dbSet e PATHS (pode ser null em alguns contextos)
+function requireStorage() {
+  return { dbSet, PATHS };
+}
 
 /**
  * @typedef {Object} ActionConfig
@@ -263,6 +269,16 @@ export class ActionConfigLoader {
       if (!player.storage) player.storage = {};
       player.storage[key] = value;
       console.log("[ActionEffect] Storage set:", key, "=", value);
+
+      // Persiste no Firebase
+      if (player.id) {
+        const { dbSet, PATHS } = requireStorage();
+        if (dbSet && PATHS) {
+          dbSet(PATHS.playerStorage(player.id, key), value).catch((err) =>
+            console.error("[ActionEffect] Erro ao salvar storage:", err),
+          );
+        }
+      }
     }
 
     // Remove item

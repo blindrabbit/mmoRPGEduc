@@ -100,6 +100,7 @@ export const PATHS = {
   playerStats: (id) => safePath("online_players", id, "stats"),
   playerData: (id) => safePath("players_data", id),
   playerDataStats: (id) => safePath("players_data", id, "stats"),
+  playerStorage: (id, key) => safePath("players_data", id, "storage", key),
   effects: "world_effects",
   effect: (id) => safePath("world_effects", id),
   fields: "world_fields",

@@ -1422,6 +1422,7 @@
         monitorEffects,
       } from "./src/gameplay/gameCore.js";
       import { initSchemaRegistry } from "./src/gameplay/schemaRegistry.js";
+      import { getActionSystem } from "./src/core/actionSystem.js";
 
       // ── Boot logger ────────────────────────────────────────────────────────
       const bootLogEl = document.getElementById("boot-log");
@@ -2592,6 +2593,7 @@
           appearance: _normalizeAppearance(playerData.appearance),
           class: playerData.appearance?.class ?? playerData.class ?? null,
           spells: playerData.spells ?? {},
+          storage: playerData.storage ?? {}, // Storage para quests e eventos
           type: "player",
         };
 
@@ -3125,6 +3127,7 @@
           // vazio (ex: último item dropado), e manter o valor antigo causa ghost slots.
           myPos.inventory = serverData.inventory ?? {};
           myPos.equipment = serverData.equipment ?? {};
+          myPos.storage = serverData.storage ?? {}; // Atualiza storage para quests/eventos
           myPos.status = serverData.status ?? null;
           myPos.lastAttack = serverData.lastAttack ?? myPos.lastAttack;
           myPos[BASIC_ATTACK_CD_KEY] =
@@ -3259,6 +3262,38 @@
         updateRegenHint(getCurrentRegenRates());
 
         // Movimento
+        const playerActionOnMove = (nx, ny, nz, dir) => {
+          // Callback de movimento do Player Actions (para position actions)
+          const actionSystem = getActionSystem();
+          if (actionSystem) {
+            const posKey = `${nx},${ny},${nz}`;
+            const posHandler = actionSystem.positionActions?.get(posKey);
+            if (posHandler) {
+              console.log(
+                `[ActionConfig] Position action encontrada em ${posKey}`,
+              );
+              const context = {
+                player: myPos,
+                target: { x: nx, y: ny, z: nz },
+                metadata: null,
+              };
+              try {
+                const result = posHandler(context);
+                if (result !== false) {
+                  console.log(
+                    `[ActionConfig] Position action executada com sucesso`,
+                  );
+                }
+              } catch (error) {
+                console.error(
+                  `[ActionConfig] Erro ao executar position action:`,
+                  error,
+                );
+              }
+            }
+          }
+        };
+
         setupMovement(
           myPos,
           map,
@@ -3274,6 +3309,9 @@
               myPos.lastMoveTime = Date.now();
               handlePlayerSync(uid, myPos);
               pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
+
+              // Chama o callback do Player Actions para verificar position actions
+              playerActionOnMove(nx, ny, nz, dir);
             }
           },
           false, // isAdmin
@@ -3293,6 +3331,10 @@
           onPlayerMove: (nx, ny, nz, dir) => {
             // Callback de movimento do Player Actions
             if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
+              const oldX = myPos.x;
+              const oldY = myPos.y;
+              const oldZ = myPos.z;
+
               myPos.oldX = myPos.x;
               myPos.oldY = myPos.y;
               myPos.x = nx;
@@ -3302,6 +3344,38 @@
               myPos.lastMoveTime = Date.now();
               handlePlayerSync(uid, myPos);
               pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
+
+              // Verifica se há position action registrada para esta posição
+              // e executa automaticamente quando o player entra no tile
+              // Executa imediatamente após atualizar a posição
+              const actionSystem = getActionSystem();
+              if (actionSystem) {
+                const posKey = `${nx},${ny},${nz}`;
+                const posHandler = actionSystem.positionActions?.get(posKey);
+                if (posHandler) {
+                  console.log(
+                    `[ActionConfig] Position action encontrada em ${posKey}`,
+                  );
+                  const context = {
+                    player: myPos,
+                    target: { x: nx, y: ny, z: nz },
+                    metadata: null,
+                  };
+                  try {
+                    const result = posHandler(context);
+                    if (result !== false) {
+                      console.log(
+                        `[ActionConfig] Position action executada com sucesso`,
+                      );
+                    }
+                  } catch (error) {
+                    console.error(
+                      `[ActionConfig] Erro ao executar position action:`,
+                      error,
+                    );
+                  }
+                }
+              }
             }
           },
           onPlayerAction: (actionData) => {
@@ -3330,6 +3404,7 @@
         // Action Config Loader — carrega ações de JSON externo
         (async () => {
           try {
+            console.log("[ActionConfig] Iniciando carregamento...");
             const actionLoader = createActionConfigLoader({
               player: myPos,
               map,
@@ -3339,10 +3414,21 @@
 
             // Carrega configurações do arquivo JSON
             const configResponse = await fetch("./assets/action_configs.json");
+            console.log(
+              "[ActionConfig] Response status:",
+              configResponse.status,
+            );
             if (configResponse.ok) {
               const config = await configResponse.json();
+              console.log("[ActionConfig] Config carregada:", config);
               const count = actionLoader.loadFromJSON(config);
               console.log(`[RPG] ${count} ações customizadas carregadas.`);
+
+              // Lista todas as actions registradas
+              console.log(
+                "[ActionConfig] Actions registradas:",
+                Array.from(actionLoader.registeredActions.keys()),
+              );
 
               // Registra listeners para eventos customizados
               actionLoader.on("questStarted", (data) => {
@@ -3358,9 +3444,14 @@
                 pushLog("rpg", "trade", `Abrindo shop de ${data.npcId}`);
                 // TODO: Abrir UI de shop
               });
+            } else {
+              console.error(
+                "[ActionConfig] Erro ao carregar JSON:",
+                configResponse.statusText,
+              );
             }
           } catch (error) {
-            console.warn("[RPG] Erro ao carregar action configs:", error);
+            console.error("[RPG] Erro ao carregar action configs:", error);
           }
         })();
 
