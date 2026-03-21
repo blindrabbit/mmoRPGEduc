@@ -591,6 +591,62 @@ async function _processAllocateStat(action, player, now) {
 }
 
 // ---------------------------------------------------------------------------
+// VALIDAÇÃO DE ITENS — ItemMoveValidator (instância lazy, import dinâmico)
+// ---------------------------------------------------------------------------
+let _itemMoveValidator = null;
+
+/**
+ * Converte o formato legado de ação de item para o formato do ItemMoveValidator.
+ * @param {Object} src - payload da ação legada
+ * @param {string} playerId
+ * @returns {{ from: Object, to: Object, count?: number } | null}
+ */
+function _buildMovePayload(src, playerId) {
+  const { itemAction, slotIndex, toSlot, worldItemId, equipSlot, quantity } = src;
+
+  switch (itemAction) {
+    case "drop":
+      return {
+        from: { type: "inventory", slotIndex },
+        to:   { type: "map", position: { x: src.toX, y: src.toY, z: src.toZ } },
+        count: quantity ?? null,
+      };
+    case "moveWorld":
+      return {
+        from: { type: "world", itemId: worldItemId },
+        to:   { type: "map", position: { x: src.toX, y: src.toY, z: src.toZ } },
+        count: quantity ?? null,
+      };
+    case "pickUp":
+      return {
+        from: { type: "world", itemId: worldItemId },
+        to:   { type: "inventory" },
+        count: null,
+      };
+    case "equip":
+      return {
+        from: { type: "inventory", slotIndex },
+        to:   { type: "equipment", slotId: equipSlot },
+        count: null,
+      };
+    case "unequip":
+      return {
+        from: { type: "equipment", slotId: equipSlot },
+        to:   { type: "inventory", slotIndex: slotIndex ?? undefined },
+        count: null,
+      };
+    case "move":
+      return {
+        from: { type: "inventory", slotIndex },
+        to:   { type: "inventory", slotIndex: toSlot },
+        count: null,
+      };
+    default:
+      return null; // use, splitWorld, etc. — não passam pelo validator por enquanto
+  }
+}
+
+// ---------------------------------------------------------------------------
 // AÇÕES DE ITEM
 // ---------------------------------------------------------------------------
 async function _processItem(action, player, now) {
@@ -621,6 +677,41 @@ async function _processItem(action, player, now) {
     moveItem,
     useItem,
   } = await import("./items/itemActions.js");
+
+  // ── Validação via ItemMoveValidator (server-authoritative) ────────────────
+  // Ações que têm payload mapeável passam pelo validator antes de executar.
+  // Ações sem mapeamento (use, splitWorld) seguem pelo caminho legado.
+  const movePayload = _buildMovePayload(src, playerId);
+  if (movePayload) {
+    const { ItemMoveValidator } = await import(
+      "../server/worldEngine/validators/ItemMoveValidator.js"
+    );
+    if (!_itemMoveValidator) _itemMoveValidator = new ItemMoveValidator();
+
+    const validationResult = await _itemMoveValidator.validate({
+      playerId,
+      type: "MOVE_ITEM",
+      payload: movePayload,
+    });
+
+    if (!validationResult.ok) {
+      pushLog(
+        "error",
+        `[${player.name ?? playerId}] ${itemAction} negado: ${validationResult.userMessage}`,
+      );
+      if (clientActionId) {
+        worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
+          actionId: clientActionId,
+          playerId,
+          itemAction,
+          reason: validationResult.code,
+          userMessage: validationResult.userMessage,
+        });
+      }
+      return { success: false, error: validationResult.code };
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
 
   let result;
   switch (itemAction) {

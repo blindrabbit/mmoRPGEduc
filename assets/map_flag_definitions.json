@@ -1,0 +1,42 @@
+{
+  "0": {
+    "isProtectionZone": false,
+    "isHouse": false,
+    "isNoPvP": false,
+    "isNoLogout": false,
+    "isPvPZone": false,
+    "isFloorChange": false,
+    "isDepot": false,
+    "isMailbox": false,
+    "isTrashHolder": false,
+    "isBed": false,
+    "isBlocked": false,
+    "isBlockSolid": false,
+    "isBlockPath": false,
+    "isImmovableBlockSolid": false,
+    "isImmovableBlockPath": false,
+    "supportsHangable": false,
+    "isWalkable": true,
+    "canDropItem": true
+  },
+  "1": {
+    "isProtectionZone": true,
+    "isHouse": false,
+    "isNoPvP": false,
+    "isNoLogout": false,
+    "isPvPZone": false,
+    "isFloorChange": false,
+    "isDepot": false,
+    "isMailbox": false,
+    "isTrashHolder": false,
+    "isBed": false,
+    "isBlocked": false,
+    "isBlockSolid": false,
+    "isBlockPath": false,
+    "isImmovableBlockSolid": false,
+    "isImmovableBlockPath": false,
+    "supportsHangable": false,
+    "isWalkable": true,
+    "canDropItem": false
+  }
+}

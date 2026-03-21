@@ -32,9 +32,11 @@ import {
   dbSet,
   dbGet,
   watchPlayerData,
+  getFlagDefinitions,
   PATHS,
 } from "../../../core/db.js";
 import { initItemDataService } from "../../../gameplay/items/ItemDataService.js";
+import { FlagResolver } from "../../../core/FlagResolver.js";
 import { renderWorld } from "../../../render/worldRenderer.js";
 import { buildFloorIndex } from "../../../render/mapRenderer.js";
 import { getMonsters, getPlayers } from "../../../core/worldStore.js";
@@ -135,11 +137,18 @@ export class Initializer {
   }
 
   async loadMapAssets() {
-    // [1/4] tilesData do Firebase (dados de jogo: walkable, pickup, etc.)
+    // [1/4] tilesData + flag definitions do Firebase
     this.logger.info("[1/4] tilesData (Firebase)");
-    this.worldState.mapData = await loadFirebaseTilesData();
+    const [mapData, flagDefs] = await Promise.all([
+      loadFirebaseTilesData(),
+      getFlagDefinitions().catch(() => null),
+    ]);
+    this.worldState.mapData = mapData;
+    this.worldState.flagDefs = flagDefs ?? {};
+    FlagResolver.init(this.worldState.flagDefs);
     this.logger.ok(
-      `Metadata: ${Object.keys(this.worldState.mapData).length} itens`,
+      `Metadata: ${Object.keys(this.worldState.mapData).length} itens, ` +
+      `${Object.keys(this.worldState.flagDefs).length} flags`,
     );
 
     // [2/4] Atlas segmentados (usa metadata já lida do Firebase)
@@ -516,6 +525,7 @@ export class Initializer {
       this.logger.ok(
         `✓ ItemDataService: ${itemDataService.getAllItemIds().length} itens indexados`,
       );
+
 
       // ── Cache local de world_items (Firebase) indexado por coordenada ──
       // Chave primária: ID Firebase  Chave secundária: "x,y,z"

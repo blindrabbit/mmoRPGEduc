@@ -210,6 +210,14 @@ export class InventoryUI {
         this._showFeedback("invalid"),
       ),
     );
+
+    // Servidor rejeitou ação — exibe mensagem amigável para o jogador
+    this._unsubs.push(
+      worldEvents.subscribe(EVENT_TYPES.ITEM_ACTION_ROLLBACK, (e) => {
+        const msg = e.userMessage || "Ação não permitida.";
+        this._showFeedback("denied", msg);
+      }),
+    );
   }
 
   // ---------------------------------------------------------------------------
@@ -409,10 +417,11 @@ export class InventoryUI {
     return null;
   }
 
-  _showFeedback(type) {
+  _showFeedback(type, message) {
     const el = this._container.querySelector(".inventory-feedback");
     if (!el) return;
-    el.textContent = type === "invalid" ? "Local inválido" : "";
+    el.textContent = message
+      ?? (type === "invalid" ? "Local inválido" : "");
     el.className = `inventory-feedback feedback-${type}`;
     clearTimeout(this._feedbackTimeout);
     this._feedbackTimeout = setTimeout(() => {

@@ -96,13 +96,30 @@ export class MapChunkSubscriber {
 
     const newCoords = new Set();
     if (data && typeof data === "object") {
-      for (const [xy, layers] of Object.entries(data)) {
+      for (const [xy, tileData] of Object.entries(data)) {
         const coord = `${xy},${z}`;
         newCoords.add(coord);
         if (!map[coord]) map[coord] = {};
-        for (const [layer, tiles] of Object.entries(layers)) {
+
+        // Suporta dois formatos:
+        //   Compacto: { "0": [{id,count}], "2": [...] }
+        //   Firebase: { layers: {"0": [...], "2": [...]}, flags: N, houseId: ... }
+        const layersObj =
+          tileData &&
+          typeof tileData === "object" &&
+          tileData.layers != null &&
+          typeof tileData.layers === "object" &&
+          !Array.isArray(tileData.layers)
+            ? tileData.layers
+            : tileData;
+
+        for (const [layer, tiles] of Object.entries(layersObj ?? {})) {
           if (layer !== "99") map[coord][layer] = tiles;
         }
+
+        // Preserva metadados do tile para uso futuro (FlagResolver, houses)
+        if (tileData?.flags != null) map[coord].__flags = tileData.flags;
+        if (tileData?.houseId) map[coord].__houseId = tileData.houseId;
       }
     }
 

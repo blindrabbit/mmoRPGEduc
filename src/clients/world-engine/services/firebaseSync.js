@@ -5,6 +5,7 @@
 import {
   setMapChunks,
   setMapData,
+  setFlagDefinitions,
   setMonsterTemplates,
   setEntitySchemas,
   setAbilitySchemas,
@@ -16,6 +17,7 @@ import {
   runSchemaMigration,
 } from "../../../core/db.js";
 import { NEW_ASSETS } from "../../../core/config.js";
+import { FlagResolver } from "../../../core/FlagResolver.js";
 
 export class FirebaseSync {
   constructor(worldState, logger, assets) {
@@ -37,12 +39,14 @@ export class FirebaseSync {
   async _loadFreshLocalWorldData(statusEl) {
     this._setStatus(
       statusEl,
-      "Lendo map_compacto.json e map_data.json locais...",
+      "Lendo map_compacto.json, map_data.json e map_flag_definitions.json locais...",
     );
 
-    const [freshMap, freshMapData] = await Promise.all([
+    const [freshMap, freshMapData, freshFlagDefs] = await Promise.all([
       this._fetchJsonNoCache(NEW_ASSETS.mapFile, "map_compacto.json"),
       this._fetchJsonNoCache(NEW_ASSETS.dataFile, "map_data.json"),
+      this._fetchJsonNoCache(NEW_ASSETS.flagDefsFile, "map_flag_definitions.json")
+        .catch(() => null),
     ]);
 
     if (!freshMap || typeof freshMap !== "object") {
@@ -54,11 +58,13 @@ export class FirebaseSync {
 
     this.worldState._localMap = freshMap;
     this.worldState.mapData = freshMapData;
+    this.worldState.flagDefs = freshFlagDefs ?? {};
     if (this.assets) this.assets.mapData = freshMapData;
 
     return {
       localMap: freshMap,
       mapData: freshMapData,
+      flagDefs: freshFlagDefs ?? {},
     };
   }
 
@@ -122,12 +128,12 @@ export class FirebaseSync {
   // ── Recarregar Mundo ────────────────────────────────────────
   async _reloadWorld(statusEl) {
     // Recarrega usando JSONs locais como fonte de verdade.
-    let localMap;
-    let mapData;
+    let localMap, mapData, flagDefs;
     try {
       const fresh = await this._loadFreshLocalWorldData(statusEl);
       localMap = fresh.localMap;
       mapData = fresh.mapData;
+      flagDefs = fresh.flagDefs;
     } catch (e) {
       this._setStatus(
         statusEl,
@@ -139,17 +145,13 @@ export class FirebaseSync {
     }
 
     if (!localMap || !mapData) {
-      this._setStatus(
-        statusEl,
-        "Erro: mapa não carregado na memória.",
-        "error",
-      );
+      this._setStatus(statusEl, "Erro: mapa não carregado na memória.", "error");
       return;
     }
 
     const tilesCount = Object.keys(localMap).length;
     const mapDataCount = Object.keys(mapData).length;
-    const map = localMap;
+    const flagDefsCount = Object.keys(flagDefs).length;
     const reloadId = Date.now();
 
     this._setStatus(statusEl, "Iniciando recarga...");
@@ -162,19 +164,20 @@ export class FirebaseSync {
         by: "worldEngine",
       });
 
-      this._setStatus(
-        statusEl,
-        "Limpando map_data e world_tiles anteriores...",
-      );
+      this._setStatus(statusEl, "Limpando dados anteriores do Firebase...");
       await clearWorldForReload();
 
       this._setStatus(statusEl, `Enviando ${tilesCount} tiles em chunks...`);
-      await setMapChunks(map, (done, total) => {
+      await setMapChunks(localMap, (done, total) => {
         this._setStatus(statusEl, `Enviando chunks: ${done}/${total}...`);
       });
 
-      this._setStatus(statusEl, `Enviando ${mapDataCount} metadados...`);
+      this._setStatus(statusEl, `Enviando ${mapDataCount} metadados de itens...`);
       await setMapData(mapData);
+
+      this._setStatus(statusEl, `Enviando ${flagDefsCount} definições de flags...`);
+      await setFlagDefinitions(flagDefs);
+      FlagResolver.init(flagDefs);
 
       this._setStatus(statusEl, "Sincronizando schemas/modelos...");
       await this.syncModelsAndSchemasFromLocal();
@@ -183,11 +186,11 @@ export class FirebaseSync {
 
       this._setStatus(
         statusEl,
-        `Concluído: ${tilesCount} tiles, ${mapDataCount} itens.`,
+        `Concluído: ${tilesCount} tiles, ${mapDataCount} itens, ${flagDefsCount} flags.`,
         "ok",
       );
       this.logger?.ok?.(
-        `[FirebaseSync] Mundo sincronizado: ${tilesCount} tiles`,
+        `[FirebaseSync] Mundo sincronizado: ${tilesCount} tiles, ${flagDefsCount} flags`,
       );
     } catch (e) {
       await markWorldReloadError(e.message, { reloadId }).catch(() => {});

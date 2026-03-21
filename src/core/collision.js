@@ -10,8 +10,11 @@
 // SISTEMA 2 — Projéteis/magias:  game.blocks_missiles === true
 // SISTEMA 3 — Linha de visão:    game.blocks_sight === true
 //
-// Fallback formato antigo: flags_raw.unreadable === true
+// Fallback formato antigo: flags_raw.unpass === true
+// Fallback por ID: itemClassification.js (NOT_WALKABLE_IDS / WALKABLE_IDS)
 // ═══════════════════════════════════════════════════════════════
+
+import { isWalkableById } from "../gameplay/items/itemClassification.js";
 
 // Criaturas normais não entram em tiles com movement_cost >= threshold.
 // Tiles com cost === 1 também são tratados como impassáveis para NPCs.
@@ -25,21 +28,33 @@ const IMPASSABLE_COST_THRESHOLD = 500;
  *   false = bloqueia o tile (parede, objeto sólido)
  *   null  = sem informação (ignorar na decisão)
  *
- * Suporta formato novo (game.is_walkable) e antigo (flags_raw.bank.waypoints).
+ * Ordem de verificação:
+ *   1. itemClassification.js (NOT_WALKABLE_IDS / WALKABLE_IDS) — máxima prioridade
+ *   2. game.is_walkable (formato novo)
+ *   3. flags_raw.unpass / bank.waypoints (formato antigo)
+ *
+ * @param {Object|null} meta - Entrada do map_data para o item
+ * @param {number|null} [itemId] - ID numérico do item (para lookup em itemClassification)
  */
-function _itemWalkable(meta) {
+function _itemWalkable(meta, itemId) {
+  // 1. Classificação explícita por ID (inclui árvores, paredes, chãos mapeados)
+  if (itemId != null) {
+    const byId = isWalkableById(itemId);
+    if (byId !== null) return byId;
+  }
+
   if (!meta) return null;
 
-  // Formato novo
+  // 2. Formato novo
   if (meta.game) {
     if (meta.game.is_walkable === false) return false;
     if (meta.game.is_walkable === true) return true;
   }
 
-  // Fallback formato antigo: unreadable = bloqueante
-  if (meta?.flags_raw?.unreadable === true) return false;
+  // 3. Fallback formato antigo: unpass = bloqueante
+  if (meta?.flags_raw?.unpass === true) return false;
 
-  // Fallback formato antigo: bank.waypoints > 0 = tile de chão walkable
+  // 3b. Fallback formato antigo: bank.waypoints > 0 = tile de chão walkable
   const waypoints = meta?.flags_raw?.bank?.waypoints;
   if (typeof waypoints === "number" && waypoints > 0) return true;
 
@@ -51,7 +66,7 @@ function _itemBlocksMovement(meta) {
   if (meta.game) {
     return meta.game.is_walkable === false || meta.game.movement_cost === 0;
   }
-  if (meta?.flags_raw?.unreadable === true) return true;
+  if (meta?.flags_raw?.unpass === true) return true;
   return false;
 }
 
@@ -59,7 +74,7 @@ function _itemBlocksMissiles(meta) {
   if (!meta) return false;
   if (meta.game) return meta.game.blocks_missiles === true;
   // Fallback formato antigo
-  if (meta?.flags_raw?.unreadable === true) return true;
+  if (meta?.flags_raw?.unpass === true) return true;
   return false;
 }
 
@@ -67,7 +82,7 @@ function _itemBlocksSight(meta) {
   if (!meta) return false;
   if (meta.game) return meta.game.blocks_sight === true;
   // Fallback formato antigo
-  if (meta?.flags_raw?.unreadable === true) return true;
+  if (meta?.flags_raw?.unpass === true) return true;
   return false;
 }
 
@@ -76,6 +91,8 @@ function _itemBlocksSight(meta) {
 // Formato legado:   [100, 103, 4538]  (array de IDs numéricos)
 // Formato compacto: { "0": [{id:100, count:1}], "1": [{id:4538, count:1}] }
 //                   (objeto de layers indexadas com objetos {id, count})
+// Formato Firebase: { layers: {"0": [...], "2": [...]}, flags: N, houseId: ... }
+//                   (tile completo do map_compacto.json / world_tiles)
 //
 function _extractItemIds(tileValue) {
   if (!tileValue) return [];
@@ -84,9 +101,15 @@ function _extractItemIds(tileValue) {
     return tileValue.map((v) => (typeof v === "object" ? v.id : v)).filter(Boolean);
   }
   if (typeof tileValue === "object") {
-    // Compacto: { "0": [{id, count}], "1": [...] }
+    // Detecta formato Firebase com wrapper { layers: {...}, flags: N, houseId: ... }
+    const layersObj =
+      tileValue.layers != null &&
+      typeof tileValue.layers === "object" &&
+      !Array.isArray(tileValue.layers)
+        ? tileValue.layers
+        : tileValue;
     const ids = [];
-    for (const layer of Object.values(tileValue)) {
+    for (const layer of Object.values(layersObj)) {
       if (Array.isArray(layer)) {
         for (const item of layer) {
           const id = typeof item === "object" ? item.id : item;
@@ -107,7 +130,7 @@ function _extractItemIds(tileValue) {
  *   1) tile precisa ter PELO MENOS um item com game.is_walkable === true
  *   2) se qualquer item do tile tiver game.is_walkable === false, bloqueia
  *
- * Observação: para movimento de entidades, tags legadas (flags_raw.unreadable)
+ * Observação: para movimento de entidades, tags legadas (flags_raw.unpass)
  * não são mais critério principal.
  */
 export function isTileWalkable(x, y, z, worldTiles, nexoData) {
@@ -123,11 +146,11 @@ export function isTileWalkable(x, y, z, worldTiles, nexoData) {
 
   for (const itemId of ids) {
     const meta = nexoData[String(itemId)];
-    const walkable = _itemWalkable(meta);
+    const walkable = _itemWalkable(meta, itemId);
 
     if (walkable === false) return false;   // bloqueio explícito → para imediatamente
     if (walkable === true) hasWalkableTrue = true;  // ao menos um confirma ground
-    if (meta != null) hasAnyKnownItem = true;
+    if (meta != null || isWalkableById(itemId) !== null) hasAnyKnownItem = true;
   }
 
   // Se nenhum item tem metadados no nexoData, não bloquear o movimento
@@ -175,7 +198,7 @@ export function isTileBlockedByWall(x, y, z, worldTiles, nexoData) {
   const raw = worldTiles?.[`${x},${y},${z}`];
   if (!raw || !nexoData) return false; // sem dados = não é parede
   for (const itemId of _extractItemIds(raw)) {
-    if (_itemWalkable(nexoData[String(itemId)]) === false) return true;
+    if (_itemWalkable(nexoData[String(itemId)], itemId) === false) return true;
   }
   return false;
 }

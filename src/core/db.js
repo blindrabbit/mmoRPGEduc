@@ -107,6 +107,7 @@ export const PATHS = {
   field: (id) => safePath("world_fields", id),
   tiles: "world_tiles",
   tilesData: "world_tiles_data",
+  flagDefs: "world_flag_definitions",
   worldItems: "world_items",
   worldState: "world_state",
   account: (userOrUuid) =>
@@ -605,13 +606,13 @@ export const TILE_CHUNK_SIZE = 16;
 
 /**
  * Converte o mapa flat (map_compacto.json) para o formato de chunks.
- * @param {Object} flatMap - { "x,y,z": { "layer": [...] } }
+ * @param {Object} flatMap - { "x,y,z": { layers: {"0":[...]}, flags: N } } ou { "x,y,z": {"0":[...]} }
  * @param {number} [chunkSize]
- * @returns {Object} - { "z/cx,cy": { "x,y": { "layer": [...] } } }
+ * @returns {Object} - { "z/cx,cy": { "x,y": {"0":[...], "2":[...]} } }
  */
 export function flatMapToChunks(flatMap, chunkSize = TILE_CHUNK_SIZE) {
   const chunks = {};
-  for (const [coord, layers] of Object.entries(flatMap ?? {})) {
+  for (const [coord, tileObj] of Object.entries(flatMap ?? {})) {
     const [x, y, z] = coord.split(",").map(Number);
     if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z))
       continue;
@@ -619,7 +620,16 @@ export function flatMapToChunks(flatMap, chunkSize = TILE_CHUNK_SIZE) {
     const cy = Math.floor(y / chunkSize);
     const chunkKey = `${z}/${cx},${cy}`;
     if (!chunks[chunkKey]) chunks[chunkKey] = {};
-    chunks[chunkKey][`${x},${y}`] = layers;
+    // Suporta formato novo { layers: {...}, flags: N } e formato legado { "0": [...] }
+    const layersOnly =
+      tileObj &&
+      typeof tileObj === "object" &&
+      tileObj.layers != null &&
+      typeof tileObj.layers === "object" &&
+      !Array.isArray(tileObj.layers)
+        ? tileObj.layers
+        : tileObj;
+    chunks[chunkKey][`${x},${y}`] = layersOnly;
   }
   return chunks;
 }
@@ -644,6 +654,8 @@ export async function setMapChunks(flatMap, onProgress) {
   }
 }
 export const setMapData = (data) => dbSet(PATHS.tilesData, data);
+export const getFlagDefinitions = () => dbGet(PATHS.flagDefs);
+export const setFlagDefinitions = (data) => dbSet(PATHS.flagDefs, data);
 export const setWorldState = (data) => dbSet(PATHS.worldState, data);
 export const getWorldState = () => dbGet(PATHS.worldState);
 
@@ -733,6 +745,7 @@ export const clearWorldForReload = () =>
   dbUpdate({
     [PATHS.tiles]: null,
     [PATHS.tilesData]: null,
+    [PATHS.flagDefs]: null,
     [PATHS.worldItems]: null,
     [PATHS.monsterTemplates]: null,
     [PATHS.monsters]: null,

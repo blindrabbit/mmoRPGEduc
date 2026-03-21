@@ -21,6 +21,7 @@ export const NEW_ASSETS = {
   basePath: "./assets/",
   mapFile: "./assets/map_compacto.json",
   dataFile: "./assets/map_data.json",
+  flagDefsFile: "./assets/map_flag_definitions.json",
   atlasFolder: "./assets/",
 };
 

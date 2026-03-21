@@ -7,6 +7,7 @@ import { getActionSystem } from "../../../core/actionSystem.js";
 import { registerDefaultActions } from "../../../gameplay/defaultActions.js";
 import { createPlayerInputHandler } from "../../../gameplay/playerInputHandler.js";
 import { PlayerAction } from "../../../core/playerAction.js";
+import { resolveStepOnEffects } from "../../../core/TileEffects.js";
 
 /**
  * Inicializa o sistema de Player Actions
@@ -125,6 +126,27 @@ function executeAutoWalk(directions, path) {
     if (player) {
       player.x += delta.dx;
       player.y += delta.dy;
+
+      // Verifica efeito de tile (teleporte ou escada)
+      const ws = window.worldState;
+      const effect = resolveStepOnEffects(player.x, player.y, player.z, ws);
+      if (effect?.type === "teleport") {
+        player.x = effect.dest.x;
+        player.y = effect.dest.y;
+        player.z = effect.dest.z;
+        updateCameraToPlayer();
+        console.log(`[TileEffects] Teleporte → (${player.x},${player.y},${player.z})`);
+        return; // interrompe o autowalk
+      }
+      if (effect?.type === "floor_change") {
+        player.x = effect.newX;
+        player.y = effect.newY;
+        player.z = effect.newZ;
+        updateCameraToPlayer();
+        updateFloorHUD(player.z);
+        console.log(`[TileEffects] Mudança de andar → Z=${player.z}`);
+        return; // interrompe o autowalk
+      }
 
       // Atualiza câmera para seguir o player
       updateCameraToPlayer();

@@ -8,6 +8,7 @@ import { PlayerAction } from "../../core/playerAction.js";
 import { PathFinder } from "../../core/pathfinding.js";
 import { isTileWalkable } from "../../core/collision.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
+import { resolveStepOnEffects } from "../../core/TileEffects.js";
 
 /**
  * Inicializa Player Actions específico para o RPG
@@ -392,6 +393,21 @@ function executeWalkTo(
 
     // Move player
     onPlayerMove(nextPos.x, nextPos.y, nextPos.z, direction);
+
+    // Verifica efeito de tile (teleporte ou escada)
+    const effect = resolveStepOnEffects(nextPos.x, nextPos.y, nextPos.z, worldState);
+    if (effect?.type === "teleport") {
+      onPlayerMove(effect.dest.x, effect.dest.y, effect.dest.z, direction);
+      console.log(`[TileEffects] Teleporte → (${effect.dest.x},${effect.dest.y},${effect.dest.z})`);
+      if (onComplete) onComplete();
+      return; // interrompe o autowalk
+    }
+    if (effect?.type === "floor_change") {
+      onPlayerMove(effect.newX, effect.newY, effect.newZ, direction);
+      console.log(`[TileEffects] Mudança de andar → Z=${effect.newZ}`);
+      if (onComplete) onComplete();
+      return; // interrompe o autowalk
+    }
 
     stepIndex++;
 
