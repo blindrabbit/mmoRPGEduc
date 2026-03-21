@@ -124,7 +124,7 @@ export function initRPGPlayerActions({
             _pendingItemMove = null;
           }
         }, 300);
-      });
+      }, worldState);
     }
   };
 
@@ -297,7 +297,7 @@ function setupRPGInputHandler({
     // Executa ação
     if (action === PlayerAction.AUTOWALK_HIGHLIGHT || action === 4) {
       // Move para o tile clicado (ou origem do drag)
-      executeWalkTo(player, targetTile, pathFinder, onPlayerMove);
+      executeWalkTo(player, targetTile, pathFinder, onPlayerMove, undefined, worldState);
     } else if (action === PlayerAction.CHANGE_FLOOR) {
       // Muda floor (escada)
       executeFloorChange(
@@ -306,13 +306,14 @@ function setupRPGInputHandler({
         metadata,
         onPlayerMove,
         onPlayerAction,
+        worldState,
       );
     } else if (action === PlayerAction.LOOK || action === 1) {
       // Look
       executeLook(targetTile, metadata);
     } else if (action === PlayerAction.USE || action === 2) {
-      // Use
-      executeUse(player, targetTile, metadata, onPlayerAction);
+      // Use (inclui toggle de portas)
+      executeUse(player, targetTile, metadata, onPlayerAction, worldState);
     } else if (action === PlayerAction.OPEN || action === 3) {
       // Open
       executeOpen(player, targetTile, metadata, onPlayerAction);
@@ -362,6 +363,7 @@ function executeWalkTo(
   pathFinder,
   onPlayerMove,
   onComplete,
+  worldState,
 ) {
   const start = { x: player.x, y: player.y, z: player.z };
   const goal = targetTile;
@@ -429,6 +431,7 @@ function executeFloorChange(
   metadata,
   onPlayerMove,
   onPlayerAction,
+  worldState,
 ) {
   // Verifica se está adjacente à escada
   const dx = Math.abs(player.x - targetTile.x);
@@ -486,9 +489,15 @@ function executeLook(targetTile, metadata) {
 }
 
 /**
- * Executa ação de Use
+ * Executa ação de Use.
+ * Se o item for uma porta (metadata.door), delega para executeDoor.
  */
-function executeUse(player, targetTile, metadata, onPlayerAction) {
+function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
+  if (metadata?.door) {
+    executeDoor(targetTile, metadata, worldState, onPlayerAction);
+    return;
+  }
+
   console.log("[Use]", metadata?.name || targetTile);
 
   if (onPlayerAction) {
@@ -496,6 +505,67 @@ function executeUse(player, targetTile, metadata, onPlayerAction) {
       type: "use",
       target: targetTile,
       itemId: metadata?.id,
+    });
+  }
+}
+
+/**
+ * Abre ou fecha uma porta trocando o item no tile pelo openId/closedId.
+ * A porta precisa estar no worldState.map (tile) e ter metadata.door.
+ *
+ * @param {{x,y,z}} targetTile
+ * @param {Object}  metadata   — entrada do map_data com .door e .id
+ * @param {Object}  worldState — estado do mundo (worldState.map)
+ * @param {Function} onPlayerAction — callback para enviar ação ao servidor
+ */
+function executeDoor(targetTile, metadata, worldState, onPlayerAction) {
+  const door = metadata?.door;
+  if (!door) return;
+
+  const { x, y, z } = targetTile;
+  const tileKey = `${x},${y},${z}`;
+  const tile = worldState?.map?.[tileKey];
+  if (!tile) return;
+
+  const currentId = metadata.id;
+  const isOpen = currentId === door.openId;
+  const nextId = isOpen ? door.closedId : door.openId;
+
+  console.log(`[Door] ${isOpen ? "Fechando" : "Abrindo"} porta ${currentId} → ${nextId} em ${tileKey}`);
+
+  // Troca o item no tile localmente (todos os layers)
+  const layerKeys = Object.keys(tile).filter((k) => !isNaN(Number(k)));
+  for (const layerKey of layerKeys) {
+    const layer = tile[layerKey];
+    if (!Array.isArray(layer)) continue;
+    for (const item of layer) {
+      if (typeof item === "object" && item !== null && item.id === currentId) {
+        item.id = nextId;
+      }
+    }
+  }
+
+  // Invalida cache de render para forçar re-draw
+  if (worldState.floorIndex) {
+    const floorMap = worldState.floorIndex.get(z);
+    if (floorMap) {
+      const record = floorMap.get(tileKey);
+      if (record) {
+        // Rebuilda flatItems para refletir a troca
+        record.flatItems = record.flatItems?.map((item) =>
+          typeof item === "object" && item?.id === currentId ? { ...item, id: nextId } : item
+        );
+      }
+    }
+  }
+
+  // Notifica servidor/Firebase para persistir a mudança
+  if (onPlayerAction) {
+    onPlayerAction({
+      type: "toggle_door",
+      target: { x, y, z },
+      fromId: currentId,
+      toId: nextId,
     });
   }
 }
@@ -552,31 +622,36 @@ function executeAttack(targetTile, worldState) {
 function determineAction(player, tile, metadata) {
   if (!metadata) return PlayerAction.AUTOWALK_HIGHLIGHT;
 
-  // Verifica default_action
-  const defaultActionRaw =
-    metadata.game?.default_action || metadata.flags_raw?.defaultAction;
-  const defaultAction =
-    typeof defaultActionRaw === "object"
-      ? defaultActionRaw?.action
-      : defaultActionRaw;
-
-  if (defaultAction != null) {
-    return defaultAction;
-  }
-
-  // Inferência baseada em flags
-  const flags = metadata.flags_raw || {};
   const game = metadata.game || {};
+  // New format: game.flags.*; old format fallback: flags_raw
+  const vflags = game.flags?.visual || metadata.flags_raw || {};
+  const mflags = game.flags?.movement || metadata.flags_raw || {};
 
-  if (flags.bank || game.render_layer === 0) {
+  // Verifica default_action
+  const defaultActionRaw = game.flags?.interaction?.default_action
+    ?? metadata.flags_raw?.defaultAction;
+  const defaultAction = typeof defaultActionRaw === "object"
+    ? defaultActionRaw?.action
+    : defaultActionRaw;
+  if (defaultAction != null) return defaultAction;
+
+  // Ground tile (bank ou layer 0) → autowalk
+  if (mflags.bank || (game.layer ?? game.render_layer) === 0) {
     return PlayerAction.AUTOWALK_HIGHLIGHT;
   }
 
-  if (flags.clip) {
+  // GroundBorder (clip sem bottom) → autowalk
+  if (vflags.clip && !vflags.bottom) {
     return PlayerAction.AUTOWALK_HIGHLIGHT;
   }
 
-  if (flags.container) {
+  // Porta → USE (toggle abre/fecha)
+  if (metadata.door) {
+    return PlayerAction.USE;
+  }
+
+  // Container → OPEN
+  if (game.container || game.flags?.interaction?.container) {
     return PlayerAction.OPEN;
   }
 
@@ -600,27 +675,43 @@ function determineAction(player, tile, metadata) {
 }
 
 /**
- * Pega metadata de um tile
+ * Pega metadata de um tile — suporta formato compacto {\"0\":[...],\"2\":[...]} e legado
  */
 function getTileMetadata(tileData, nexoData) {
   if (!tileData || !nexoData) return null;
 
-  // Tile pode ser array ou objeto
-  const items = Array.isArray(tileData) ? tileData : tileData.items || [];
+  // Achata todas as layers em um array flat (formato compacto do map_compacto.json)
+  let items;
+  if (Array.isArray(tileData)) {
+    items = tileData;
+  } else if (Array.isArray(tileData.items)) {
+    items = tileData.items;
+  } else {
+    // Formato {"0":[...],"2":[...]} — itera layers em ordem decrescente (2→1→0)
+    // para priorizar items sobre ground
+    items = [];
+    const layerKeys = Object.keys(tileData)
+      .map(Number).filter((n) => Number.isFinite(n))
+      .sort((a, b) => b - a); // descending: camada 2 antes da 0
+    for (const k of layerKeys) {
+      const layer = tileData[String(k)];
+      if (Array.isArray(layer)) items.push(...layer);
+    }
+  }
 
-  // Pega primeiro item não-ground (prioriza items visíveis)
+  // Prioriza primeiro item que não é ground (layer 0)
   for (const item of items) {
     const spriteId = typeof item === "object" ? item.id : item;
     const metadata = nexoData[String(spriteId)];
-    if (metadata && metadata.category !== "ground") {
+    if (metadata && metadata.game?.layer !== 0 && metadata.game?.movement_cost == null) {
       return metadata;
     }
   }
 
-  // Fallback: pega primeiro item
+  // Fallback: primeiro item encontrado
   if (items.length > 0) {
-    const firstItem = items[0];
-    const spriteId = typeof firstItem === "object" ? firstItem.id : firstItem;
+    const first = items[0];
+    const spriteId = typeof first === "object" ? first.id : first;
     return nexoData[String(spriteId)];
   }
 

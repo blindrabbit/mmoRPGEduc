@@ -4,12 +4,13 @@
 //
 // SISTEMA 1 — Movimento físico (estrito por tag):
 //             entidades só caminham em tiles que tenham
-//             pelo menos um item com game.is_walkable === true,
-//             e nenhum item com game.is_walkable === false.
+//             pelo menos um item com game.walkable === true,
+//             e nenhum item com game.walkable === false.
 // SISTEMA 1b— Custo de terreno:  game.movement_cost (água/lava >= 500)
 // SISTEMA 2 — Projéteis/magias:  game.blocks_missiles === true
 // SISTEMA 3 — Linha de visão:    game.blocks_sight === true
 //
+// Fallback formato novo: game.flags.movement.unpass
 // Fallback formato antigo: flags_raw.unpass === true
 // Fallback por ID: itemClassification.js (NOT_WALKABLE_IDS / WALKABLE_IDS)
 // ═══════════════════════════════════════════════════════════════
@@ -30,8 +31,9 @@ const IMPASSABLE_COST_THRESHOLD = 500;
  *
  * Ordem de verificação:
  *   1. itemClassification.js (NOT_WALKABLE_IDS / WALKABLE_IDS) — máxima prioridade
- *   2. game.is_walkable (formato novo)
- *   3. flags_raw.unpass / bank.waypoints (formato antigo)
+ *   2. game.walkable (novo) ou game.is_walkable (legado)
+ *   3. game.flags.movement.unpass / game.flags.movement.bank (novo)
+ *   4. flags_raw.unpass / bank.waypoints (formato antigo)
  *
  * @param {Object|null} meta - Entrada do map_data para o item
  * @param {number|null} [itemId] - ID numérico do item (para lookup em itemClassification)
@@ -45,17 +47,22 @@ function _itemWalkable(meta, itemId) {
 
   if (!meta) return null;
 
-  // 2. Formato novo
+  // 2. game.walkable (novo) ou game.is_walkable (legado)
   if (meta.game) {
-    if (meta.game.is_walkable === false) return false;
-    if (meta.game.is_walkable === true) return true;
+    const w = meta.game.walkable ?? meta.game.is_walkable;
+    if (w === false) return false;
+    if (w === true) return true;
   }
 
-  // 3. Fallback formato antigo: unpass = bloqueante
-  if (meta?.flags_raw?.unpass === true) return false;
+  // 3. game.flags.movement.unpass (novo) ou flags_raw.unpass (legado)
+  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  if (unpass === true) return false;
 
-  // 3b. Fallback formato antigo: bank.waypoints > 0 = tile de chão walkable
-  const waypoints = meta?.flags_raw?.bank?.waypoints;
+  // 4. bank.waypoints > 0 = tile de chão walkable
+  const bankNew = meta?.game?.flags?.movement?.bank;
+  const bankOld = meta?.flags_raw?.bank;
+  const bank = bankNew ?? bankOld;
+  const waypoints = typeof bank === "object" ? bank?.waypoints : (bank != null ? 1 : null);
   if (typeof waypoints === "number" && waypoints > 0) return true;
 
   return null;
@@ -64,26 +71,26 @@ function _itemWalkable(meta, itemId) {
 function _itemBlocksMovement(meta) {
   if (!meta) return false;
   if (meta.game) {
-    return meta.game.is_walkable === false || meta.game.movement_cost === 0;
+    const w = meta.game.walkable ?? meta.game.is_walkable;
+    if (w === false) return true;
+    if (meta.game.movement_cost === 0) return true;
   }
-  if (meta?.flags_raw?.unpass === true) return true;
-  return false;
+  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  return unpass === true;
 }
 
 function _itemBlocksMissiles(meta) {
   if (!meta) return false;
   if (meta.game) return meta.game.blocks_missiles === true;
-  // Fallback formato antigo
-  if (meta?.flags_raw?.unpass === true) return true;
-  return false;
+  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  return unpass === true;
 }
 
 function _itemBlocksSight(meta) {
   if (!meta) return false;
   if (meta.game) return meta.game.blocks_sight === true;
-  // Fallback formato antigo
-  if (meta?.flags_raw?.unpass === true) return true;
-  return false;
+  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  return unpass === true;
 }
 
 // ── Extração de IDs de tile (suporta array legado e formato compacto) ────────

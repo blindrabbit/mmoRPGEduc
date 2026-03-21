@@ -46,7 +46,14 @@ export function calculateStackPosition(itemFlags = {}, category = "item") {
 
 export function resolveStackPosition(metadata = null, category = "item") {
   const meta = metadata ?? {};
-  const raw = Number(meta?.game?.stack_position);
+  // New format: game.stack_pos; old format fallback: game.stack_position
+  const raw = Number(meta?.game?.stack_pos ?? meta?.game?.stack_position);
   if (Number.isFinite(raw)) return raw;
-  return calculateStackPosition(meta?.flags_raw ?? {}, category);
+  // Compose flags from new format or fall back to flags_raw
+  const mflags = meta?.game?.flags?.movement || {};
+  const vflags = meta?.game?.flags?.visual || {};
+  const fallbackFlags = Object.keys(mflags).length || Object.keys(vflags).length
+    ? { ...mflags, ...vflags }
+    : (meta?.flags_raw ?? {});
+  return calculateStackPosition(fallbackFlags, category);
 }

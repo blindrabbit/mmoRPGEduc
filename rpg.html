@@ -1405,6 +1405,7 @@
         getDefense,
       } from "./src/gameplay/progression/progressionSystem.js";
       import { setupMovement } from "./src/gameplay/input.js";
+      import { resolveStepOnEffects } from "./src/core/TileEffects.js";
       import {
         initRPGPlayerActions,
         cleanupRPGPlayerActions,
@@ -3312,6 +3313,20 @@
 
               // Chama o callback do Player Actions para verificar position actions
               playerActionOnMove(nx, ny, nz, dir);
+
+              // Verifica efeito de tile (teleporte ou escada)
+              const effect = resolveStepOnEffects(nx, ny, nz, { map, assets: { mapData } });
+              if (effect?.type === "teleport") {
+                myPos.x = effect.dest.x;
+                myPos.y = effect.dest.y;
+                myPos.z = effect.dest.z;
+                handlePlayerSync(uid, myPos);
+              } else if (effect?.type === "floor_change") {
+                myPos.x = effect.newX;
+                myPos.y = effect.newY;
+                myPos.z = effect.newZ;
+                handlePlayerSync(uid, myPos);
+              }
             }
           },
           false, // isAdmin

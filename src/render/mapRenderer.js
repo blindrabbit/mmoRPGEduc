@@ -62,7 +62,8 @@ function _flattenTileEntries(tileLayers, layerKeys) {
 }
 
 function _resolveRenderLayer(metadata, category = "common") {
-  const rawLayer = Number(metadata?.game?.render_layer);
+  // New format: game.layer; old format fallback: game.render_layer
+  const rawLayer = Number(metadata?.game?.layer ?? metadata?.game?.render_layer);
   if (Number.isFinite(rawLayer)) {
     return Math.max(0, Math.min(3, Math.floor(rawLayer)));
   }
@@ -242,24 +243,27 @@ export function getTileDrawElevation({
 function classifyItemOT(metadata) {
   if (!metadata) return "common";
 
-  const flags = metadata.flags_raw || {};
   const game = metadata.game || {};
+  // New format: flags are in game.flags.{movement,visual}
+  // Old format fallback: flags_raw at top level
+  const vflags = game.flags?.visual || metadata.flags_raw || {};
+  const mflags = game.flags?.movement || metadata.flags_raw || {};
 
-  // ThingAttrGround (0) - flags.bank, mas apenas se category_type for ground
+  // ThingAttrGround (0) - bank flag or layer 0
   // Paredes/montanhas com bank (ex: 1128) devem ser tratadas como bottom
-  if (flags.bank || game.render_layer === 0) {
+  if (mflags.bank || (game.layer ?? game.render_layer) === 0) {
     if (game.category_type === "wall") return "bottom";
     return "ground";
   }
 
-  // ThingAttrGroundBorder (1) - flags.clip (sem bottom)
-  if (flags.clip && !flags.bottom) return "groundBorder";
+  // ThingAttrGroundBorder (1) - clip sem bottom
+  if (vflags.clip && !vflags.bottom) return "groundBorder";
 
-  // ThingAttrOnBottom (2) - flags.bottom
-  if (flags.bottom) return "bottom";
+  // ThingAttrOnBottom (2) - bottom flag
+  if (vflags.bottom) return "bottom";
 
-  // ThingAttrOnTop (3) - flags.top ou flags.topeffect
-  if (flags.top || flags.topeffect) return "top";
+  // ThingAttrOnTop (3) - top ou topeffect flag
+  if (vflags.top || vflags.topeffect) return "top";
 
   // Default: common item
   return "common";
@@ -445,7 +449,8 @@ function calculateSpritePosition(
 ) {
   const _bb = metadata?.bounding_box;
   const bbox = (Array.isArray(_bb) ? _bb[0] : _bb) || { x: 0, y: 0 };
-  const shift = metadata?.flags_raw?.shift || { x: 0, y: 0 };
+  // New format: game.flags.visual.shift; old format fallback: flags_raw.shift
+  const shift = metadata?.game?.flags?.visual?.shift || metadata?.flags_raw?.shift || { x: 0, y: 0 };
 
   // Quantos tiles de 32px o sprite ocupa (dimensões REAIS do atlas)
   const sizeW = Math.ceil(spriteInfo.w / 32);
