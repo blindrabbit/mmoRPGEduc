@@ -3,18 +3,7 @@
 // Orquestrador de IA: lê worldStore, decide via monsterAI/combatLogic,
 // escreve no Firebase via db.js.
 //
-// MUDANÇAS DESTA FASE:
-//   ❌ import { dbUpdate } from './firebaseClient.js'
-//   ✅ import { batchWrite, applyHpToPlayer, respawnPlayer,
-//               syncEffect, syncField, removeMonster, removeEffect,
-//               PATHS } from './db.js'
-//
-//   ❌ await dbUpdate({ 'players_data/id/stats': {...}, 'online_players/id/stats': {...} })
-//   ✅ await applyHpToPlayer(id, newHp)
-//
-//   ❌ await dbUpdate({ 'players_data/id': {...}, 'online_players/id': {...}, ... })
-//   ✅ await respawnPlayer(id, { x, y, z, hp })
-// =============================================================================
+//=============================================================================
 
 // ✅ FASE IMEDIATA: só db.js, zero firebaseClient direto
 import {

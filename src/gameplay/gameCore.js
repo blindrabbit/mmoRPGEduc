@@ -1,7 +1,6 @@
 // =============================================================================
 // gameCore.js — mmoRPGGame
 // Motor de render do jogo: renderização e efeitos visuais.
-// FASE IMEDIATA: re-export de firebaseClient REMOVIDO.
 // Dependências: outfitData.js, config.js, worldStore.js, combatEngine.js,
 //               playerManager.js, assetLoader.js
 // =============================================================================
@@ -17,8 +16,6 @@ const DEBUGVISUAL = false;
 
 // ---------------------------------------------------------------------------
 // RE-EXPORTS DE COMPATIBILIDADE
-// ❌ REMOVIDO: export { dbWatch as monitorFirebase } from './firebaseClient.js'
-// ✅ monitorFirebase agora é função vazia — worldStore já ouve os efeitos
 // ---------------------------------------------------------------------------
 
 export {
@@ -69,6 +66,10 @@ export function smoothProgress(t) {
 // ---------------------------------------------------------------------------
 // RENDERIZAÇÃO DO MAPA — legado (usado por rpg/admin via processRenderFrame)
 // ---------------------------------------------------------------------------
+/**
+ * @deprecated Usar diretamente worldRenderer.js para novo código.
+ * Mantida para compatibilidade com admin.html e rpg.html legados.
+ */
 export function drawMap(
   ctx,
   worldTiles,
@@ -113,6 +114,9 @@ export function drawMap(
 // ---------------------------------------------------------------------------
 // RENDER FRAME PRINCIPAL — legado
 // ---------------------------------------------------------------------------
+/**
+ * @deprecated Mantida para compatibilidade. Nova arquitetura usa WorldRenderer.renderFrame().
+ */
 export function processRenderFrame(
   ctx,
   canvas,
@@ -149,6 +153,9 @@ export function processRenderFrame(
   return { camX, camY };
 }
 
+/**
+ * @deprecated Mantida para compatibilidade. Nova arquitetura usa WorldRenderer.renderFrame().
+ */
 export function renderGameFrame(
   ctx,
   canvas,

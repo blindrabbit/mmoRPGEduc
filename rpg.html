@@ -1377,12 +1377,6 @@
         PATHS,
       } from "./src/core/db.js";
       import {
-        authSignIn,
-        authSignOut,
-        onAuthChange,
-        getCurrentUser,
-      } from "./src/core/firebaseClient.js";
-      import {
         initWorldStore,
         getMonsters,
         getPlayers,
@@ -2234,10 +2228,10 @@
           errEl.textContent = "";
           btn.disabled = true;
           try {
-            const user = await authSignIn(email, pass);
             const account = await findAccountByEmail(email);
-            if (!account) throw new Error("Conta não encontrada no banco.");
-            _currentAccount = { ...account, uuid: user.uid };
+            if (!account) throw new Error("E-mail não encontrado.");
+            if (account.pass !== pass) throw new Error("Senha incorreta.");
+            _currentAccount = account;
             document.getElementById("auth-overlay").style.display = "none";
             showCharacterSelect();
           } catch (e) {
@@ -2247,11 +2241,10 @@
           }
         });
 
-      document.getElementById("btn-logout").addEventListener("click", async () => {
+      document.getElementById("btn-logout").addEventListener("click", () => {
         _cleanup();
         myPos = null;
         _currentAccount = null;
-        await authSignOut().catch(() => {});
         document.getElementById("game-wrapper").style.display = "none";
         document.getElementById("auth-overlay").style.display = "flex";
       });

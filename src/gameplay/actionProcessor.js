@@ -63,6 +63,10 @@ import {
 const _cooldowns = new Map();
 const _queuedActions = new Map();
 
+// Rastreia buffs/debuffs ativos para expiração via tick (evita setTimeout perdido em crash)
+const _activeBuffs = new Map();
+// key: `${playerId}:${spellId}:${targetId}`, value: { expiresAt, stat, originalValue, targetType, targetId }
+
 function _isOnCooldown(playerId, key) {
   return Date.now() < (_cooldowns.get(`${playerId}:${key}`) ?? 0);
 }
@@ -529,12 +533,14 @@ async function _processSpell(action, player, now) {
           }),
         );
       }
-      setTimeout(async () => {
-        await batchWrite({
-          [`${PATHS.playerDataStats(playerId)}/${stat}`]: current,
-          [`${PATHS.playerStats(playerId)}/${stat}`]: current,
-        });
-      }, spell.duration ?? 5000);
+      // Registra buff para expiração no próximo tick que passar do prazo
+      _activeBuffs.set(`${playerId}:${spellId}:self`, {
+        expiresAt: (now ?? Date.now()) + (spell.duration ?? 5000),
+        stat,
+        originalValue: current,
+        targetType: "player",
+        targetId: playerId,
+      });
     } else {
       const monsters = getMonsters();
       const target = monsters[targetId];
@@ -557,11 +563,13 @@ async function _processSpell(action, player, now) {
           }),
         );
       }
-      setTimeout(async () => {
-        await batchWrite({
-          [`world_entities/${targetId}/stats/${stat}`]: current,
-        });
-      }, spell.duration ?? 5000);
+      _activeBuffs.set(`${playerId}:${spellId}:${targetId}`, {
+        expiresAt: (now ?? Date.now()) + (spell.duration ?? 5000),
+        stat,
+        originalValue: current,
+        targetType: "monster",
+        targetId,
+      });
     }
     pushLog("system", `${player.name} usou ${spell.name}`);
   }
@@ -570,6 +578,32 @@ async function _processSpell(action, player, now) {
 // =============================================================================
 // ADICIONAR NOVA FUNÇÃO (após _processSpell)
 // =============================================================================
+
+// ---------------------------------------------------------------------------
+// EXPIRAÇÃO DE BUFFS
+// ---------------------------------------------------------------------------
+export async function tickExpiredBuffs(now = Date.now()) {
+  if (_activeBuffs.size === 0) return;
+
+  for (const [key, buff] of _activeBuffs.entries()) {
+    if (now < buff.expiresAt) continue;
+    _activeBuffs.delete(key);
+
+    const updates = {};
+    if (buff.targetType === "player") {
+      updates[`${PATHS.playerDataStats(buff.targetId)}/${buff.stat}`] = buff.originalValue;
+      updates[`${PATHS.playerStats(buff.targetId)}/${buff.stat}`]     = buff.originalValue;
+    } else {
+      updates[`world_entities/${buff.targetId}/stats/${buff.stat}`] = buff.originalValue;
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await batchWrite(updates).catch((e) =>
+        console.error("[tickExpiredBuffs] Erro ao reverter buff:", e)
+      );
+    }
+  }
+}
 
 // ---------------------------------------------------------------------------
 // DISTRIBUIÇÃO DE ATRIBUTOS

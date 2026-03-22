@@ -1,14 +1,17 @@
-// =============================================================================
-// WorldEngineServer.js — mmoRPGEduc (SOLUTION 3 - PREPARAÇÃO)
-// Server-side World Engine para Node.js
-//
-// Este arquivo é um ESQUELETO para futura migração.
-// Quando estiver pronto para migrar:
-// 1. Instalar dependências: firebase-admin, express, ws
-// 2. Configurar Firebase Admin SDK
-// 3. Substituir WorkerBridge por WebSocket server
-// 4. Este módulo já usa WorldEngineCore, então a lógica é reutilizada!
-// =============================================================================
+/**
+ * WorldEngineServer.js — ESQUELETO PARA MIGRAÇÃO (NÃO FUNCIONAL)
+ *
+ * Status: aguardando Fase 3 do roadmap (migração do worldEngine.html → Node.js)
+ *
+ * Para ativar quando a migração for iniciada:
+ *   1. npm install firebase-admin express ws
+ *   2. Criar src/core/firebase.admin.config.js com as credenciais do service account
+ *   3. Descomentar os imports abaixo
+ *   4. Substituir WorkerBridge por WebSocket server
+ *
+ * A lógica de jogo (WorldEngineCore) já é compartilhada com o cliente —
+ * a migração não requer reescrever regras de gameplay.
+ */
 
 // Dependências (instalar com: npm install firebase-admin express ws)
 // import admin from 'firebase-admin';

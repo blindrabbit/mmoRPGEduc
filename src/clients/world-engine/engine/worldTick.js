@@ -17,6 +17,7 @@ import {
   enqueueAction,
   processAction,
   flushQueuedActions,
+  tickExpiredBuffs,
 } from "../../../gameplay/actionProcessor.js";
 import { recordActionReceived } from "../../../core/metrics.js";
 import {
@@ -97,6 +98,7 @@ export class WorldTick {
       try {
         const processedActionIds = await flushQueuedActions(now);
         await deletePlayerActions(processedActionIds);
+        await tickExpiredBuffs(now);
       } catch (e) {
         console.error("[WorldTick] Erro no flush de combate:", e);
       }

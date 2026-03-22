@@ -58,9 +58,12 @@ export function calculateCombatResult(atkS, defS) {
 
 // ---------------------------------------------------------------------------
 // APLICAÇÃO DE DANO — legado/admin (usa statsCache)
-// Para novo código prefira combatService.applyPlayerDamage(playerId, dmg, player)
 // ---------------------------------------------------------------------------
 
+/**
+ * @deprecated Use combatService.applyPlayerDamage() para novo código.
+ * Mantida apenas para compatibilidade com admin.html.
+ */
 export async function applyDamage(playerId, amount) {
   const cached = statsCache.players[playerId];
   const currentHp = cached?.hp ?? 100;

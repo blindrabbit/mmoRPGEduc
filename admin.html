@@ -406,13 +406,6 @@
       import { AssetManager } from "./src/render/assetManager.js";
       import { AnimationController } from "./src/render/animationController.js";
       import { uploadWorld } from "./src/clients/rpg-admin/admin/adminloader.js";
-      import {
-        authSignIn,
-        authSignOut,
-        onAuthChange,
-        getCurrentUser,
-      } from "./src/core/firebaseClient.js";
-
       // ✅ FASE IMEDIATA: db.js substitui firebaseClient + SDK Firebase direto
       // ❌ REMOVIDO: import { db, dbGet, dbSet, dbWatch, syncEntity } from './firebaseClient.js'
       // ❌ REMOVIDO: import { ref, remove } from 'https://...firebase-database.js'
@@ -904,35 +897,6 @@
       // INIT
       // ---------------------------------------------------------------------------
       async function init() {
-        // Verifica autenticação antes de inicializar
-        const currentUser = getCurrentUser();
-        if (!currentUser) {
-          const email = prompt("Admin — E-mail:");
-          const pass  = prompt("Admin — Senha:");
-          if (!email || !pass) {
-            document.body.innerHTML = "<p style='color:red;padding:2rem'>Acesso negado.</p>";
-            return;
-          }
-          try {
-            await authSignIn(email, pass);
-          } catch (e) {
-            document.body.innerHTML = `<p style='color:red;padding:2rem'>Falha no login: ${e.message}</p>`;
-            return;
-          }
-        }
-
-        // Verifica role de admin
-        const uid = getCurrentUser()?.uid;
-        if (uid) {
-          const { dbGet } = await import("./src/core/db.js");
-          const role = await dbGet(`players_data/${uid}/role`).catch(() => null);
-          if (role && role !== "admin") {
-            await authSignOut().catch(() => {});
-            document.body.innerHTML = "<p style='color:red;padding:2rem'>Acesso negado: sem permissão de admin.</p>";
-            return;
-          }
-        }
-
         const canvas = document.getElementById("adminCanvas");
         const ctx = canvas.getContext("2d");
         canvas.width = window.innerWidth - ADMIN_ENGINE.sidebarWidth;
