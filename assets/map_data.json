@@ -1142,9 +1142,10 @@
     "fluidsource": "water",
     "primaryType": "casks"
   },
-  "1632": {
+  "1631": {
     "name": "closed door",
     "article": "a",
+    "description": "It is locked.",
     "variants": {
       "0": {
         "x": 1698,
@@ -1178,6 +1179,66 @@
       "stack_pos": 5,
       "category_type": "obstacle"
     },
+    "door": {
+      "type": "key",
+      "openId": 1633,
+      "closedId": 1632,
+      "lockedId": 1631,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "1632": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 1764,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 1633,
+      "closedId": 1632,
+      "lockedId": 1631,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
     "type": "material",
     "category": "material",
     "blockprojectile": "1"
@@ -1187,7 +1248,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1764,
+        "x": 1830,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1218,43 +1279,18 @@
       "stack_pos": 5,
       "category_type": "obstacle"
     },
+    "door": {
+      "type": "custom",
+      "openId": 1641,
+      "closedId": 1640,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
     "type": "material",
     "category": "material",
     "blockprojectile": "1"
   },
   "1765": {
-    "name": "small sail",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 1830,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_obstacles"
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "unpass": true,
-      "unmove": true,
-      "render_layer": 2,
-      "stack_pos": 5,
-      "category_type": "obstacle"
-    },
-    "type": "material",
-    "category": "material"
-  },
-  "1766": {
     "name": "small sail",
     "article": "a",
     "variants": {
@@ -1286,12 +1322,44 @@
     "type": "material",
     "category": "material"
   },
+  "1766": {
+    "name": "small sail",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 1962,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "type": "material",
+    "category": "material"
+  },
   "184": {
     "name": "spider web",
     "article": "a",
     "variants": {
       "0": {
-        "x": 1962,
+        "x": 2028,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -1324,7 +1392,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2028,
+        "x": 2094,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -1357,49 +1425,49 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2094,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
         "x": 2160,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
-      "2": {
+      "1": {
         "x": 2226,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
-      "3": {
+      "2": {
         "x": 2292,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "3": {
         "x": 2358,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "4": {
         "x": 2424,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "5": {
         "x": 2490,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "6": {
         "x": 2556,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 2622,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1458,7 +1526,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2622,
+        "x": 2688,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -1494,7 +1562,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2688,
+        "x": 2754,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1530,7 +1598,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2754,
+        "x": 2820,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1566,7 +1634,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2788,
+        "x": 2854,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1602,7 +1670,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2854,
+        "x": 2920,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1638,13 +1706,13 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2920,
+        "x": 2986,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 2986,
+        "x": 3052,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -1680,13 +1748,13 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3052,
+        "x": 3118,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 3086,
+        "x": 3152,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1722,13 +1790,13 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3120,
+        "x": 3186,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 3186,
+        "x": 3252,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1764,7 +1832,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3252,
+        "x": 3318,
         "w": 24,
         "h": 24,
         "atlas": "atlas_obstacles"
@@ -1802,7 +1870,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3278,
+        "x": 3344,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1838,7 +1906,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3344,
+        "x": 3410,
         "w": 25,
         "h": 25,
         "atlas": "atlas_obstacles"
@@ -1876,7 +1944,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3371,
+        "x": 3437,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1912,7 +1980,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3405,
+        "x": 3471,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -1948,7 +2016,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3471,
+        "x": 3537,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -1984,7 +2052,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3537,
+        "x": 3603,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -2020,7 +2088,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3603,
+        "x": 3669,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -2048,6 +2116,13 @@
       "stack_pos": 5,
       "category_type": "obstacle"
     },
+    "door": {
+      "type": "custom",
+      "openId": 2180,
+      "closedId": 2179,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
     "type": "material",
     "category": "doors",
     "primaryType": "doors"
@@ -2057,7 +2132,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3669,
+        "x": 3735,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -2093,7 +2168,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3703,
+        "x": 3769,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -2129,7 +2204,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3769,
+        "x": 3835,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -2167,7 +2242,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3835,
+        "x": 3901,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -2205,7 +2280,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3901,
+        "x": 3967,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -2242,7 +2317,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3967,
+        "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -2279,6 +2354,7 @@
     "article": "a",
     "variants": {
       "0": {
+        "x": 66,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -2315,7 +2391,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 66,
+        "x": 132,
         "y": 66,
         "w": 32,
         "h": 27,
@@ -2358,7 +2434,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 100,
+        "x": 166,
         "y": 66,
         "w": 32,
         "h": 29,
@@ -2399,7 +2475,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 134,
+        "x": 200,
         "y": 66,
         "w": 32,
         "h": 28,
@@ -2442,7 +2518,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 168,
+        "x": 234,
         "y": 66,
         "w": 32,
         "h": 29,
@@ -2483,7 +2559,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 202,
+        "x": 268,
         "y": 66,
         "w": 27,
         "h": 32,
@@ -2526,7 +2602,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 231,
+        "x": 297,
         "y": 66,
         "w": 29,
         "h": 32,
@@ -2562,68 +2638,313 @@
     "maleTransformTo": 2498,
     "primaryType": "constructions"
   },
+  "2495": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 328,
+        "y": 66,
+        "w": 32,
+        "h": 27,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "y": 5,
+      "width": 32,
+      "height": 27
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 2496,
+    "partnerDirection": "south",
+    "maleTransformTo": 2487,
+    "primaryType": "constructions"
+  },
+  "2496": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 362,
+        "y": 66,
+        "w": 32,
+        "h": 29,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 32,
+      "height": 29
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 2495,
+    "partnerDirection": "north",
+    "primaryType": "constructions"
+  },
+  "2497": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 396,
+        "y": 66,
+        "w": 27,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "x": 5,
+      "width": 27,
+      "height": 32
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 2498,
+    "partnerDirection": "east",
+    "maleTransformTo": 2493,
+    "primaryType": "constructions"
+  },
+  "2498": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 425,
+        "y": 66,
+        "w": 29,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 29,
+      "height": 32
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 2497,
+    "partnerDirection": "west",
+    "maleTransformTo": 2494,
+    "primaryType": "constructions"
+  },
+  "2499": {
+    "name": "cot",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 456,
+        "y": 66,
+        "w": 32,
+        "h": 28,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "y": 4,
+      "width": 32,
+      "height": 28
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 2500,
+    "partnerDirection": "south",
+    "maleTransformTo": 2491,
+    "primaryType": "constructions"
+  },
+  "2500": {
+    "name": "cot",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 490,
+        "y": 66,
+        "w": 32,
+        "h": 29,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 32,
+      "height": 29
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 2499,
+    "partnerDirection": "north",
+    "maleTransformTo": 2492,
+    "primaryType": "constructions"
+  },
   "2524": {
     "name": "trough",
     "article": "a",
     "variants": {
       "0": {
-        "x": 262,
+        "x": 524,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 283,
+        "x": 545,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 304,
+        "x": 566,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 325,
+        "x": 587,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 346,
+        "x": 608,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 367,
+        "x": 629,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 388,
+        "x": 650,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 409,
+        "x": 671,
         "y": 66,
         "w": 19,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 430,
+        "x": 692,
         "y": 66,
         "w": 19,
         "h": 32,
@@ -2681,7 +3002,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 451,
+        "x": 713,
         "y": 66,
         "w": 21,
         "h": 21,
@@ -2724,7 +3045,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 474,
+        "x": 736,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -2760,7 +3081,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 508,
+        "x": 770,
         "y": 66,
         "w": 29,
         "h": 28,
@@ -2796,7 +3117,7 @@
     "description": "It's a lumberjack's working place.",
     "variants": {
       "0": {
-        "x": 539,
+        "x": 801,
         "y": 66,
         "w": 31,
         "h": 27,
@@ -2831,7 +3152,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 572,
+        "x": 834,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -2867,7 +3188,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 638,
+        "x": 900,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -2903,7 +3224,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 704,
+        "x": 966,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -2939,7 +3260,7 @@
     "article": "an",
     "variants": {
       "0": {
-        "x": 770,
+        "x": 1032,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -2974,7 +3295,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 836,
+        "x": 1098,
         "y": 66,
         "w": 25,
         "h": 27,
@@ -3019,7 +3340,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 863,
+        "x": 1125,
         "y": 66,
         "w": 27,
         "h": 25,
@@ -3064,56 +3385,56 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 892,
+        "x": 1154,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 958,
+        "x": 1220,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 1024,
+        "x": 1286,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 1090,
+        "x": 1352,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 1156,
+        "x": 1418,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 1222,
+        "x": 1484,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 1288,
+        "x": 1550,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 1354,
+        "x": 1616,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -3173,7 +3494,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1420,
+        "x": 1682,
         "y": 66,
         "w": 29,
         "h": 31,
@@ -3213,7 +3534,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1451,
+        "x": 1713,
         "y": 66,
         "w": 29,
         "h": 31,
@@ -3252,112 +3573,112 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 1482,
+        "x": 1744,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 1548,
+        "x": 1810,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 1614,
+        "x": 1876,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 1680,
+        "x": 1942,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 1746,
+        "x": 2008,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 1812,
+        "x": 2074,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 1878,
+        "x": 2140,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 1944,
+        "x": 2206,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 2010,
+        "x": 2272,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 2076,
+        "x": 2338,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 2142,
+        "x": 2404,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 2208,
+        "x": 2470,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 2274,
+        "x": 2536,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 2340,
+        "x": 2602,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "14": {
-        "x": 2406,
+        "x": 2668,
         "y": 66,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "15": {
-        "x": 2472,
+        "x": 2734,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -3394,98 +3715,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 2538,
+        "x": 2800,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 2572,
+        "x": 2834,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 2606,
+        "x": 2868,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 2640,
+        "x": 2902,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 2674,
+        "x": 2936,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 2708,
+        "x": 2970,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 2742,
+        "x": 3004,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 2776,
+        "x": 3038,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 2810,
+        "x": 3072,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 2844,
+        "x": 3106,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 2878,
+        "x": 3140,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 2912,
+        "x": 3174,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 2946,
+        "x": 3208,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 2980,
+        "x": 3242,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -3543,98 +3864,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 3014,
+        "x": 3276,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 3048,
+        "x": 3310,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 3082,
+        "x": 3344,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 3116,
+        "x": 3378,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 3150,
+        "x": 3412,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 3184,
+        "x": 3446,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 3218,
+        "x": 3480,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 3252,
+        "x": 3514,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 3286,
+        "x": 3548,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 3320,
+        "x": 3582,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 3354,
+        "x": 3616,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 3388,
+        "x": 3650,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 3422,
+        "x": 3684,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 3456,
+        "x": 3718,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -3692,98 +4013,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 3490,
+        "x": 3752,
         "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 748,
+        "x": 986,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 1020,
+        "x": 1258,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 1292,
+        "x": 1530,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 1428,
+        "x": 1666,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 1564,
+        "x": 1802,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 1700,
+        "x": 1938,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 1836,
+        "x": 2074,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 3864,
-        "y": 66,
+        "x": 34,
+        "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 4000,
-        "y": 66,
+        "x": 170,
+        "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 204,
+        "x": 442,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 476,
+        "x": 714,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 1972,
+        "x": 2210,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 2108,
+        "x": 2346,
         "y": 132,
         "w": 32,
         "h": 32,
@@ -3855,98 +4176,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 2142,
-        "y": 132,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 3060,
-        "y": 132,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "5": {
-        "x": 3468,
-        "y": 132,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "7": {
-        "x": 4012,
-        "y": 132,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
         "x": 2380,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
+      "2": {
+        "x": 3298,
+        "y": 132,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 3706,
+        "y": 132,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 170,
+        "y": 166,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "10": {
+        "x": 2618,
+        "y": 132,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
       "11": {
-        "x": 2516,
+        "x": 2754,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 2652,
+        "x": 2890,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 2788,
+        "x": 3026,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 2924,
+        "x": 3162,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 3196,
+        "x": 3434,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 3332,
+        "x": 3570,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 3740,
+        "x": 3978,
         "y": 132,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 204,
+        "x": 442,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 340,
+        "x": 578,
         "y": 166,
         "w": 32,
         "h": 32,
@@ -4018,98 +4339,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 374,
+        "x": 612,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 1428,
+        "x": 1666,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 2244,
+        "x": 2482,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 2788,
+        "x": 3026,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 748,
+        "x": 986,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 884,
+        "x": 1122,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 1020,
+        "x": 1258,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 1156,
+        "x": 1394,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 1292,
+        "x": 1530,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 1700,
+        "x": 1938,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 1972,
+        "x": 2210,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 2516,
+        "x": 2754,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 3060,
+        "x": 3298,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 3332,
+        "x": 3570,
         "y": 166,
         "w": 32,
         "h": 32,
@@ -4181,98 +4502,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 3366,
+        "x": 3604,
         "y": 166,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 884,
+        "x": 1122,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 1156,
+        "x": 1394,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 1428,
+        "x": 1666,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 1700,
+        "x": 1938,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 1972,
+        "x": 2210,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 2244,
+        "x": 2482,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 2516,
+        "x": 2754,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 3876,
-        "y": 166,
+        "x": 34,
+        "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 68,
+        "x": 306,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 340,
+        "x": 578,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 612,
+        "x": 850,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 2788,
+        "x": 3026,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 3060,
+        "x": 3298,
         "y": 200,
         "w": 32,
         "h": 32,
@@ -4345,98 +4666,98 @@
     "description": "You see the silvery movement of fish.",
     "variants": {
       "0": {
-        "x": 3094,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
-        "x": 3128,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "11": {
-        "x": 3162,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "12": {
-        "x": 3196,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "13": {
-        "x": 3230,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
-        "x": 3264,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 3298,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "3": {
         "x": 3332,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "10": {
         "x": 3366,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "11": {
         "x": 3400,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "12": {
         "x": 3434,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "13": {
         "x": 3468,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "8": {
+      "1": {
         "x": 3502,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "9": {
+      "2": {
         "x": 3536,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "3": {
+        "x": 3570,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "4": {
+        "x": 3604,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 3638,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "6": {
+        "x": 3672,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 3706,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "8": {
+        "x": 3740,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "9": {
+        "x": 3774,
         "y": 200,
         "w": 32,
         "h": 32,
@@ -4495,99 +4816,98 @@
     "description": "You see the silvery movement of fish.",
     "variants": {
       "0": {
-        "x": 3570,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
-        "x": 3604,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "11": {
-        "x": 3638,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "12": {
-        "x": 3672,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "13": {
-        "x": 3706,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
-        "x": 3740,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 3774,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "3": {
         "x": 3808,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "10": {
         "x": 3842,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "11": {
         "x": 3876,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "12": {
         "x": 3910,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "13": {
         "x": 3944,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "8": {
+      "1": {
         "x": 3978,
         "y": 200,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "9": {
+      "2": {
         "x": 4012,
         "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "3": {
+        "x": 4046,
+        "y": 200,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "4": {
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 34,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "6": {
+        "x": 68,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 102,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "8": {
+        "x": 136,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "9": {
+        "x": 170,
+        "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -4645,97 +4965,98 @@
     "description": "You see the silvery movement of fish.",
     "variants": {
       "0": {
-        "x": 4046,
-        "y": 200,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "11": {
-        "x": 34,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "12": {
-        "x": 68,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "13": {
-        "x": 102,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
-        "x": 136,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 170,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "3": {
         "x": 204,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "10": {
         "x": 238,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "11": {
         "x": 272,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "12": {
         "x": 306,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "13": {
         "x": 340,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "8": {
+      "1": {
         "x": 374,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "9": {
+      "2": {
         "x": 408,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "3": {
+        "x": 442,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "4": {
+        "x": 476,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 510,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "6": {
+        "x": 544,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 578,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "8": {
+        "x": 612,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "9": {
+        "x": 646,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -4793,98 +5114,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 442,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
-        "x": 476,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "11": {
-        "x": 510,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "12": {
-        "x": 544,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "13": {
-        "x": 578,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
-        "x": 612,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 646,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "3": {
         "x": 680,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "10": {
         "x": 714,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "11": {
         "x": 748,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "12": {
         "x": 782,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "13": {
         "x": 816,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "8": {
+      "1": {
         "x": 850,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "9": {
+      "2": {
         "x": 884,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "3": {
+        "x": 918,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "4": {
+        "x": 952,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 986,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "6": {
+        "x": 1020,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 1054,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "8": {
+        "x": 1088,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "9": {
+        "x": 1122,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -4945,98 +5266,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 918,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
-        "x": 952,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "11": {
-        "x": 986,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "12": {
-        "x": 1020,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "13": {
-        "x": 1054,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
-        "x": 1088,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 1122,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "3": {
         "x": 1156,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "10": {
         "x": 1190,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "11": {
         "x": 1224,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "12": {
         "x": 1258,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "13": {
         "x": 1292,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "8": {
+      "1": {
         "x": 1326,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "9": {
+      "2": {
         "x": 1360,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "3": {
+        "x": 1394,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "4": {
+        "x": 1428,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 1462,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "6": {
+        "x": 1496,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 1530,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "8": {
+        "x": 1564,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "9": {
+        "x": 1598,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -5097,98 +5418,98 @@
     "name": "shallow water",
     "variants": {
       "0": {
-        "x": 1394,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "10": {
-        "x": 1428,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "11": {
-        "x": 1462,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "12": {
-        "x": 1496,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "13": {
-        "x": 1530,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "1": {
-        "x": 1564,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "2": {
-        "x": 1598,
-        "y": 234,
-        "w": 32,
-        "h": 32,
-        "atlas": "atlas_obstacles"
-      },
-      "3": {
         "x": 1632,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "4": {
+      "10": {
         "x": 1666,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "5": {
+      "11": {
         "x": 1700,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "6": {
+      "12": {
         "x": 1734,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "7": {
+      "13": {
         "x": 1768,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "8": {
+      "1": {
         "x": 1802,
         "y": 234,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
-      "9": {
+      "2": {
         "x": 1836,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "3": {
+        "x": 1870,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "4": {
+        "x": 1904,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "5": {
+        "x": 1938,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "6": {
+        "x": 1972,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "7": {
+        "x": 2006,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "8": {
+        "x": 2040,
+        "y": 234,
+        "w": 32,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      },
+      "9": {
+        "x": 2074,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -5251,131 +5572,7 @@
     "description": "It is locked.",
     "variants": {
       "0": {
-        "x": 1870,
-        "y": 234,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_obstacles"
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "usable": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 186
-      },
-      "lenshelp": {
-        "id": 1104
-      },
-      "render_layer": 2,
-      "stack_pos": 5,
-      "category_type": "obstacle"
-    },
-    "type": "material",
-    "category": "material",
-    "blockprojectile": "1"
-  },
-  "5136": {
-    "name": "closed door",
-    "article": "a",
-    "description": "It is locked.",
-    "variants": {
-      "0": {
-        "x": 1936,
-        "y": 234,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_obstacles"
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "usable": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 186
-      },
-      "lenshelp": {
-        "id": 1104
-      },
-      "render_layer": 2,
-      "stack_pos": 5,
-      "category_type": "obstacle"
-    },
-    "type": "material",
-    "category": "material",
-    "blockprojectile": "1"
-  },
-  "5137": {
-    "name": "closed door",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 2002,
-        "y": 234,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_obstacles"
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "usable": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 186
-      },
-      "lenshelp": {
-        "id": 1104
-      },
-      "render_layer": 2,
-      "stack_pos": 5,
-      "category_type": "obstacle"
-    },
-    "type": "material",
-    "category": "material",
-    "blockprojectile": "1"
-  },
-  "5140": {
-    "name": "closed door",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 2068,
+        "x": 2108,
         "y": 234,
         "w": 64,
         "h": 64,
@@ -5408,9 +5605,271 @@
       "category_type": "obstacle"
     },
     "door": {
-      "type": "gate",
+      "type": "key",
+      "openId": 5117,
+      "closedId": 5116,
+      "lockedId": 5115,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5116": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 2174,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5117,
+      "closedId": 5116,
+      "lockedId": 5115,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5136": {
+    "name": "closed door",
+    "article": "a",
+    "description": "It is locked.",
+    "variants": {
+      "0": {
+        "x": 2240,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5138,
+      "closedId": 5137,
+      "lockedId": 5136,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5137": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 2306,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5138,
+      "closedId": 5137,
+      "lockedId": 5136,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5139": {
+    "name": "closed door",
+    "article": "a",
+    "description": "It is locked.",
+    "variants": {
+      "0": {
+        "x": 2372,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
       "openId": 5141,
-      "closedId": 5140
+      "closedId": 5140,
+      "lockedId": 5139,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5140": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 2438,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5141,
+      "closedId": 5140,
+      "requiresKey": true,
+      "lockedId": 5139,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
     },
     "type": "material",
     "category": "material",
@@ -5421,7 +5880,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2134,
+        "x": 2504,
         "y": 234,
         "w": 9,
         "h": 32,
@@ -5455,7 +5914,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2145,
+        "x": 2515,
         "y": 234,
         "w": 9,
         "h": 9,
@@ -5497,7 +5956,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2156,
+        "x": 2526,
         "y": 234,
         "w": 7,
         "h": 7,
@@ -5538,7 +5997,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2165,
+        "x": 2535,
         "y": 234,
         "w": 7,
         "h": 5,
@@ -5571,7 +6030,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2174,
+        "x": 2544,
         "y": 234,
         "w": 9,
         "h": 6,
@@ -5605,7 +6064,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2185,
+        "x": 2555,
         "y": 234,
         "w": 32,
         "h": 8,
@@ -5639,7 +6098,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2219,
+        "x": 2589,
         "y": 234,
         "w": 32,
         "h": 5,
@@ -5672,7 +6131,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2253,
+        "x": 2623,
         "y": 234,
         "w": 10,
         "h": 32,
@@ -5700,12 +6159,218 @@
     "type": "material",
     "category": "material"
   },
+  "5277": {
+    "name": "closed door",
+    "article": "a",
+    "description": "It is locked.",
+    "variants": {
+      "0": {
+        "x": 2635,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5279,
+      "closedId": 5278,
+      "lockedId": 5277,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5278": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 2701,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5279,
+      "closedId": 5278,
+      "lockedId": 5277,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5280": {
+    "name": "closed door",
+    "article": "a",
+    "description": "It is locked.",
+    "variants": {
+      "0": {
+        "x": 2767,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5282,
+      "closedId": 5281,
+      "lockedId": 5280,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "5281": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 2833,
+        "y": 234,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5282,
+      "closedId": 5281,
+      "lockedId": 5280,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
   "5283": {
     "name": "closed door",
     "article": "a",
     "variants": {
       "0": {
-        "x": 2265,
+        "x": 2899,
         "y": 234,
         "w": 64,
         "h": 64,
@@ -5737,6 +6402,13 @@
       "stack_pos": 5,
       "category_type": "obstacle"
     },
+    "door": {
+      "type": "custom",
+      "openId": 5284,
+      "closedId": 5283,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
     "type": "material",
     "category": "material",
     "blockprojectile": "1"
@@ -5746,7 +6418,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2331,
+        "x": 2965,
         "y": 234,
         "w": 64,
         "h": 32,
@@ -5783,7 +6455,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2397,
+        "x": 3031,
         "y": 234,
         "w": 32,
         "h": 64,
@@ -5820,7 +6492,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2431,
+        "x": 3065,
         "y": 234,
         "w": 64,
         "h": 64,
@@ -5857,7 +6529,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2497,
+        "x": 3131,
         "y": 234,
         "w": 64,
         "h": 64,
@@ -5894,7 +6566,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2563,
+        "x": 3197,
         "y": 234,
         "w": 64,
         "h": 64,
@@ -5926,12 +6598,91 @@
     "category": "walls",
     "primaryType": "walls"
   },
+  "5495": {
+    "name": "straw mat",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 3263,
+        "y": 234,
+        "w": 31,
+        "h": 30,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "x": 1,
+      "y": 2,
+      "width": 31,
+      "height": 30
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 5496,
+    "partnerDirection": "south",
+    "maleTransformTo": 5501,
+    "primaryType": "constructions"
+  },
+  "5496": {
+    "name": "straw mat",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 3296,
+        "y": 234,
+        "w": 32,
+        "h": 31,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 32,
+      "height": 31
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 5495,
+    "partnerDirection": "north",
+    "maleTransformTo": 5502,
+    "primaryType": "constructions"
+  },
   "5501": {
     "name": "straw mat",
     "article": "a",
     "variants": {
       "0": {
-        "x": 2629,
+        "x": 3330,
         "y": 234,
         "w": 31,
         "h": 30,
@@ -5972,7 +6723,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2662,
+        "x": 3363,
         "y": 234,
         "w": 32,
         "h": 31,
@@ -6009,28 +6760,28 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 2696,
+        "x": 3397,
         "y": 234,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 2762,
+        "x": 3463,
         "y": 234,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 2828,
+        "x": 3529,
         "y": 234,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 2894,
+        "x": 3595,
         "y": 234,
         "w": 64,
         "h": 64,
@@ -6067,7 +6818,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 2960,
+        "x": 3661,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6101,7 +6852,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 2994,
+        "x": 3695,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6135,7 +6886,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3028,
+        "x": 3729,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6169,7 +6920,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3062,
+        "x": 3763,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6203,7 +6954,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3096,
+        "x": 3797,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6237,7 +6988,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3130,
+        "x": 3831,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6271,7 +7022,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3164,
+        "x": 3865,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6305,7 +7056,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3198,
+        "x": 3899,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6339,7 +7090,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3232,
+        "x": 3933,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6373,7 +7124,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3266,
+        "x": 3967,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6407,7 +7158,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3300,
+        "x": 4001,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6441,7 +7192,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3334,
+        "x": 4035,
         "y": 234,
         "w": 32,
         "h": 32,
@@ -6475,8 +7226,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3368,
-        "y": 234,
+        "y": 300,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6509,8 +7259,8 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3402,
-        "y": 234,
+        "x": 34,
+        "y": 300,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6543,8 +7293,8 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3436,
-        "y": 234,
+        "x": 68,
+        "y": 300,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6577,8 +7327,8 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 3470,
-        "y": 234,
+        "x": 102,
+        "y": 300,
         "w": 32,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6607,13 +7357,14 @@
     "type": "material",
     "category": "material"
   },
-  "6252": {
+  "6251": {
     "name": "closed door",
     "article": "a",
+    "description": "It is locked.",
     "variants": {
       "0": {
-        "x": 3504,
-        "y": 234,
+        "x": 136,
+        "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
@@ -6644,17 +7395,486 @@
       "stack_pos": 5,
       "category_type": "obstacle"
     },
+    "door": {
+      "type": "key",
+      "openId": 6253,
+      "closedId": 6252,
+      "lockedId": 6251,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "locked"
+    },
     "type": "material",
     "category": "material",
     "blockprojectile": "1"
+  },
+  "6252": {
+    "name": "closed door",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 202,
+        "y": 300,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle"
+    },
+    "door": {
+      "type": "key",
+      "openId": 6253,
+      "closedId": 6252,
+      "lockedId": 6251,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
+    },
+    "type": "material",
+    "category": "material",
+    "blockprojectile": "1"
+  },
+  "694": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 268,
+        "y": 300,
+        "w": 32,
+        "h": 27,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "y": 5,
+      "width": 32,
+      "height": 27
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 695,
+    "partnerDirection": "south",
+    "maleTransformTo": 2487,
+    "primaryType": "constructions"
+  },
+  "695": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 302,
+        "y": 300,
+        "w": 32,
+        "h": 29,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 32,
+      "height": 29
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 694,
+    "partnerDirection": "north",
+    "maleTransformTo": 2488,
+    "primaryType": "constructions"
+  },
+  "696": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 336,
+        "y": 300,
+        "w": 27,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "x": 5,
+      "width": 27,
+      "height": 32
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 697,
+    "partnerDirection": "east",
+    "maleTransformTo": 2493,
+    "primaryType": "constructions"
+  },
+  "697": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 365,
+        "y": 300,
+        "w": 29,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 29,
+      "height": 32
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 696,
+    "partnerDirection": "west",
+    "maleTransformTo": 2494,
+    "primaryType": "constructions"
+  },
+  "698": {
+    "name": "cot",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 396,
+        "y": 300,
+        "w": 32,
+        "h": 28,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "y": 4,
+      "width": 32,
+      "height": 28
+    },
+    "grid_size": 32,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 699,
+    "partnerDirection": "south",
+    "maleTransformTo": 2491,
+    "primaryType": "constructions"
+  },
+  "699": {
+    "name": "cot",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 430,
+        "y": 300,
+        "w": 32,
+        "h": 29,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 32,
+      "height": 29
+    },
+    "grid_size": 32,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 698,
+    "partnerDirection": "north",
+    "maleTransformTo": 2492,
+    "primaryType": "constructions"
+  },
+  "710": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 464,
+        "y": 300,
+        "w": 64,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 40,
+      "height": 40
+    },
+    "grid_size": 40,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 711,
+    "partnerDirection": "south",
+    "maleTransformTo": 738,
+    "primaryType": "constructions"
+  },
+  "711": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 530,
+        "y": 300,
+        "w": 64,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 40,
+      "height": 40
+    },
+    "grid_size": 40,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 710,
+    "partnerDirection": "north",
+    "maleTransformTo": 739,
+    "primaryType": "constructions"
+  },
+  "722": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 596,
+        "y": 300,
+        "w": 64,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 40,
+      "height": 40
+    },
+    "grid_size": 40,
+    "game": {
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "pillow",
+    "bedPartOf": 723,
+    "partnerDirection": "south",
+    "maleTransformTo": 738,
+    "primaryType": "constructions"
+  },
+  "723": {
+    "name": "bed",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 662,
+        "y": 300,
+        "w": 64,
+        "h": 32,
+        "atlas": "atlas_obstacles"
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 40,
+      "height": 40
+    },
+    "grid_size": 40,
+    "game": {
+      "unpass": true,
+      "unmove": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "obstacle",
+      "has_height": true,
+      "height_elevation": 8
+    },
+    "type": "material",
+    "category": "constructions",
+    "bedPart": "blanket",
+    "bedPartOf": 722,
+    "partnerDirection": "north",
+    "maleTransformTo": 739,
+    "primaryType": "constructions"
   },
   "738": {
     "name": "bed",
     "article": "a",
     "variants": {
       "0": {
-        "x": 3570,
-        "y": 234,
+        "x": 728,
+        "y": 300,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6695,8 +7915,8 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3636,
-        "y": 234,
+        "x": 794,
+        "y": 300,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6735,29 +7955,29 @@
     "name": "stone railing",
     "variants": {
       "0": {
-        "x": 3702,
-        "y": 234,
+        "x": 860,
+        "y": 300,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 3768,
-        "y": 234,
+        "x": 926,
+        "y": 300,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 3834,
-        "y": 234,
+        "x": 992,
+        "y": 300,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 3900,
-        "y": 234,
+        "x": 1058,
+        "y": 300,
         "w": 64,
         "h": 32,
         "atlas": "atlas_obstacles"
@@ -6792,27 +8012,28 @@
     "name": "stone railing",
     "variants": {
       "0": {
-        "x": 3966,
-        "y": 234,
+        "x": 1124,
+        "y": 300,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 4000,
-        "y": 234,
+        "x": 1158,
+        "y": 300,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 4034,
-        "y": 234,
+        "x": 1192,
+        "y": 300,
         "w": 32,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "3": {
+        "x": 1226,
         "y": 300,
         "w": 32,
         "h": 64,
@@ -6848,7 +8069,7 @@
     "name": "stone railing",
     "variants": {
       "0": {
-        "x": 34,
+        "x": 1260,
         "y": 300,
         "w": 64,
         "h": 64,
@@ -6884,7 +8105,7 @@
     "name": "stone railing",
     "variants": {
       "0": {
-        "x": 100,
+        "x": 1326,
         "y": 300,
         "w": 18,
         "h": 18,
@@ -6922,112 +8143,112 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 120,
+        "x": 1346,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "1": {
-        "x": 186,
+        "x": 1412,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "2": {
-        "x": 252,
+        "x": 1478,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "3": {
-        "x": 318,
+        "x": 1544,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "4": {
-        "x": 384,
+        "x": 1610,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "5": {
-        "x": 450,
+        "x": 1676,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "6": {
-        "x": 516,
+        "x": 1742,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "7": {
-        "x": 582,
+        "x": 1808,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "8": {
-        "x": 648,
+        "x": 1874,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "9": {
-        "x": 714,
+        "x": 1940,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "10": {
-        "x": 780,
+        "x": 2006,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "11": {
-        "x": 846,
+        "x": 2072,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "12": {
-        "x": 912,
+        "x": 2138,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "13": {
-        "x": 978,
+        "x": 2204,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "14": {
-        "x": 1044,
+        "x": 2270,
         "y": 300,
         "w": 64,
         "h": 64,
         "atlas": "atlas_obstacles"
       },
       "15": {
-        "x": 1110,
+        "x": 2336,
         "y": 300,
         "w": 64,
         "h": 64,
@@ -16687,7 +17908,7 @@
     "category": "walls",
     "primaryType": "walls"
   },
-  "5151": {
+  "5150": {
     "name": "framework wall",
     "article": "a",
     "variants": {
@@ -16698,8 +17919,61 @@
         "h": 64,
         "atlas": "atlas_walls",
         "ai": 1
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "bottom": true,
+      "unpass": true,
+      "unmove": true,
+      "unsight": true,
+      "hook": {
+        "direction": 2
+      },
+      "automap": {
+        "color": 186
+      },
+      "render_layer": 2,
+      "stack_pos": 2,
+      "category_type": "wall",
+      "blocks_missiles": true,
+      "blocks_sight": true,
+      "hang_direction": "east"
+    },
+    "door": {
+      "type": "wood_locked",
+      "openId": 5151,
+      "closedId": 5150,
+      "requiresKey": true,
+      "uniqueId": 1000
+    },
+    "type": "material",
+    "category": "walls",
+    "primaryType": "walls"
+  },
+  "5151": {
+    "name": "framework wall",
+    "article": "a",
+    "variants": {
+      "0": {
+        "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
       },
       "1": {
+        "x": 66,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16752,7 +18026,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 66,
+        "x": 132,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16798,7 +18072,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 132,
+        "x": 198,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16806,7 +18080,7 @@
         "ai": 1
       },
       "1": {
-        "x": 198,
+        "x": 264,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16852,7 +18126,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 264,
+        "x": 330,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16897,7 +18171,7 @@
     "name": "stairs",
     "variants": {
       "0": {
-        "x": 330,
+        "x": 396,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16943,7 +18217,7 @@
     "name": "stairs",
     "variants": {
       "0": {
-        "x": 396,
+        "x": 462,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -16990,14 +18264,6 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 462,
-        "y": 330,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
         "x": 528,
         "y": 330,
         "w": 64,
@@ -17005,8 +18271,16 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "2": {
+      "1": {
         "x": 594,
+        "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "2": {
+        "x": 660,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17052,14 +18326,6 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 660,
-        "y": 330,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
         "x": 726,
         "y": 330,
         "w": 64,
@@ -17067,8 +18333,16 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "2": {
+      "1": {
         "x": 792,
+        "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "2": {
+        "x": 858,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17114,7 +18388,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 858,
+        "x": 924,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17156,7 +18430,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 924,
+        "x": 990,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17198,7 +18472,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 990,
+        "x": 1056,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17240,7 +18514,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1056,
+        "x": 1122,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17278,52 +18552,6 @@
     "primaryType": "walls"
   },
   "5271": {
-    "name": "wooden wall",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 1122,
-        "y": 330,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "bottom": true,
-      "unpass": true,
-      "unmove": true,
-      "unsight": true,
-      "hook": {
-        "direction": 1
-      },
-      "automap": {
-        "color": 186
-      },
-      "render_layer": 2,
-      "stack_pos": 2,
-      "category_type": "wall",
-      "blocks_missiles": true,
-      "blocks_sight": true,
-      "hang_direction": "south"
-    },
-    "type": "material",
-    "category": "walls",
-    "primaryType": "walls"
-  },
-  "5272": {
     "name": "wooden wall",
     "article": "a",
     "variants": {
@@ -17369,7 +18597,7 @@
     "category": "walls",
     "primaryType": "walls"
   },
-  "5273": {
+  "5272": {
     "name": "wooden wall",
     "article": "a",
     "variants": {
@@ -17399,7 +18627,7 @@
       "unmove": true,
       "unsight": true,
       "hook": {
-        "direction": 2
+        "direction": 1
       },
       "automap": {
         "color": 186
@@ -17409,13 +18637,13 @@
       "category_type": "wall",
       "blocks_missiles": true,
       "blocks_sight": true,
-      "hang_direction": "east"
+      "hang_direction": "south"
     },
     "type": "material",
     "category": "walls",
     "primaryType": "walls"
   },
-  "5274": {
+  "5273": {
     "name": "wooden wall",
     "article": "a",
     "variants": {
@@ -17461,12 +18689,58 @@
     "category": "walls",
     "primaryType": "walls"
   },
+  "5274": {
+    "name": "wooden wall",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 1386,
+        "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "bottom": true,
+      "unpass": true,
+      "unmove": true,
+      "unsight": true,
+      "hook": {
+        "direction": 2
+      },
+      "automap": {
+        "color": 186
+      },
+      "render_layer": 2,
+      "stack_pos": 2,
+      "category_type": "wall",
+      "blocks_missiles": true,
+      "blocks_sight": true,
+      "hang_direction": "east"
+    },
+    "type": "material",
+    "category": "walls",
+    "primaryType": "walls"
+  },
   "5321": {
     "name": "wooden column",
     "article": "a",
     "variants": {
       "0": {
-        "x": 1386,
+        "x": 1452,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17505,7 +18779,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1452,
+        "x": 1518,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17544,7 +18818,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1518,
+        "x": 1584,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17583,7 +18857,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1584,
+        "x": 1650,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17622,7 +18896,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1650,
+        "x": 1716,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17661,7 +18935,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1716,
+        "x": 1782,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17700,7 +18974,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1782,
+        "x": 1848,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17735,7 +19009,7 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 1848,
+        "x": 1914,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17773,7 +19047,7 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 1914,
+        "x": 1980,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -17812,22 +19086,6 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1980,
-        "y": 330,
-        "w": 31,
-        "h": 32,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
-        "x": 2013,
-        "y": 330,
-        "w": 31,
-        "h": 32,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "2": {
         "x": 2046,
         "y": 330,
         "w": 31,
@@ -17835,8 +19093,24 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "3": {
+      "1": {
         "x": 2079,
+        "y": 330,
+        "w": 31,
+        "h": 32,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "2": {
+        "x": 2112,
+        "y": 330,
+        "w": 31,
+        "h": 32,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "3": {
+        "x": 2145,
         "y": 330,
         "w": 31,
         "h": 32,
@@ -17878,7 +19152,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2112,
+        "x": 2178,
         "y": 330,
         "w": 32,
         "h": 31,
@@ -17886,7 +19160,7 @@
         "ai": 1
       },
       "1": {
-        "x": 2146,
+        "x": 2212,
         "y": 330,
         "w": 32,
         "h": 31,
@@ -17894,7 +19168,7 @@
         "ai": 1
       },
       "2": {
-        "x": 2180,
+        "x": 2246,
         "y": 330,
         "w": 32,
         "h": 31,
@@ -17902,7 +19176,7 @@
         "ai": 1
       },
       "3": {
-        "x": 2214,
+        "x": 2280,
         "y": 330,
         "w": 32,
         "h": 31,
@@ -17958,7 +19232,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2248,
+        "x": 2314,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18000,7 +19274,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2282,
+        "x": 2348,
         "y": 330,
         "w": 31,
         "h": 32,
@@ -18042,7 +19316,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2315,
+        "x": 2381,
         "y": 330,
         "w": 30,
         "h": 30,
@@ -18084,7 +19358,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2347,
+        "x": 2413,
         "y": 330,
         "w": 32,
         "h": 31,
@@ -18126,7 +19400,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2381,
+        "x": 2447,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18168,7 +19442,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2415,
+        "x": 2481,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18210,22 +19484,6 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2449,
-        "y": 330,
-        "w": 31,
-        "h": 32,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
-        "x": 2482,
-        "y": 330,
-        "w": 31,
-        "h": 32,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "2": {
         "x": 2515,
         "y": 330,
         "w": 31,
@@ -18233,8 +19491,24 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "3": {
+      "1": {
         "x": 2548,
+        "y": 330,
+        "w": 31,
+        "h": 32,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "2": {
+        "x": 2581,
+        "y": 330,
+        "w": 31,
+        "h": 32,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "3": {
+        "x": 2614,
         "y": 330,
         "w": 31,
         "h": 32,
@@ -18276,7 +19550,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2581,
+        "x": 2647,
         "y": 330,
         "w": 32,
         "h": 30,
@@ -18284,7 +19558,7 @@
         "ai": 1
       },
       "1": {
-        "x": 2615,
+        "x": 2681,
         "y": 330,
         "w": 32,
         "h": 30,
@@ -18292,7 +19566,7 @@
         "ai": 1
       },
       "2": {
-        "x": 2649,
+        "x": 2715,
         "y": 330,
         "w": 32,
         "h": 30,
@@ -18300,7 +19574,7 @@
         "ai": 1
       },
       "3": {
-        "x": 2683,
+        "x": 2749,
         "y": 330,
         "w": 32,
         "h": 30,
@@ -18356,7 +19630,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2717,
+        "x": 2783,
         "y": 330,
         "w": 31,
         "h": 32,
@@ -18399,7 +19673,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2750,
+        "x": 2816,
         "y": 330,
         "w": 32,
         "h": 31,
@@ -18442,7 +19716,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2784,
+        "x": 2850,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18484,7 +19758,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2818,
+        "x": 2884,
         "y": 330,
         "w": 29,
         "h": 32,
@@ -18526,7 +19800,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2849,
+        "x": 2915,
         "y": 330,
         "w": 30,
         "h": 30,
@@ -18568,7 +19842,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2881,
+        "x": 2947,
         "y": 330,
         "w": 32,
         "h": 29,
@@ -18610,7 +19884,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2915,
+        "x": 2981,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18652,7 +19926,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2949,
+        "x": 3015,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18694,7 +19968,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 2983,
+        "x": 3049,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18736,7 +20010,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3017,
+        "x": 3083,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18778,7 +20052,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3051,
+        "x": 3117,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18820,7 +20094,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3085,
+        "x": 3151,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18862,7 +20136,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3119,
+        "x": 3185,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18904,7 +20178,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3153,
+        "x": 3219,
         "y": 330,
         "w": 32,
         "h": 32,
@@ -18945,14 +20219,6 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 3187,
-        "y": 330,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
         "x": 3253,
         "y": 330,
         "w": 64,
@@ -18960,7 +20226,7 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "2": {
+      "1": {
         "x": 3319,
         "y": 330,
         "w": 64,
@@ -18968,8 +20234,16 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "3": {
+      "2": {
         "x": 3385,
+        "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "3": {
+        "x": 3451,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -19007,7 +20281,7 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 3451,
+        "x": 3517,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -19046,14 +20320,6 @@
     "article": "an",
     "variants": {
       "0": {
-        "x": 3517,
-        "y": 330,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
         "x": 3583,
         "y": 330,
         "w": 64,
@@ -19061,7 +20327,7 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "2": {
+      "1": {
         "x": 3649,
         "y": 330,
         "w": 64,
@@ -19069,8 +20335,16 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "3": {
+      "2": {
         "x": 3715,
+        "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "3": {
+        "x": 3781,
         "y": 330,
         "w": 64,
         "h": 64,
@@ -19108,14 +20382,6 @@
     "article": "an",
     "variants": {
       "0": {
-        "x": 3781,
-        "y": 330,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      },
-      "1": {
         "x": 3847,
         "y": 330,
         "w": 64,
@@ -19123,7 +20389,7 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "2": {
+      "1": {
         "x": 3913,
         "y": 330,
         "w": 64,
@@ -19131,9 +20397,16 @@
         "atlas": "atlas_walls",
         "ai": 1
       },
-      "3": {
+      "2": {
         "x": 3979,
         "y": 330,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      },
+      "3": {
+        "y": 396,
         "w": 64,
         "h": 64,
         "atlas": "atlas_walls",
@@ -19166,43 +20439,6 @@
     "category": "material"
   },
   "5751": {
-    "name": "earth pile",
-    "article": "an",
-    "variants": {
-      "0": {
-        "y": 396,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 52,
-      "height": 52
-    },
-    "grid_size": 52,
-    "game": {
-      "bottom": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 86
-      },
-      "render_layer": 2,
-      "stack_pos": 2,
-      "category_type": "furniture"
-    },
-    "type": "material",
-    "category": "material"
-  },
-  "5752": {
     "name": "earth pile",
     "article": "an",
     "variants": {
@@ -19240,12 +20476,50 @@
     "type": "material",
     "category": "material"
   },
-  "5753": {
+  "5752": {
     "name": "earth pile",
     "article": "an",
     "variants": {
       "0": {
         "x": 132,
+        "y": 396,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 52,
+      "height": 52
+    },
+    "grid_size": 52,
+    "game": {
+      "bottom": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 86
+      },
+      "render_layer": 2,
+      "stack_pos": 2,
+      "category_type": "furniture"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "5753": {
+    "name": "earth pile",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 198,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19283,7 +20557,7 @@
     "article": "an",
     "variants": {
       "0": {
-        "x": 198,
+        "x": 264,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19320,7 +20594,7 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 264,
+        "x": 330,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19328,7 +20602,7 @@
         "ai": 1
       },
       "3": {
-        "x": 330,
+        "x": 396,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19366,7 +20640,7 @@
     "name": "rubble",
     "variants": {
       "0": {
-        "x": 396,
+        "x": 462,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19401,46 +20675,6 @@
     "primaryType": "rocks"
   },
   "6437": {
-    "name": "framework window",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 462,
-        "y": 396,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "bottom": true,
-      "usable": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 186
-      },
-      "render_layer": 2,
-      "stack_pos": 2,
-      "category_type": "furniture"
-    },
-    "type": "material",
-    "category": "windows",
-    "primaryType": "windows"
-  },
-  "6438": {
     "name": "framework window",
     "article": "a",
     "variants": {
@@ -19480,8 +20714,8 @@
     "category": "windows",
     "primaryType": "windows"
   },
-  "6445": {
-    "name": "stone window",
+  "6438": {
+    "name": "framework window",
     "article": "a",
     "variants": {
       "0": {
@@ -19491,9 +20725,49 @@
         "h": 64,
         "atlas": "atlas_walls",
         "ai": 1
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "bottom": true,
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "render_layer": 2,
+      "stack_pos": 2,
+      "category_type": "furniture"
+    },
+    "type": "material",
+    "category": "windows",
+    "primaryType": "windows"
+  },
+  "6445": {
+    "name": "stone window",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 660,
+        "y": 396,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
       },
       "1": {
-        "x": 660,
+        "x": 726,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19532,7 +20806,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 726,
+        "x": 792,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19540,7 +20814,7 @@
         "ai": 1
       },
       "1": {
-        "x": 792,
+        "x": 858,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19575,46 +20849,6 @@
     "category": "material"
   },
   "6471": {
-    "name": "wooden window",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 858,
-        "y": 396,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "bottom": true,
-      "usable": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 186
-      },
-      "render_layer": 2,
-      "stack_pos": 2,
-      "category_type": "furniture"
-    },
-    "type": "material",
-    "category": "windows",
-    "primaryType": "windows"
-  },
-  "6472": {
     "name": "wooden window",
     "article": "a",
     "variants": {
@@ -19654,12 +20888,52 @@
     "category": "windows",
     "primaryType": "windows"
   },
+  "6472": {
+    "name": "wooden window",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 990,
+        "y": 396,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "bottom": true,
+      "usable": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "render_layer": 2,
+      "stack_pos": 2,
+      "category_type": "furniture"
+    },
+    "type": "material",
+    "category": "windows",
+    "primaryType": "windows"
+  },
   "7024": {
     "name": "pine",
     "article": "a",
     "variants": {
       "0": {
-        "x": 990,
+        "x": 1056,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19694,46 +20968,6 @@
     "primaryType": "trees"
   },
   "7095": {
-    "name": "wooden railing",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 1056,
-        "y": 396,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_walls",
-        "ai": 1
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 47,
-      "height": 47
-    },
-    "grid_size": 47,
-    "game": {
-      "bottom": true,
-      "unpass": true,
-      "unmove": true,
-      "automap": {
-        "color": 186
-      },
-      "ignore_look": true,
-      "render_layer": 2,
-      "stack_pos": 2,
-      "category_type": "furniture"
-    },
-    "type": "material",
-    "category": "walls",
-    "primaryType": "walls"
-  },
-  "7096": {
     "name": "wooden railing",
     "article": "a",
     "variants": {
@@ -19773,12 +21007,52 @@
     "category": "walls",
     "primaryType": "walls"
   },
-  "7097": {
+  "7096": {
     "name": "wooden railing",
     "article": "a",
     "variants": {
       "0": {
         "x": 1188,
+        "y": 396,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_walls",
+        "ai": 1
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 47,
+      "height": 47
+    },
+    "grid_size": 47,
+    "game": {
+      "bottom": true,
+      "unpass": true,
+      "unmove": true,
+      "automap": {
+        "color": 186
+      },
+      "ignore_look": true,
+      "render_layer": 2,
+      "stack_pos": 2,
+      "category_type": "furniture"
+    },
+    "type": "material",
+    "category": "walls",
+    "primaryType": "walls"
+  },
+  "7097": {
+    "name": "wooden railing",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 1254,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19818,7 +21092,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1254,
+        "x": 1320,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -19857,7 +21131,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1320,
+        "x": 1386,
         "y": 396,
         "w": 64,
         "h": 32,
@@ -19896,7 +21170,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1386,
+        "x": 1452,
         "y": 396,
         "w": 32,
         "h": 64,
@@ -19935,7 +21209,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1420,
+        "x": 1486,
         "y": 396,
         "w": 64,
         "h": 32,
@@ -19970,7 +21244,7 @@
     "name": "jagged stones",
     "variants": {
       "0": {
-        "x": 1486,
+        "x": 1552,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -20008,7 +21282,7 @@
     "name": "jagged stones",
     "variants": {
       "0": {
-        "x": 1552,
+        "x": 1618,
         "y": 396,
         "w": 32,
         "h": 64,
@@ -20046,7 +21320,7 @@
     "name": "earth",
     "variants": {
       "0": {
-        "x": 1586,
+        "x": 1652,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -20087,7 +21361,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1652,
+        "x": 1718,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -20126,7 +21400,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1718,
+        "x": 1784,
         "y": 396,
         "w": 64,
         "h": 64,
@@ -20164,7 +21438,7 @@
     "name": "stone stairs",
     "variants": {
       "0": {
-        "x": 1784,
+        "x": 1850,
         "y": 396,
         "w": 64,
         "h": 32,
@@ -20195,6 +21469,10 @@
       "category_type": "furniture",
       "has_height": true,
       "height_elevation": 8
+    },
+    "floorChange": {
+      "direction": "south",
+      "type": "stair"
     },
     "type": "material",
     "category": "stairs",
@@ -37994,8 +39272,8 @@
     "primaryType": "fluid containers",
     "allowPickUpAble": true
   },
-  "2908": {
-    "name": "lit wall lamp",
+  "2907": {
+    "name": "wall lamp",
     "article": "a",
     "variants": {
       "0": {
@@ -38004,30 +39282,67 @@
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
-      },
-      "1": {
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 49,
+      "height": 49
+    },
+    "grid_size": 49,
+    "game": {
+      "usable": true,
+      "unmove": true,
+      "hang": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "light_source",
+      "emits_light": true,
+      "hang_direction": "unknown"
+    },
+    "type": "material",
+    "category": "material",
+    "transformOnUse": 2908
+  },
+  "2908": {
+    "name": "lit wall lamp",
+    "article": "a",
+    "variants": {
+      "0": {
         "x": 2655,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
       },
-      "2": {
+      "1": {
         "x": 2689,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
       },
-      "3": {
+      "2": {
         "x": 2723,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
       },
-      "4": {
+      "3": {
         "x": 2757,
+        "w": 32,
+        "h": 64,
+        "atlas": "atlas_items",
+        "ai": 3
+      },
+      "4": {
+        "x": 2791,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
@@ -38076,40 +39391,77 @@
     "category": "material",
     "transformOnUse": 2907
   },
+  "2909": {
+    "name": "wall lamp",
+    "article": "a",
+    "variants": {
+      "0": {
+        "x": 2825,
+        "w": 64,
+        "h": 32,
+        "atlas": "atlas_items",
+        "ai": 3
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 49,
+      "height": 49
+    },
+    "grid_size": 49,
+    "game": {
+      "usable": true,
+      "unmove": true,
+      "hang": true,
+      "render_layer": 2,
+      "stack_pos": 5,
+      "category_type": "light_source",
+      "emits_light": true,
+      "hang_direction": "unknown"
+    },
+    "type": "material",
+    "category": "material",
+    "transformOnUse": 2910
+  },
   "2910": {
     "name": "lit wall lamp",
     "article": "a",
     "variants": {
       "0": {
-        "x": 2791,
+        "x": 2891,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "1": {
-        "x": 2857,
+        "x": 2957,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "2": {
-        "x": 2923,
+        "x": 3023,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "3": {
-        "x": 2989,
+        "x": 3089,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "4": {
-        "x": 3055,
+        "x": 3155,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
@@ -38163,42 +39515,42 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3121,
+        "x": 3221,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "1": {
-        "x": 3187,
+        "x": 3287,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "2": {
-        "x": 3253,
+        "x": 3353,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "3": {
-        "x": 3319,
+        "x": 3419,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "4": {
-        "x": 3385,
+        "x": 3485,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "5": {
-        "x": 3451,
+        "x": 3551,
         "w": 64,
         "h": 32,
         "atlas": "atlas_items",
@@ -38253,28 +39605,28 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3517,
+        "x": 3617,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
       },
       "1": {
-        "x": 3551,
+        "x": 3651,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
       },
       "2": {
-        "x": 3585,
+        "x": 3685,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
         "ai": 3
       },
       "3": {
-        "x": 3619,
+        "x": 3719,
         "w": 32,
         "h": 64,
         "atlas": "atlas_items",
@@ -38329,7 +39681,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3653,
+        "x": 3753,
         "w": 26,
         "h": 26,
         "atlas": "atlas_items",
@@ -38368,7 +39720,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3681,
+        "x": 3781,
         "w": 21,
         "h": 17,
         "atlas": "atlas_items",
@@ -38407,7 +39759,7 @@
     "article": "an",
     "variants": {
       "0": {
-        "x": 3704,
+        "x": 3804,
         "w": 15,
         "h": 17,
         "atlas": "atlas_items",
@@ -38445,7 +39797,7 @@
     "name": "rubbish",
     "variants": {
       "0": {
-        "x": 3721,
+        "x": 3821,
         "w": 15,
         "h": 14,
         "atlas": "atlas_items",
@@ -38482,7 +39834,7 @@
     "name": "rubbish",
     "variants": {
       "0": {
-        "x": 3738,
+        "x": 3838,
         "w": 12,
         "h": 12,
         "atlas": "atlas_items",
@@ -38520,7 +39872,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3752,
+        "x": 3852,
         "w": 10,
         "h": 9,
         "atlas": "atlas_items",
@@ -38559,7 +39911,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3764,
+        "x": 3864,
         "w": 28,
         "h": 27,
         "atlas": "atlas_items",
@@ -38597,7 +39949,7 @@
     "name": "rotten meat",
     "variants": {
       "0": {
-        "x": 3794,
+        "x": 3894,
         "w": 17,
         "h": 17,
         "atlas": "atlas_items",
@@ -38635,7 +39987,7 @@
     "name": "broken pottery",
     "variants": {
       "0": {
-        "x": 3813,
+        "x": 3913,
         "w": 27,
         "h": 25,
         "atlas": "atlas_items",
@@ -38674,55 +40026,58 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3842,
+        "x": 3942,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "1": {
-        "x": 3876,
+        "x": 3976,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "2": {
-        "x": 3910,
+        "x": 4010,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "3": {
-        "x": 3944,
+        "x": 4044,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "4": {
-        "x": 3978,
+        "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "5": {
-        "x": 4012,
+        "x": 34,
+        "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "6": {
-        "x": 4046,
+        "x": 68,
+        "y": 66,
         "w": 32,
         "h": 32,
         "atlas": "atlas_items",
         "ai": 3
       },
       "7": {
+        "x": 102,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -38778,7 +40133,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 34,
+        "x": 136,
         "y": 66,
         "w": 17,
         "h": 17,
@@ -38818,7 +40173,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 53,
+        "x": 155,
         "y": 66,
         "w": 20,
         "h": 22,
@@ -38857,7 +40212,7 @@
     "name": "remains of a fish",
     "variants": {
       "0": {
-        "x": 75,
+        "x": 177,
         "y": 66,
         "w": 27,
         "h": 26,
@@ -38895,7 +40250,7 @@
     "name": "rubbish",
     "variants": {
       "0": {
-        "x": 104,
+        "x": 206,
         "y": 66,
         "w": 15,
         "h": 22,
@@ -38934,7 +40289,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 121,
+        "x": 223,
         "y": 66,
         "w": 21,
         "h": 21,
@@ -38985,7 +40340,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 144,
+        "x": 246,
         "y": 66,
         "w": 28,
         "h": 27,
@@ -39032,7 +40387,7 @@
     "description": "It is enchanted with ancient magic that renders a weak staff into a powerful weapon",
     "variants": {
       "0": {
-        "x": 174,
+        "x": 276,
         "y": 66,
         "w": 31,
         "h": 31,
@@ -39081,7 +40436,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 207,
+        "x": 309,
         "y": 66,
         "w": 32,
         "h": 21,
@@ -39119,7 +40474,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 241,
+        "x": 343,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39127,7 +40482,7 @@
         "ai": 3
       },
       "1": {
-        "x": 271,
+        "x": 373,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39135,7 +40490,7 @@
         "ai": 3
       },
       "2": {
-        "x": 301,
+        "x": 403,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39143,7 +40498,7 @@
         "ai": 3
       },
       "3": {
-        "x": 331,
+        "x": 433,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39151,7 +40506,7 @@
         "ai": 3
       },
       "4": {
-        "x": 361,
+        "x": 463,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39159,7 +40514,7 @@
         "ai": 3
       },
       "5": {
-        "x": 391,
+        "x": 493,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39167,7 +40522,7 @@
         "ai": 3
       },
       "6": {
-        "x": 421,
+        "x": 523,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39175,7 +40530,7 @@
         "ai": 3
       },
       "7": {
-        "x": 451,
+        "x": 553,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39183,7 +40538,7 @@
         "ai": 3
       },
       "8": {
-        "x": 481,
+        "x": 583,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39191,7 +40546,7 @@
         "ai": 3
       },
       "9": {
-        "x": 511,
+        "x": 613,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39199,7 +40554,7 @@
         "ai": 3
       },
       "10": {
-        "x": 541,
+        "x": 643,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39207,7 +40562,7 @@
         "ai": 3
       },
       "11": {
-        "x": 571,
+        "x": 673,
         "y": 66,
         "w": 28,
         "h": 29,
@@ -39272,7 +40627,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 601,
+        "x": 703,
         "y": 66,
         "w": 24,
         "h": 23,
@@ -39311,7 +40666,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 627,
+        "x": 729,
         "y": 66,
         "w": 9,
         "h": 24,
@@ -39350,7 +40705,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 638,
+        "x": 740,
         "y": 66,
         "w": 9,
         "h": 25,
@@ -39391,7 +40746,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 649,
+        "x": 751,
         "y": 66,
         "w": 23,
         "h": 19,
@@ -39432,7 +40787,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 674,
+        "x": 776,
         "y": 66,
         "w": 30,
         "h": 10,
@@ -39470,7 +40825,7 @@
     "name": "meat",
     "variants": {
       "0": {
-        "x": 706,
+        "x": 808,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39478,7 +40833,7 @@
         "ai": 3
       },
       "1": {
-        "x": 735,
+        "x": 837,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39486,7 +40841,7 @@
         "ai": 3
       },
       "2": {
-        "x": 764,
+        "x": 866,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39494,7 +40849,7 @@
         "ai": 3
       },
       "3": {
-        "x": 793,
+        "x": 895,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39502,7 +40857,7 @@
         "ai": 3
       },
       "4": {
-        "x": 822,
+        "x": 924,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39510,7 +40865,7 @@
         "ai": 3
       },
       "5": {
-        "x": 851,
+        "x": 953,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39518,7 +40873,7 @@
         "ai": 3
       },
       "6": {
-        "x": 880,
+        "x": 982,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39526,7 +40881,7 @@
         "ai": 3
       },
       "7": {
-        "x": 909,
+        "x": 1011,
         "y": 66,
         "w": 27,
         "h": 29,
@@ -39586,7 +40941,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 938,
+        "x": 1040,
         "y": 66,
         "w": 22,
         "h": 22,
@@ -39627,7 +40982,7 @@
     "name": "moon flowers",
     "variants": {
       "0": {
-        "x": 962,
+        "x": 1064,
         "y": 66,
         "w": 32,
         "h": 30,
@@ -39662,7 +41017,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 996,
+        "x": 1098,
         "y": 66,
         "w": 18,
         "h": 17,
@@ -39702,7 +41057,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1016,
+        "x": 1118,
         "y": 66,
         "w": 27,
         "h": 26,
@@ -39739,7 +41094,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1045,
+        "x": 1147,
         "y": 66,
         "w": 31,
         "h": 32,
@@ -39775,7 +41130,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1078,
+        "x": 1180,
         "y": 66,
         "w": 24,
         "h": 25,
@@ -39817,7 +41172,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1104,
+        "x": 1206,
         "y": 66,
         "w": 11,
         "h": 12,
@@ -39856,7 +41211,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1117,
+        "x": 1219,
         "y": 66,
         "w": 12,
         "h": 12,
@@ -39896,7 +41251,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1131,
+        "x": 1233,
         "y": 66,
         "w": 18,
         "h": 20,
@@ -39942,7 +41297,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1151,
+        "x": 1253,
         "y": 66,
         "w": 31,
         "h": 31,
@@ -39980,7 +41335,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1184,
+        "x": 1286,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -40014,7 +41369,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1218,
+        "x": 1320,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -40048,7 +41403,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1252,
+        "x": 1354,
         "y": 66,
         "w": 6,
         "h": 9,
@@ -40083,7 +41438,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1260,
+        "x": 1362,
         "y": 66,
         "w": 6,
         "h": 32,
@@ -40117,7 +41472,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1268,
+        "x": 1370,
         "y": 66,
         "w": 4,
         "h": 5,
@@ -40151,7 +41506,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1274,
+        "x": 1376,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -40185,7 +41540,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1308,
+        "x": 1410,
         "y": 66,
         "w": 32,
         "h": 6,
@@ -40219,7 +41574,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1342,
+        "x": 1444,
         "y": 66,
         "w": 32,
         "h": 32,
@@ -40253,7 +41608,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1376,
+        "x": 1478,
         "y": 66,
         "w": 12,
         "h": 6,
@@ -40283,34 +41638,11 @@
     "category": "artificial tiles",
     "primaryType": "artificial tiles"
   },
-  "5281": {
-    "name": "closed door",
-    "article": "a",
-    "variants": {
-      "0": {
-        "x": 1390,
-        "y": 66,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_items",
-        "ai": 3
-      }
-    },
-    "grid_size": 32,
-    "game": {
-      "render_layer": 2,
-      "stack_pos": 2,
-      "is_movable": true
-    },
-    "type": "material",
-    "category": "material",
-    "blockprojectile": "1"
-  },
   "5298": {
     "name": "wooden planks",
     "variants": {
       "0": {
-        "x": 1456,
+        "x": 1492,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -40344,7 +41676,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1522,
+        "x": 1558,
         "y": 66,
         "w": 32,
         "h": 12,
@@ -40379,7 +41711,7 @@
     "name": "wooden planks",
     "variants": {
       "0": {
-        "x": 1556,
+        "x": 1592,
         "y": 66,
         "w": 32,
         "h": 25,
@@ -40414,7 +41746,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1590,
+        "x": 1626,
         "y": 66,
         "w": 26,
         "h": 32,
@@ -40454,7 +41786,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1618,
+        "x": 1654,
         "y": 66,
         "w": 26,
         "h": 32,
@@ -40462,7 +41794,7 @@
         "ai": 3
       },
       "1": {
-        "x": 1646,
+        "x": 1682,
         "y": 66,
         "w": 26,
         "h": 32,
@@ -40470,7 +41802,7 @@
         "ai": 3
       },
       "2": {
-        "x": 1674,
+        "x": 1710,
         "y": 66,
         "w": 26,
         "h": 32,
@@ -40505,7 +41837,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1702,
+        "x": 1738,
         "y": 66,
         "w": 32,
         "h": 24,
@@ -40513,7 +41845,7 @@
         "ai": 3
       },
       "1": {
-        "x": 1736,
+        "x": 1772,
         "y": 66,
         "w": 32,
         "h": 24,
@@ -40521,7 +41853,7 @@
         "ai": 3
       },
       "2": {
-        "x": 1770,
+        "x": 1806,
         "y": 66,
         "w": 32,
         "h": 24,
@@ -40568,7 +41900,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1804,
+        "x": 1840,
         "y": 66,
         "w": 31,
         "h": 29,
@@ -40602,7 +41934,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1837,
+        "x": 1873,
         "y": 66,
         "w": 27,
         "h": 28,
@@ -40637,7 +41969,7 @@
     "name": "small branches",
     "variants": {
       "0": {
-        "x": 1866,
+        "x": 1902,
         "y": 66,
         "w": 27,
         "h": 31,
@@ -40645,7 +41977,7 @@
         "ai": 3
       },
       "1": {
-        "x": 1895,
+        "x": 1931,
         "y": 66,
         "w": 27,
         "h": 31,
@@ -40653,7 +41985,7 @@
         "ai": 3
       },
       "2": {
-        "x": 1924,
+        "x": 1960,
         "y": 66,
         "w": 27,
         "h": 31,
@@ -40689,7 +42021,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1953,
+        "x": 1989,
         "y": 66,
         "w": 32,
         "h": 30,
@@ -40728,7 +42060,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1987,
+        "x": 2023,
         "y": 66,
         "w": 31,
         "h": 32,
@@ -40764,7 +42096,7 @@
     "name": "grass",
     "variants": {
       "0": {
-        "x": 2020,
+        "x": 2056,
         "y": 66,
         "w": 29,
         "h": 26,
@@ -40772,7 +42104,7 @@
         "ai": 3
       },
       "1": {
-        "x": 2051,
+        "x": 2087,
         "y": 66,
         "w": 29,
         "h": 26,
@@ -40780,7 +42112,7 @@
         "ai": 3
       },
       "2": {
-        "x": 2082,
+        "x": 2118,
         "y": 66,
         "w": 29,
         "h": 26,
@@ -40788,7 +42120,7 @@
         "ai": 3
       },
       "3": {
-        "x": 2113,
+        "x": 2149,
         "y": 66,
         "w": 29,
         "h": 26,
@@ -40830,7 +42162,7 @@
     "name": "grass",
     "variants": {
       "0": {
-        "x": 2144,
+        "x": 2180,
         "y": 66,
         "w": 19,
         "h": 23,
@@ -40838,7 +42170,7 @@
         "ai": 3
       },
       "1": {
-        "x": 2165,
+        "x": 2201,
         "y": 66,
         "w": 19,
         "h": 23,
@@ -40846,7 +42178,7 @@
         "ai": 3
       },
       "2": {
-        "x": 2186,
+        "x": 2222,
         "y": 66,
         "w": 19,
         "h": 23,
@@ -40854,7 +42186,7 @@
         "ai": 3
       },
       "3": {
-        "x": 2207,
+        "x": 2243,
         "y": 66,
         "w": 19,
         "h": 23,
@@ -40897,7 +42229,7 @@
     "name": "grass",
     "variants": {
       "0": {
-        "x": 2228,
+        "x": 2264,
         "y": 66,
         "w": 30,
         "h": 28,
@@ -40905,7 +42237,7 @@
         "ai": 3
       },
       "1": {
-        "x": 2260,
+        "x": 2296,
         "y": 66,
         "w": 30,
         "h": 28,
@@ -40913,7 +42245,7 @@
         "ai": 3
       },
       "2": {
-        "x": 2292,
+        "x": 2328,
         "y": 66,
         "w": 30,
         "h": 28,
@@ -40921,7 +42253,7 @@
         "ai": 3
       },
       "3": {
-        "x": 2324,
+        "x": 2360,
         "y": 66,
         "w": 30,
         "h": 28,
@@ -40964,7 +42296,7 @@
     "name": "twines",
     "variants": {
       "0": {
-        "x": 2356,
+        "x": 2392,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -40972,7 +42304,7 @@
         "ai": 3
       },
       "1": {
-        "x": 2422,
+        "x": 2458,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -40980,7 +42312,7 @@
         "ai": 3
       },
       "2": {
-        "x": 2488,
+        "x": 2524,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -41013,7 +42345,7 @@
     "name": "twines",
     "variants": {
       "0": {
-        "x": 2554,
+        "x": 2590,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -41021,7 +42353,7 @@
         "ai": 3
       },
       "1": {
-        "x": 2620,
+        "x": 2656,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -41029,7 +42361,7 @@
         "ai": 3
       },
       "2": {
-        "x": 2686,
+        "x": 2722,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -41062,7 +42394,7 @@
     "name": "twines",
     "variants": {
       "0": {
-        "x": 2752,
+        "x": 2788,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41095,7 +42427,7 @@
     "name": "twines",
     "variants": {
       "0": {
-        "x": 2786,
+        "x": 2822,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41128,7 +42460,7 @@
     "name": "twines",
     "variants": {
       "0": {
-        "x": 2820,
+        "x": 2856,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -41161,7 +42493,7 @@
     "name": "twines",
     "variants": {
       "0": {
-        "x": 2886,
+        "x": 2922,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -41194,7 +42526,7 @@
     "name": "flowers",
     "variants": {
       "0": {
-        "x": 2952,
+        "x": 2988,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -41202,7 +42534,7 @@
         "ai": 3
       },
       "1": {
-        "x": 3018,
+        "x": 3054,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -41210,7 +42542,7 @@
         "ai": 3
       },
       "2": {
-        "x": 3084,
+        "x": 3120,
         "y": 66,
         "w": 64,
         "h": 32,
@@ -41242,7 +42574,7 @@
     "name": "flowers",
     "variants": {
       "0": {
-        "x": 3150,
+        "x": 3186,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41250,7 +42582,7 @@
         "ai": 3
       },
       "1": {
-        "x": 3184,
+        "x": 3220,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41258,7 +42590,7 @@
         "ai": 3
       },
       "2": {
-        "x": 3218,
+        "x": 3254,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41290,7 +42622,7 @@
     "name": "flowers",
     "variants": {
       "0": {
-        "x": 3252,
+        "x": 3288,
         "y": 66,
         "w": 31,
         "h": 52,
@@ -41298,7 +42630,7 @@
         "ai": 3
       },
       "1": {
-        "x": 3285,
+        "x": 3321,
         "y": 66,
         "w": 31,
         "h": 52,
@@ -41306,7 +42638,7 @@
         "ai": 3
       },
       "2": {
-        "x": 3318,
+        "x": 3354,
         "y": 66,
         "w": 31,
         "h": 52,
@@ -41340,7 +42672,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3351,
+        "x": 3387,
         "y": 66,
         "w": 19,
         "h": 19,
@@ -41385,7 +42717,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3372,
+        "x": 3408,
         "y": 66,
         "w": 64,
         "h": 64,
@@ -41427,7 +42759,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3438,
+        "x": 3474,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41461,7 +42793,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 3472,
+        "x": 3508,
         "y": 66,
         "w": 32,
         "h": 64,
@@ -41625,9 +42957,9 @@
     "category": "constructions",
     "primaryType": "constructions"
   },
-  "1634": {
-    "name": "buttress",
-    "article": "a",
+  "1633": {
+    "name": "open door",
+    "article": "an",
     "variants": {
       "0": {
         "x": 264,
@@ -41650,15 +42982,29 @@
     "grid_size": 64,
     "game": {
       "top": true,
+      "usable": true,
       "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
       "render_layer": 3,
       "stack_pos": 10,
       "category_type": "top_decoration"
     },
+    "door": {
+      "type": "key",
+      "openId": 1633,
+      "closedId": 1632,
+      "lockedId": 1631,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
     "type": "material",
     "category": "material"
   },
-  "1635": {
+  "1634": {
     "name": "buttress",
     "article": "a",
     "variants": {
@@ -41691,7 +43037,7 @@
     "type": "material",
     "category": "material"
   },
-  "1636": {
+  "1635": {
     "name": "buttress",
     "article": "a",
     "variants": {
@@ -41724,7 +43070,7 @@
     "type": "material",
     "category": "material"
   },
-  "1637": {
+  "1636": {
     "name": "buttress",
     "article": "a",
     "variants": {
@@ -41757,9 +43103,9 @@
     "type": "material",
     "category": "material"
   },
-  "5138": {
-    "name": "open door",
-    "article": "an",
+  "1637": {
+    "name": "buttress",
+    "article": "a",
     "variants": {
       "0": {
         "x": 528,
@@ -41782,11 +43128,7 @@
     "grid_size": 64,
     "game": {
       "top": true,
-      "usable": true,
       "unmove": true,
-      "lenshelp": {
-        "id": 1104
-      },
       "render_layer": 3,
       "stack_pos": 10,
       "category_type": "top_decoration"
@@ -41794,86 +43136,12 @@
     "type": "material",
     "category": "material"
   },
-  "5279": {
+  "1641": {
     "name": "open door",
     "article": "an",
     "variants": {
       "0": {
         "x": 594,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_top",
-        "ai": 4
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "top": true,
-      "usable": true,
-      "unmove": true,
-      "lenshelp": {
-        "id": 1104
-      },
-      "render_layer": 3,
-      "stack_pos": 10,
-      "category_type": "top_decoration"
-    },
-    "type": "material",
-    "category": "material"
-  },
-  "5282": {
-    "name": "open door",
-    "article": "an",
-    "variants": {
-      "0": {
-        "x": 660,
-        "w": 64,
-        "h": 64,
-        "atlas": "atlas_top",
-        "ai": 4
-      }
-    },
-    "pattern": {
-      "width": 1,
-      "height": 1,
-      "depth": 1,
-      "layers": 1
-    },
-    "bounding_box": {
-      "width": 64,
-      "height": 64
-    },
-    "grid_size": 64,
-    "game": {
-      "top": true,
-      "usable": true,
-      "unmove": true,
-      "lenshelp": {
-        "id": 1104
-      },
-      "render_layer": 3,
-      "stack_pos": 10,
-      "category_type": "top_decoration"
-    },
-    "type": "material",
-    "category": "material"
-  },
-  "5284": {
-    "name": "open door",
-    "article": "an",
-    "variants": {
-      "0": {
-        "x": 726,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -41902,6 +43170,334 @@
       "stack_pos": 10,
       "category_type": "top_decoration"
     },
+    "door": {
+      "type": "custom",
+      "openId": 1641,
+      "closedId": 1640,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "2180": {
+    "name": "open fence gate",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 660,
+        "w": 32,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 40,
+      "height": 40
+    },
+    "grid_size": 40,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "custom",
+      "openId": 2180,
+      "closedId": 2179,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "doors",
+    "primaryType": "doors"
+  },
+  "5117": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 694,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5117,
+      "closedId": 5116,
+      "lockedId": 5115,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "5138": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 760,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5138,
+      "closedId": 5137,
+      "lockedId": 5136,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "5141": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 826,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5141,
+      "closedId": 5140,
+      "requiresKey": true,
+      "lockedId": 5139,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "5279": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 892,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5279,
+      "closedId": 5278,
+      "lockedId": 5277,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "5282": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 958,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "key",
+      "openId": 5282,
+      "closedId": 5281,
+      "lockedId": 5280,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
+  "5284": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 1024,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1105
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "custom",
+      "openId": 5284,
+      "closedId": 5283,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
     "type": "material",
     "category": "material"
   },
@@ -41910,7 +43506,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 792,
+        "x": 1090,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -41947,7 +43543,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 858,
+        "x": 1156,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -41984,7 +43580,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 924,
+        "x": 1222,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -42021,7 +43617,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 990,
+        "x": 1288,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -42053,12 +43649,59 @@
     "category": "pillars",
     "primaryType": "pillars"
   },
+  "6253": {
+    "name": "open door",
+    "article": "an",
+    "variants": {
+      "0": {
+        "x": 1354,
+        "w": 64,
+        "h": 64,
+        "atlas": "atlas_top",
+        "ai": 4
+      }
+    },
+    "pattern": {
+      "width": 1,
+      "height": 1,
+      "depth": 1,
+      "layers": 1
+    },
+    "bounding_box": {
+      "width": 64,
+      "height": 64
+    },
+    "grid_size": 64,
+    "game": {
+      "top": true,
+      "usable": true,
+      "unmove": true,
+      "lenshelp": {
+        "id": 1104
+      },
+      "render_layer": 3,
+      "stack_pos": 10,
+      "category_type": "top_decoration"
+    },
+    "door": {
+      "type": "key",
+      "openId": 6253,
+      "closedId": 6252,
+      "lockedId": 6251,
+      "requiresKey": true,
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
+    },
+    "type": "material",
+    "category": "material"
+  },
   "6981": {
     "name": "rope",
     "article": "a",
     "variants": {
       "0": {
-        "x": 1056,
+        "x": 1420,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -42093,7 +43736,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1122,
+        "x": 1486,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -42128,7 +43771,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1188,
+        "x": 1552,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -42161,7 +43804,7 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1254,
+        "x": 1618,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
@@ -42194,112 +43837,112 @@
     "article": "a",
     "variants": {
       "0": {
-        "x": 1320,
+        "x": 1684,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "1": {
-        "x": 1386,
+        "x": 1750,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "2": {
-        "x": 1452,
+        "x": 1816,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "3": {
-        "x": 1518,
+        "x": 1882,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "4": {
-        "x": 1584,
+        "x": 1948,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "5": {
-        "x": 1650,
+        "x": 2014,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "6": {
-        "x": 1716,
+        "x": 2080,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "7": {
-        "x": 1782,
+        "x": 2146,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "8": {
-        "x": 1848,
+        "x": 2212,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "9": {
-        "x": 1914,
+        "x": 2278,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "10": {
-        "x": 1980,
+        "x": 2344,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "11": {
-        "x": 2046,
+        "x": 2410,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "12": {
-        "x": 2112,
+        "x": 2476,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "13": {
-        "x": 2178,
+        "x": 2542,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "14": {
-        "x": 2244,
+        "x": 2608,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",
         "ai": 4
       },
       "15": {
-        "x": 2310,
+        "x": 2674,
         "w": 64,
         "h": 64,
         "atlas": "atlas_top",

@@ -11,11 +11,13 @@
 
 import {
   batchWrite,
+  dbGet,
   applyHpToPlayer,
   applyMpToPlayer,
   syncEffect,
   encodeUser,
   PATHS,
+  TILE_CHUNK_SIZE,
 } from "../core/db.js";
 
 import { getMonsters, getPlayers } from "../core/worldStore.js";
@@ -962,11 +964,27 @@ async function _processToggleDoor(action, player, now) {
   const { playerId, target, fromId, toId } = action;
   if (!target || fromId == null || toId == null) return;
 
+  const x = Number(target.x);
+  const y = Number(target.y);
+  const z = Number(target.z);
+  const fromIdNum = Number(fromId);
+  const toIdNum = Number(toId);
+
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(z) ||
+    !Number.isFinite(fromIdNum) ||
+    !Number.isFinite(toIdNum)
+  ) {
+    return;
+  }
+
   const dist = Math.max(
-    Math.abs(target.x - player.x),
-    Math.abs(target.y - player.y),
+    Math.abs(x - Number(player.x ?? x)),
+    Math.abs(y - Number(player.y ?? y)),
   );
-  if (dist > 1 || target.z !== player.z) {
+  if (dist > 1 || z !== Number(player.z ?? z)) {
     pushLog("error", `[${player.name}] porta fora de alcance`);
     return;
   }
@@ -974,20 +992,79 @@ async function _processToggleDoor(action, player, now) {
   if (_isOnCooldown(playerId, "toggle_door")) return;
   _setCooldown(playerId, "toggle_door", 500);
 
-  const { x, y, z } = target;
+  const chunkX = Math.floor(x / TILE_CHUNK_SIZE);
+  const chunkY = Math.floor(y / TILE_CHUNK_SIZE);
+  const tileXY = `${x},${y}`;
+  const chunkPath = `${PATHS.tiles}/${z}/${chunkX},${chunkY}`;
+
+  const chunkData = await dbGet(chunkPath);
+  if (!chunkData || typeof chunkData !== "object") {
+    pushLog("error", `[${player.name}] chunk da porta nao encontrado`);
+    return;
+  }
+
+  const tileData = chunkData[tileXY];
+  if (!tileData || typeof tileData !== "object") {
+    pushLog("error", `[${player.name}] tile da porta nao encontrado`);
+    return;
+  }
+
+  const tileClone = { ...tileData };
+  let replaced = false;
+
+  for (const [layerKey, layer] of Object.entries(tileClone)) {
+    if (!Array.isArray(layer)) continue;
+
+    tileClone[layerKey] = layer.map((entry) => {
+      if (typeof entry === "object" && entry !== null) {
+        const currentEntryId = Number(
+          entry.id ?? entry.itemid ?? entry.itemId ?? entry.tileId,
+        );
+        if (currentEntryId === fromIdNum) {
+          replaced = true;
+          if (entry.id != null) return { ...entry, id: toIdNum };
+          if (entry.itemid != null) return { ...entry, itemid: toIdNum };
+          if (entry.itemId != null) return { ...entry, itemId: toIdNum };
+          if (entry.tileId != null) return { ...entry, tileId: toIdNum };
+          return { ...entry, id: toIdNum };
+        }
+        return entry;
+      }
+
+      const value = Number(entry);
+      if (value === fromIdNum) {
+        replaced = true;
+        return toIdNum;
+      }
+      return entry;
+    });
+  }
+
+  if (!replaced) {
+    pushLog(
+      "error",
+      `[${player.name}] porta ${fromIdNum} nao encontrada no tile ${x},${y},${z}`,
+    );
+    return;
+  }
+
+  await batchWrite({
+    [`${chunkPath}/${tileXY}`]: tileClone,
+  });
+
   worldEvents.emit(EVENT_TYPES.DOOR_TOGGLED, {
     x,
     y,
     z,
-    fromId,
-    toId,
+    fromId: fromIdNum,
+    toId: toIdNum,
     playerId,
     timestamp: now,
   });
 
   pushLog(
     "system",
-    `[${player.name}] ${fromId === action.fromId ? "abriu" : "fechou"} porta em ${x},${y}`,
+    `[${player.name}] alternou porta ${fromIdNum}->${toIdNum} em ${x},${y}`,
   );
 }
 

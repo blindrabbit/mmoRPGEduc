@@ -1300,21 +1300,56 @@ export async function useItem(playerId, slotIndex) {
       error: "Inventário desatualizado. Reabra o inventário e tente novamente.",
     };
   }
-  if (item.type !== "consumable")
-    return { success: false, error: "Item não é consumível" };
-  if (!item.effect) return { success: false, error: "Item sem efeito" };
+
+  const tileId = _resolveItemTileId(item);
+  const itemDataService = getItemDataService?.() ?? null;
+  const isUsableByMetadata =
+    tileId != null ? (itemDataService?.isUsable?.(tileId) ?? false) : false;
+  const hasEffect = !!item.effect;
+  const canUseItem =
+    item.type === "consumable" ||
+    hasEffect ||
+    isUsableByMetadata ||
+    item.usable === true ||
+    item.forceUse === true;
+
+  if (!canUseItem) {
+    return { success: false, error: "Item não pode ser usado" };
+  }
+
+  if (!_matchesUseRules(item.useConditions ?? item.onUseConditions, player)) {
+    return {
+      success: false,
+      error: "Condições para usar este item não foram atendidas",
+    };
+  }
+
+  if (!item.effect && item.type !== "consumable") {
+    // Permite ONUSE para itens sem efeito quando a regra de uso aprovar,
+    // mas sem aplicar mutações de stats/consumo por padrão.
+    return {
+      success: true,
+      effect: null,
+      consumed: false,
+    };
+  }
 
   // Cooldown de uso
   const lastUsed = player.itemCooldowns?.[item.id] ?? 0;
-  if (
-    Date.now() - lastUsed <
-    (item.cooldown ??
-      RuntimeConfig.get(
-        "items.consumableCooldown",
-        ITEM_CONFIG.consumableCooldown,
-      ))
-  ) {
-    return { success: false, error: "Aguarde antes de usar novamente" };
+  const hasExplicitCooldown = item.cooldown != null;
+  const cooldownMs = hasExplicitCooldown
+    ? Number(item.cooldown)
+    : item.type === "consumable"
+      ? RuntimeConfig.get(
+          "items.consumableCooldown",
+          ITEM_CONFIG.consumableCooldown,
+        )
+      : 0;
+
+  if (Number.isFinite(cooldownMs) && cooldownMs > 0) {
+    if (Date.now() - lastUsed < cooldownMs) {
+      return { success: false, error: "Aguarde antes de usar novamente" };
+    }
   }
 
   const updates = {};
@@ -1337,6 +1372,25 @@ export async function useItem(playerId, slotIndex) {
       updates[P.statsMp(playerId)] = newMp;
       break;
     }
+    case "set_storage": {
+      const key = String(item.effect.key ?? "").trim();
+      if (!key) {
+        return { success: false, error: "Efeito set_storage sem chave" };
+      }
+      updates[`players_data/${playerId}/storage/${key}`] =
+        item.effect.value ?? 1;
+      break;
+    }
+    case "add_storage": {
+      const key = String(item.effect.key ?? "").trim();
+      if (!key) {
+        return { success: false, error: "Efeito add_storage sem chave" };
+      }
+      const base = Number(player.storage?.[key] ?? 0);
+      const delta = Number(item.effect.value ?? 1);
+      updates[`players_data/${playerId}/storage/${key}`] = base + delta;
+      break;
+    }
     default:
       return {
         success: false,
@@ -1344,21 +1398,39 @@ export async function useItem(playerId, slotIndex) {
       };
   }
 
-  // Consumir item (stack ou remover)
-  const newQty = (item.quantity ?? 1) - 1;
-  updates[P.inventorySlot(playerId, useSlot)] =
-    newQty > 0 ? { ...item, quantity: newQty, count: newQty } : null;
+  const shouldConsume = _shouldConsumeOnUse(item, player);
+
+  // Consumir item (stack ou remover) apenas quando a regra de consumo aprovar.
+  const currentQty = Number(item.quantity ?? item.count ?? 1);
+  const newQty = shouldConsume ? currentQty - 1 : currentQty;
+
+  if (shouldConsume) {
+    updates[P.inventorySlot(playerId, useSlot)] =
+      newQty > 0 ? { ...item, quantity: newQty, count: newQty } : null;
+  }
 
   // Registrar cooldown
-  updates[`players_data/${playerId}/itemCooldowns/${item.id}`] = Date.now();
+  if (Number.isFinite(cooldownMs) && cooldownMs > 0) {
+    updates[`players_data/${playerId}/itemCooldowns/${item.id}`] = Date.now();
+  }
 
   await batchWrite(updates);
 
   const newInventory = { ...inventory };
-  if (newQty > 0) {
-    newInventory[useSlot] = { ...item, quantity: newQty, count: newQty };
-  } else {
-    delete newInventory[useSlot];
+  if (shouldConsume) {
+    if (newQty > 0) {
+      newInventory[useSlot] = { ...item, quantity: newQty, count: newQty };
+    } else {
+      delete newInventory[useSlot];
+    }
+  }
+
+  const nextStorage = { ...(player.storage ?? {}) };
+  for (const [path, value] of Object.entries(updates)) {
+    const prefix = `players_data/${playerId}/storage/`;
+    if (!path.startsWith(prefix)) continue;
+    const key = path.slice(prefix.length);
+    nextStorage[key] = value;
   }
 
   applyPlayersLocal(playerId, {
@@ -1368,10 +1440,14 @@ export async function useItem(playerId, slotIndex) {
       hp: updates[P.statsHp(playerId)] ?? player.stats?.hp,
       mp: updates[P.statsMp(playerId)] ?? player.stats?.mp,
     },
-    itemCooldowns: {
-      ...(player.itemCooldowns ?? {}),
-      [item.id]: Date.now(),
-    },
+    storage: nextStorage,
+    itemCooldowns:
+      Number.isFinite(cooldownMs) && cooldownMs > 0
+        ? {
+            ...(player.itemCooldowns ?? {}),
+            [item.id]: Date.now(),
+          }
+        : (player.itemCooldowns ?? {}),
   });
 
   worldEvents.emit(EVENT_TYPES.ITEM_USED, {
@@ -1380,13 +1456,14 @@ export async function useItem(playerId, slotIndex) {
     itemName: item.name,
     effect: item.effect,
     slotIndex: useSlot,
+    consumed: shouldConsume,
   });
   worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
     playerId,
     inventory: newInventory,
   });
 
-  return { success: true, effect: item.effect };
+  return { success: true, effect: item.effect, consumed: shouldConsume };
 }
 
 // =============================================================================
@@ -1446,6 +1523,111 @@ function _resolveItemTileId(item) {
   const direct = Number(item.tileId ?? item.spriteId ?? item.id);
   if (Number.isFinite(direct) && direct > 0) return Math.floor(direct);
   return null;
+}
+
+function _shouldConsumeOnUse(item, player) {
+  if (!item || typeof item !== "object") return false;
+
+  if (item.consumeOnUse != null) {
+    return _resolveConditionalFlag(
+      item.consumeOnUse,
+      player,
+      item.type === "consumable",
+    );
+  }
+
+  if (item.effect?.consume != null) {
+    return _resolveConditionalFlag(
+      item.effect.consume,
+      player,
+      item.type === "consumable",
+    );
+  }
+
+  return item.type === "consumable";
+}
+
+function _resolveConditionalFlag(rule, player, defaultValue = false) {
+  if (typeof rule === "boolean") return rule;
+
+  if (rule && typeof rule === "object") {
+    const when = rule.when ?? rule.conditions ?? null;
+    if (when == null) {
+      if (typeof rule.value === "boolean") return rule.value;
+      return defaultValue;
+    }
+
+    if (_matchesUseRules(when, player)) {
+      if (typeof rule.value === "boolean") return rule.value;
+      return true;
+    }
+
+    if (typeof rule.else === "boolean") return rule.else;
+    return defaultValue;
+  }
+
+  return defaultValue;
+}
+
+function _matchesUseRules(rules, player) {
+  if (rules == null) return true;
+
+  if (Array.isArray(rules)) {
+    return rules.every((rule) => _matchesUseRules(rule, player));
+  }
+
+  if (typeof rules !== "object") return true;
+
+  const mode = String(rules.mode ?? "all").toLowerCase();
+  if (Array.isArray(rules.rules)) {
+    if (mode === "any") {
+      return rules.rules.some((rule) => _matchesUseRules(rule, player));
+    }
+    return rules.rules.every((rule) => _matchesUseRules(rule, player));
+  }
+
+  const key = String(rules.key ?? rules.storageKey ?? "").trim();
+  if (!key) return true;
+
+  const value = _getPlayerRuleValue(player, key);
+
+  if (rules.exists === true && value == null) return false;
+  if (rules.exists === false && value != null) return false;
+
+  if (rules.equals != null && value !== rules.equals) return false;
+  if (rules.notEquals != null && value === rules.notEquals) return false;
+
+  const numeric = Number(value);
+  if (rules.min != null) {
+    const min = Number(rules.min);
+    if (!Number.isFinite(numeric) || numeric < min) return false;
+  }
+  if (rules.max != null) {
+    const max = Number(rules.max);
+    if (!Number.isFinite(numeric) || numeric > max) return false;
+  }
+
+  return true;
+}
+
+function _getPlayerRuleValue(player, key) {
+  if (!player || !key) return undefined;
+
+  if (key.startsWith("storage.")) {
+    return player.storage?.[key.slice(8)];
+  }
+
+  if (Object.prototype.hasOwnProperty.call(player.storage ?? {}, key)) {
+    return player.storage?.[key];
+  }
+
+  const parts = key.split(".");
+  let current = player;
+  for (const part of parts) {
+    if (current == null || typeof current !== "object") return undefined;
+    current = current[part];
+  }
+  return current;
 }
 
 function _sameItemForStack(a, b) {

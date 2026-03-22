@@ -1748,6 +1748,56 @@
         });
       }
 
+      let _inventoryOnUseHandler = null;
+
+      function _bindInventoryOnUse() {
+        const grid = document.getElementById("inv-grid");
+        if (!grid) return;
+
+        if (_inventoryOnUseHandler) {
+          grid.removeEventListener("contextmenu", _inventoryOnUseHandler);
+        }
+
+        _inventoryOnUseHandler = (e) => {
+          const slotEl = e.target.closest(".inv-slot");
+          if (!slotEl || !grid.contains(slotEl)) return;
+
+          const isDraggingNow =
+            document.body.classList.contains("item-dragging");
+          if (isDraggingNow) return;
+
+          const slotIndex = Number(slotEl.dataset.dropSlot);
+          if (!Number.isInteger(slotIndex) || slotIndex < 0) return;
+
+          const item = myPos?.inventory?.[slotIndex] ?? null;
+          if (!item) return;
+
+          e.preventDefault();
+          e.stopPropagation();
+
+          if (
+            !_dragDropManager ||
+            typeof _dragDropManager._sendAction !== "function"
+          ) {
+            pushLog(
+              "rpg",
+              "error",
+              "DragDropManager não disponível para ONUSE do inventário.",
+            );
+            return;
+          }
+
+          _dragDropManager._sendAction({
+            itemAction: "use",
+            slotIndex,
+          });
+
+          pushLog("rpg", "action", `ONUSE inventário slot ${slotIndex + 1}`);
+        };
+
+        grid.addEventListener("contextmenu", _inventoryOnUseHandler);
+      }
+
       function _removeTileFromLayer(coord, layerKey, predicate) {
         const tile = map?.[coord];
         if (!tile) return false;
@@ -3105,6 +3155,7 @@
 
         _dragDropManager.mount();
         _bindDragPreviewUI();
+        _bindInventoryOnUse();
 
         document.getElementById("game-wrapper").style.display = "flex";
         activeZ = myPos.z;
@@ -3340,7 +3391,12 @@
           map,
           getMonsters,
           (nx, ny, nz, dir) => {
-            if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
+            if (
+              nx !== myPos.x ||
+              ny !== myPos.y ||
+              nz !== myPos.z ||
+              dir !== myPos.direcao
+            ) {
               myPos.oldX = myPos.x;
               myPos.oldY = myPos.y;
               myPos.x = nx;
@@ -3388,7 +3444,12 @@
           canvas,
           onPlayerMove: async (nx, ny, nz, dir) => {
             // Callback de movimento do Player Actions
-            if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
+            if (
+              nx !== myPos.x ||
+              ny !== myPos.y ||
+              nz !== myPos.z ||
+              dir !== myPos.direcao
+            ) {
               myPos.oldX = myPos.x;
               myPos.oldY = myPos.y;
               myPos.x = nx;

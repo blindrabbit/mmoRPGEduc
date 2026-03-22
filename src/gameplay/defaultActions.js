@@ -43,6 +43,12 @@ export function registerDefaultActions(worldState) {
     action: PlayerAction.CHANGE_FLOOR,
   });
 
+  // Escada/ladder usada com ONUSE (botao direito) para subir andar
+  registerLadderOnUseAction(actionSystem, {
+    spriteIds: [1948],
+    floorChange: -1,
+  });
+
   // ═══════════════════════════════════════════════════════════
   // TELEPORTES
   // ═══════════════════════════════════════════════════════════
@@ -205,6 +211,46 @@ function registerStairAction(actionSystem, worldState, config) {
       // Move player
       player.z = newZ;
       console.log(`[Stair] Player mudou para floor ${newZ}`);
+      return true;
+    });
+  }
+}
+
+/**
+ * Registra ação de ONUSE para escadas/ladder.
+ * Usado no clique direito para forcar mudanca de floor em itens utilizaveis.
+ */
+function registerLadderOnUseAction(actionSystem, config) {
+  const { spriteIds, floorChange = -1 } = config;
+
+  for (const spriteId of spriteIds) {
+    actionSystem.registerItemAction(spriteId, (ctx) => {
+      const { player, target, onChangeFloor } = ctx;
+
+      if (!player || !target) return false;
+
+      const dx = Math.abs(target.x - player.x);
+      const dy = Math.abs(target.y - player.y);
+      if (dx > 1 || dy > 1) {
+        return false;
+      }
+
+      const newZ = (player.z ?? 7) + floorChange;
+
+      if (onChangeFloor) {
+        return (
+          onChangeFloor({
+            ...ctx,
+            newX: player.x,
+            newY: player.y,
+            newZ,
+            floorChange,
+          }) !== false
+        );
+      }
+
+      player.z = newZ;
+      console.log(`[LadderOnUse] Player mudou para floor ${newZ}`);
       return true;
     });
   }

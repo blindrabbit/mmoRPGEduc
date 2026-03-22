@@ -84,28 +84,72 @@ function _findFloorChangeInItems(tile, nexoData) {
 
 // Offsets cardinais: onde o player aparece no andar destino (OTClient convention)
 const _FLOOR_OFFSETS = {
-  north: { dx:  0, dy: -1 },
-  south: { dx:  0, dy: +1 },
-  east:  { dx: +1, dy:  0 },
-  west:  { dx: -1, dy:  0 },
+  north: { dx: 0, dy: -1 },
+  south: { dx: 0, dy: +1 },
+  east: { dx: +1, dy: 0 },
+  west: { dx: -1, dy: 0 },
 };
 
-const _OPPOSITE = { north: "south", south: "north", east: "west", west: "east" };
+const _OPPOSITE = {
+  north: "south",
+  south: "north",
+  east: "west",
+  west: "east",
+};
 
 /**
- * Para uma escada de descida em (x,y,z), procura a escada de subida no
- * andar abaixo (z+1) na mesma posição e retorna a direção oposta.
+ * Para uma escada com direction "down" em (x,y,z), procura a escada no
+ * andar alvo (z-1) na mesma posição e retorna a direção oposta.
  * Isso garante que o player apareça do lado oposto da escada de subida,
  * evitando loop imediato.
  * @returns {string|null}  direção oposta ("east", "north"…) ou null
  */
-function _resolveOppositeFromBelow(x, y, z, map, nexoData) {
-  const belowCoord = `${x},${y},${z + 1}`;
-  const belowTile = map?.[belowCoord];
-  if (!belowTile || !nexoData) return null;
-  const fc = _findFloorChangeInItems(belowTile, nexoData);
+function _resolveOppositeFromTargetFloor(x, y, targetZ, map, nexoData) {
+  const targetCoord = `${x},${y},${targetZ}`;
+  const targetTile = map?.[targetCoord];
+  if (!targetTile || !nexoData) return null;
+  const fc = _findFloorChangeInItems(targetTile, nexoData);
   if (!fc?.direction) return null;
   return _OPPOSITE[fc.direction] ?? null;
+}
+
+function _resolveStairAscentDelta(direction) {
+  if (!_FLOOR_OFFSETS[direction]) return null;
+  const { dx, dy } = _FLOOR_OFFSETS[direction];
+  const stairDy = direction === "south" ? +2 : dy;
+  return { dx, dy: stairDy, dz: -1 };
+}
+
+function _findStairOnTargetFloorOrSides(x, y, targetZ, map, nexoData) {
+  const candidates = [
+    { x, y },
+    { x, y: y - 1 }, // north
+    { x, y: y + 1 }, // south
+    { x: x - 1, y }, // west
+    { x: x + 1, y }, // east
+  ];
+
+  for (const candidate of candidates) {
+    const coord = `${candidate.x},${candidate.y},${targetZ}`;
+    const tile = map?.[coord];
+    if (!tile || !nexoData) continue;
+    const fc = _findFloorChangeInItems(tile, nexoData);
+    if (fc && (fc.type === "stair" || fc.type === "ramp")) {
+      return fc;
+    }
+  }
+
+  return null;
+}
+
+function _resolveReverseFromTargetStair(x, y, targetZ, map, nexoData) {
+  const targetFc = _findStairOnTargetFloorOrSides(x, y, targetZ, map, nexoData);
+  if (!targetFc) return null;
+
+  const ascentDelta = _resolveStairAscentDelta(targetFc.direction);
+  if (!ascentDelta) return null;
+
+  return { dx: -ascentDelta.dx, dy: -ascentDelta.dy };
 }
 
 /**
@@ -115,32 +159,85 @@ function _resolveOppositeFromBelow(x, y, z, map, nexoData) {
  *     offset cardinal aplicado (onde o player aparece no andar destino)
  *   - direction null/desconhecido → heurística original
  *
- * Para "down": o player aparece no mesmo (x,y) do andar abaixo + 1 sqm ao sul
- * para evitar cair de volta na escada de subida que estiver na mesma posição.
+ * Para "down" em escada/rampa: usa o reverso do movimento de subida da
+ * escada/rampa do piso inferior, mantendo a descida para Z+1.
  *
  * @param {number} x
  * @param {number} y
  * @param {number} z
  * @param {Object} map
  * @param {string|null} direction  — "up"|"down"|"north"|"south"|"east"|"west"|null
+ * @param {string|null} type       — "stair"|"ramp"|"hole"|"teleport"|null
  */
-function _resolveFloorChangeDirection(x, y, z, map, direction = null, nexoData = null) {
-  // Direção cardinal explícita → usa heurística para z + offset cardinal
+function _resolveFloorChangeDirection(
+  x,
+  y,
+  z,
+  map,
+  direction = null,
+  nexoData = null,
+  type = null,
+) {
+  // Direção cardinal explícita.
   if (_FLOOR_OFFSETS[direction]) {
+    if (type === "stair" || type === "ramp") {
+      // Regra genérica: escadas/rampas cardinais sobem 1 andar no sentido da direção.
+      const ascentDelta = _resolveStairAscentDelta(direction);
+      return {
+        newX: x + ascentDelta.dx,
+        newY: y + ascentDelta.dy,
+        newZ: z + ascentDelta.dz,
+      };
+    }
+
     const aboveCoord = `${x},${y},${z - 1}`;
-    const goingUp = map?.[aboveCoord] != null;
+    let goingUp;
+    if (type === "stair" || type === "ramp") {
+      // Escadas/rampas sobem por padrão quando direção é cardinal.
+      goingUp = true;
+    } else if (type === "hole") {
+      goingUp = false;
+    } else {
+      // Fallback legado quando não há tipo confiável.
+      goingUp = map?.[aboveCoord] != null;
+    }
     const { dx, dy } = _FLOOR_OFFSETS[direction];
     return { newX: x + dx, newY: y + dy, newZ: goingUp ? z - 1 : z + 1 };
   }
 
-  // "down" explícito → força descida; busca direção oposta da escada de subida abaixo
+  // "down" explícito.
   if (direction === "down") {
-    const opposite = _resolveOppositeFromBelow(x, y, z, map, nexoData);
-    const { dx, dy } = _FLOOR_OFFSETS[opposite] ?? { dx: 0, dy: 1 }; // sul como fallback
-    return { newX: x + dx, newY: y + dy, newZ: z + 1 };
+    if (type === "stair" || type === "ramp") {
+      // Regra genérica: desce Z+1 e aplica o reverso da escada/rampa do piso abaixo.
+      const targetZ = z + 1;
+      const reverseDelta = _resolveReverseFromTargetStair(
+        x,
+        y,
+        targetZ,
+        map,
+        nexoData,
+      );
+      return {
+        newX: x + (reverseDelta?.dx ?? 0),
+        newY: y + (reverseDelta?.dy ?? 0),
+        newZ: targetZ,
+      };
+    }
+
+    const targetZ = z - 1;
+    const opposite = _resolveOppositeFromTargetFloor(
+      x,
+      y,
+      targetZ,
+      map,
+      nexoData,
+    );
+    const { dx, dy } = _FLOOR_OFFSETS[opposite] ?? { dx: 0, dy: -1 }; // norte como fallback
+    return { newX: x + dx, newY: y + dy, newZ: targetZ };
   }
 
   // "up" explícito → força subida, sem offset
+  // Convenção deste projeto: subir = Z-1
   if (direction === "up") {
     return { newX: x, newY: y, newZ: z - 1 };
   }
@@ -194,7 +291,13 @@ export function resolveStepOnEffects(x, y, z, worldState) {
     // Tenta ler direction do map_data mesmo quando a flag vem do OTBM
     const fc = _findFloorChangeInItems(tile, nexoData);
     const { newX, newY, newZ } = _resolveFloorChangeDirection(
-      x, y, z, worldState.map, fc?.direction ?? null, nexoData
+      x,
+      y,
+      z,
+      worldState.map,
+      fc?.direction ?? null,
+      nexoData,
+      fc?.type ?? null,
     );
     return { type: "floor_change", newX, newY, newZ };
   }
@@ -213,7 +316,13 @@ export function resolveStepOnEffects(x, y, z, worldState) {
       };
     }
     const { newX, newY, newZ } = _resolveFloorChangeDirection(
-      x, y, z, worldState.map, direction ?? null, nexoData
+      x,
+      y,
+      z,
+      worldState.map,
+      direction ?? null,
+      nexoData,
+      floorChange?.type ?? null,
     );
     return { type: "floor_change", newX, newY, newZ };
   }

@@ -812,8 +812,21 @@ function _drawSpriteFromAssets(
   batchRenderer = null,
   contentType = null,
 ) {
+  if (spriteId === 0) return;
+
   const sid = String(spriteId);
   const data = nexoData?.[sid] ?? null;
+
+  // Guard: sprite não encontrado em nexoData
+  if (!data) {
+    if (window.DEBUG_MISSING_SPRITES !== true) {
+      window.DEBUG_MISSING_SPRITES = true;
+      console.warn(
+        `[mapRenderer] Sprite ${spriteId} não encontrado em nexoData`,
+      );
+    }
+    return;
+  }
 
   // Stackables usam variante por quantidade; liquid containers por content_type; demais por posição modulo
   let varKey;
