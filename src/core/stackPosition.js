@@ -47,13 +47,19 @@ export function calculateStackPosition(itemFlags = {}, category = "item") {
 export function resolveStackPosition(metadata = null, category = "item") {
   const meta = metadata ?? {};
   // New format: game.stack_pos; old format fallback: game.stack_position
-  const raw = Number(meta?.game?.stack_pos ?? meta?.game?.stack_position);
-  if (Number.isFinite(raw)) return raw;
-  // Compose flags from new format or fall back to flags_raw
-  const mflags = meta?.game?.flags?.movement || {};
-  const vflags = meta?.game?.flags?.visual || {};
-  const fallbackFlags = Object.keys(mflags).length || Object.keys(vflags).length
-    ? { ...mflags, ...vflags }
-    : (meta?.flags_raw ?? {});
-  return calculateStackPosition(fallbackFlags, category);
+  const stackPos = Number(meta?.game?.stack_pos ?? meta?.game?.stack_position);
+  if (Number.isFinite(stackPos)) return stackPos;
+  // ✅ Novo: flags planos em game; Fallback: flags_raw (legado protobuf)
+  const game = meta?.game || {};
+  const flags_raw = meta?.flags_raw || {};
+  const flags = {
+    bank:      game.bank      ?? flags_raw.bank,
+    top:       game.top       ?? flags_raw.top,
+    topeffect: game.topeffect ?? flags_raw.topeffect,
+    unpass:    game.unpass    ?? flags_raw.unpass,
+    unsight:   game.unsight   ?? flags_raw.unsight,
+    hang:      game.hang      ?? flags_raw.hang,
+    hook:      game.hook      ?? flags_raw.hook,
+  };
+  return calculateStackPosition(flags, category);
 }

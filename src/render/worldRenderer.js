@@ -554,13 +554,14 @@ export function renderWorld({
   // Itens com flag "hang" (pendurados em parede) são sempre tratados como planos:
   // sua âncora visual é a parede, não o tile abaixo, e nunca devem sobrepor andares superiores.
   const isFlat = (spriteMeta) => {
-    if (spriteMeta?.flags_raw?.hang) return true;
+    if (spriteMeta?.game?.hang || spriteMeta?.flags_raw?.hang) return true;
     const variantH = Number(spriteMeta?.variants?.["0"]?.h ?? 0);
     if (variantH > 0) return variantH <= TILE_SIZE;
     return (spriteMeta?.grid_size ?? TILE_SIZE) <= TILE_SIZE;
   };
   const blocksPlayer = (spriteMeta) =>
     spriteMeta?.game?.is_walkable === false ||
+    spriteMeta?.game?.unpass === true ||
     spriteMeta?.flags_raw?.unpass === true ||
     spriteMeta?.game?.category_type === "wall";
   // isOccluder: sprites que devem ser redesenhados APÓS o player (y-sort).
@@ -631,19 +632,34 @@ export function renderWorld({
   const _upperFloors = showUpperFloors
     ? getVisibleFloors(activeZ).filter((z) => z < activeZ)
     : [];
+  // Andares abaixo do ativo (z > activeZ): renderizados como fundo antes do
+  // andar ativo, da mais funda para a mais rasa. Espaços vazios no andar ativo
+  // revelam o conteúdo dos andares inferiores (ex: ver Z7 através de aberturas em Z6).
+  const _lowerFloors = getVisibleFloors(activeZ).filter((z) => z > activeZ);
 
-  // ── 1. Andar ativo — todos os itens (incluindo top items) ────────────────
-  // Top items (category="top" / renderLayer=3) são desenhados aqui E depois
-  // redesenhados no step 5, APÓS entidades. O segundo desenho no step 5 sobrepõe
-  // os pixels do step 1, mas ocorre DEPOIS do player → copa aparece SOBRE o player.
-  // Esta abordagem replica o OTClient: tiles desenhados inteiros, depois creature,
-  // depois top items novamente por cima de tudo.
-  // Single-floor usa drawLayer2IfFlat para y-sort de items altos (steps 4/6.25).
+  // ── 1. Background: andares abaixo + andar ativo ──────────────────────────
+  // Painter's algorithm (OTClient): andares inferiores (z > activeZ) são desenhados
+  // primeiro como fundo (do mais profundo ao mais raso). O andar ativo é desenhado
+  // por cima SEM limpar o canvas, de modo que espaços sem tile revelam os andares
+  // abaixo (ex: ver Z7 através de aberturas no piso de Z6).
+  // Quando não há andares abaixo, comportamento original: clearCanvas=true no ativo.
+  // Top items (renderLayer=3) dos andares abaixo não são desenhados — ficam cobertos.
+  // Top items do andar ativo são redesenhados após entidades no step 5.
   if (perfEnabled) {
     perfStep(perf, "mapBase", () => {
+      _lowerFloors.forEach((z, i) => {
+        renderMap({
+          ..._mapBase,
+          clearCanvas: i === 0,
+          layerMin: 0,
+          layerMax: 2,
+          zPredicate: (fz) => fz === z,
+          spritePredicate: null,
+        });
+      });
       renderMap({
         ..._mapBase,
-        clearCanvas: true,
+        clearCanvas: _lowerFloors.length === 0,
         layerMin: 0,
         layerMax: 3,
         zPredicate: (fz) => fz === activeZ,
@@ -653,9 +669,19 @@ export function renderWorld({
       });
     });
   } else {
+    _lowerFloors.forEach((z, i) => {
+      renderMap({
+        ..._mapBase,
+        clearCanvas: i === 0,
+        layerMin: 0,
+        layerMax: 2,
+        zPredicate: (fz) => fz === z,
+        spritePredicate: null,
+      });
+    });
     renderMap({
       ..._mapBase,
-      clearCanvas: true,
+      clearCanvas: _lowerFloors.length === 0,
       layerMin: 0,
       layerMax: 3,
       zPredicate: (fz) => fz === activeZ,

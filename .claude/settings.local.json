@@ -26,7 +26,8 @@
       "Bash(/tmp/trace_analysis.txt:*)",
       "Bash(find 'g:/Meu Drive/SEDU/2026/RPG_Novo/canary/src' -type f \\\\\\(-name *container* -o -name *action* \\\\\\))",
       "Bash(ls *.py)",
-      "Bash(python3 -c \":*)"
+      "Bash(python3 -c \":*)",
+      "Bash(dir /b \"G:\\\\Meu Drive\\\\SEDU\\\\2026\\\\RPG_Novo\")"
     ]
   }
 }

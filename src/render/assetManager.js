@@ -231,7 +231,8 @@ export class AssetManager {
     for (const [itemId, itemData] of Object.entries(this.mapData)) {
       if (!itemData.variants) continue;
       for (const [varKey, variant] of Object.entries(itemData.variants)) {
-        if (variant.atlas_index == null) continue;
+        const atlasIdx = variant.ai ?? variant.atlas_index;
+        if (atlasIdx == null) continue;
 
         const lookupKey = `${itemId}_${varKey}`;
         const hasAtlasVariant = this.mapAtlasLookup.has(lookupKey);
@@ -241,8 +242,8 @@ export class AssetManager {
         if (!this._useMapDataVariantCoords && hasAtlasVariant) continue;
 
         this.mapAtlasLookup.set(lookupKey, {
-          atlasIndex: variant.atlas_index,
-          atlasName: variant.atlas_name ?? "",
+          atlasIndex: atlasIdx,
+          atlasName: variant.atlas ?? variant.atlas_name ?? "",
           variant: { x: variant.x, y: variant.y, w: variant.w, h: variant.h },
         });
       }

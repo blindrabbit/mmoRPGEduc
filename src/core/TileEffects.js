@@ -82,21 +82,77 @@ function _findFloorChangeInItems(tile, nexoData) {
 
 // ── Floor Change direção ─────────────────────────────────────────
 
-/**
- * Dado que um tile tem isFloorChange=true (ou floorChange sem destOffset),
- * infere a direção por contexto:
- *  - Se há tile no mesmo (x,y) no andar ACIMA (z-1) → subir
- *  - Senão → descer (z+1)
- */
-function _resolveFloorChangeDirection(x, y, z, map) {
-  const aboveCoord = `${x},${y},${z - 1}`;
-  const goingUp = map?.[aboveCoord] != null;
+// Offsets cardinais: onde o player aparece no andar destino (OTClient convention)
+const _FLOOR_OFFSETS = {
+  north: { dx:  0, dy: -1 },
+  south: { dx:  0, dy: +1 },
+  east:  { dx: +1, dy:  0 },
+  west:  { dx: -1, dy:  0 },
+};
 
-  if (goingUp) {
+const _OPPOSITE = { north: "south", south: "north", east: "west", west: "east" };
+
+/**
+ * Para uma escada de descida em (x,y,z), procura a escada de subida no
+ * andar abaixo (z+1) na mesma posição e retorna a direção oposta.
+ * Isso garante que o player apareça do lado oposto da escada de subida,
+ * evitando loop imediato.
+ * @returns {string|null}  direção oposta ("east", "north"…) ou null
+ */
+function _resolveOppositeFromBelow(x, y, z, map, nexoData) {
+  const belowCoord = `${x},${y},${z + 1}`;
+  const belowTile = map?.[belowCoord];
+  if (!belowTile || !nexoData) return null;
+  const fc = _findFloorChangeInItems(belowTile, nexoData);
+  if (!fc?.direction) return null;
+  return _OPPOSITE[fc.direction] ?? null;
+}
+
+/**
+ * Resolve o destino de uma mudança de andar a partir de:
+ *   - direction "up"/"down" → z explícito, sem offset cardinal
+ *   - direction cardinal (north/south/east/west) → heurística para z,
+ *     offset cardinal aplicado (onde o player aparece no andar destino)
+ *   - direction null/desconhecido → heurística original
+ *
+ * Para "down": o player aparece no mesmo (x,y) do andar abaixo + 1 sqm ao sul
+ * para evitar cair de volta na escada de subida que estiver na mesma posição.
+ *
+ * @param {number} x
+ * @param {number} y
+ * @param {number} z
+ * @param {Object} map
+ * @param {string|null} direction  — "up"|"down"|"north"|"south"|"east"|"west"|null
+ */
+function _resolveFloorChangeDirection(x, y, z, map, direction = null, nexoData = null) {
+  // Direção cardinal explícita → usa heurística para z + offset cardinal
+  if (_FLOOR_OFFSETS[direction]) {
+    const aboveCoord = `${x},${y},${z - 1}`;
+    const goingUp = map?.[aboveCoord] != null;
+    const { dx, dy } = _FLOOR_OFFSETS[direction];
+    return { newX: x + dx, newY: y + dy, newZ: goingUp ? z - 1 : z + 1 };
+  }
+
+  // "down" explícito → força descida; busca direção oposta da escada de subida abaixo
+  if (direction === "down") {
+    const opposite = _resolveOppositeFromBelow(x, y, z, map, nexoData);
+    const { dx, dy } = _FLOOR_OFFSETS[opposite] ?? { dx: 0, dy: 1 }; // sul como fallback
+    return { newX: x + dx, newY: y + dy, newZ: z + 1 };
+  }
+
+  // "up" explícito → força subida, sem offset
+  if (direction === "up") {
     return { newX: x, newY: y, newZ: z - 1 };
   }
-  // Descendo: aparece 1 tile ao sul no andar abaixo (padrão Tibia)
-  return { newX: x, newY: y + 1, newZ: z + 1 };
+
+  // Fallback (sem direction): heurística por contexto
+  const aboveCoord = `${x},${y},${z - 1}`;
+  const goingUp = map?.[aboveCoord] != null;
+  return {
+    newX: x,
+    newY: goingUp ? y : y + 1,
+    newZ: goingUp ? z - 1 : z + 1,
+  };
 }
 
 // ── API pública ─────────────────────────────────────────────────
@@ -133,17 +189,21 @@ export function resolveStepOnEffects(x, y, z, worldState) {
   //    BUG FIX: campo no map_compacto.json é "flags", não "__flags"
   const flagId = tile.__flags ?? tile.flags ?? 0;
   const flags = FlagResolver.resolve(flagId);
+  const nexoData = worldState.assets?.mapData;
   if (flags.isFloorChange) {
-    const { newX, newY, newZ } = _resolveFloorChangeDirection(x, y, z, worldState.map);
+    // Tenta ler direction do map_data mesmo quando a flag vem do OTBM
+    const fc = _findFloorChangeInItems(tile, nexoData);
+    const { newX, newY, newZ } = _resolveFloorChangeDirection(
+      x, y, z, worldState.map, fc?.direction ?? null, nexoData
+    );
     return { type: "floor_change", newX, newY, newZ };
   }
 
   // 3. Mudança de andar — via floorChange no map_data do item
   //    Funciona mesmo sem TILESTATE_FLOORCHANGE setado no OTBM
-  const nexoData = worldState.assets?.mapData;
   const floorChange = _findFloorChangeInItems(tile, nexoData);
   if (floorChange) {
-    const { destOffset } = floorChange;
+    const { destOffset, direction } = floorChange;
     if (destOffset) {
       return {
         type: "floor_change",
@@ -152,8 +212,9 @@ export function resolveStepOnEffects(x, y, z, worldState) {
         newZ: z + (destOffset.z ?? 0),
       };
     }
-    // sem destOffset explícito: usa heurística de contexto
-    const { newX, newY, newZ } = _resolveFloorChangeDirection(x, y, z, worldState.map);
+    const { newX, newY, newZ } = _resolveFloorChangeDirection(
+      x, y, z, worldState.map, direction ?? null, nexoData
+    );
     return { type: "floor_change", newX, newY, newZ };
   }
 

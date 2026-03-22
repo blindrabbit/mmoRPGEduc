@@ -60,13 +60,13 @@ export class ItemDataService {
 
   /**
    * Retorna true se o item com este tileId pode ser pego pelo jogador.
-   * Fonte: game.is_pickupable || flags_raw.take
+   * Fonte: game.pickupable (novo flat) || game.is_pickupable || flags_raw.take
    * @param {number|string} tileId
    */
   canPickUp(tileId) {
     const entry = this._get(tileId);
     if (!entry) return false;
-    return !!(entry.game?.is_pickupable || entry.flags_raw?.take);
+    return !!(entry.game?.pickupable || entry.game?.is_pickupable || entry.flags_raw?.take);
   }
 
   /**
@@ -137,9 +137,14 @@ export class ItemDataService {
     if (entry.game?.is_walkable === true) return WALKABILITY.WALKABLE;
     if (entry.game?.is_walkable === false) return WALKABILITY.NOT_WALKABLE;
 
-    // 3. Fallback: flags_raw
-    if (entry.flags_raw?.bank?.waypoints > 0) return WALKABILITY.WALKABLE;
-    if (entry.flags_raw?.unpass === true) return WALKABILITY.NOT_WALKABLE;
+    // 3. game.walkable (novo flat) → derivado de unpass
+    if (entry.game?.walkable === true) return WALKABILITY.WALKABLE;
+    if (entry.game?.walkable === false) return WALKABILITY.NOT_WALKABLE;
+
+    // 4. Flags planos (novo formato) e flags_raw (legado)
+    const bank = entry.game?.bank ?? entry.flags_raw?.bank;
+    if (typeof bank === "object" ? bank?.waypoints > 0 : bank != null) return WALKABILITY.WALKABLE;
+    if (entry.game?.unpass === true || entry.flags_raw?.unpass === true) return WALKABILITY.NOT_WALKABLE;
 
     return WALKABILITY.NOT_WALKABLE;
   }

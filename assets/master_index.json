@@ -1,5 +1,5 @@
 {
-  "created_at": "2026-03-21T19:55:08.123178",
+  "created_at": "2026-03-21T20:52:39.722116",
   "config": {
     "atlas_max_width": 4096,
     "atlas_max_height": 4096,
@@ -24,7 +24,7 @@
       "atlas_name": "atlas_walls",
       "atlas_index": 0,
       "category": "walls",
-      "filename": "atlas_walls_00.png",
+      "filename": "atlas_walls.png",
       "width": 4096,
       "height": 4096,
       "actual_height": 764,
@@ -6299,13 +6299,13 @@
           }
         }
       },
-      "created_at": "2026-03-21T19:54:42.013982"
+      "created_at": "2026-03-21T20:52:06.187622"
     },
     {
       "atlas_name": "atlas_ground",
       "atlas_index": 1,
       "category": "ground",
-      "filename": "atlas_ground_01.png",
+      "filename": "atlas_ground.png",
       "width": 4096,
       "height": 4096,
       "actual_height": 102,
@@ -8384,13 +8384,13 @@
           }
         }
       },
-      "created_at": "2026-03-21T19:54:52.427879"
+      "created_at": "2026-03-21T20:52:17.436323"
     },
     {
       "atlas_name": "atlas_items",
       "atlas_index": 2,
       "category": "items",
-      "filename": "atlas_items_02.png",
+      "filename": "atlas_items.png",
       "width": 4096,
       "height": 4096,
       "actual_height": 298,
@@ -12559,13 +12559,13 @@
           }
         }
       },
-      "created_at": "2026-03-21T19:55:05.714976"
+      "created_at": "2026-03-21T20:52:36.038342"
     },
     {
       "atlas_name": "atlas_top",
       "atlas_index": 3,
       "category": "top",
-      "filename": "atlas_top_03.png",
+      "filename": "atlas_top.png",
       "width": 4096,
       "height": 4096,
       "actual_height": 66,
@@ -12830,7 +12830,7 @@
           }
         }
       },
-      "created_at": "2026-03-21T19:55:07.480040"
+      "created_at": "2026-03-21T20:52:38.916416"
     }
   ]
 }

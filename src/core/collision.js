@@ -10,7 +10,7 @@
 // SISTEMA 2 — Projéteis/magias:  game.blocks_missiles === true
 // SISTEMA 3 — Linha de visão:    game.blocks_sight === true
 //
-// Fallback formato novo: game.flags.movement.unpass
+// Fallback formato novo: game.unpass (plano, sem nested flags)
 // Fallback formato antigo: flags_raw.unpass === true
 // Fallback por ID: itemClassification.js (NOT_WALKABLE_IDS / WALKABLE_IDS)
 // ═══════════════════════════════════════════════════════════════
@@ -32,7 +32,7 @@ const IMPASSABLE_COST_THRESHOLD = 500;
  * Ordem de verificação:
  *   1. itemClassification.js (NOT_WALKABLE_IDS / WALKABLE_IDS) — máxima prioridade
  *   2. game.walkable (novo) ou game.is_walkable (legado)
- *   3. game.flags.movement.unpass / game.flags.movement.bank (novo)
+ *   3. game.unpass / game.bank (plano, sem nested flags)
  *   4. flags_raw.unpass / bank.waypoints (formato antigo)
  *
  * @param {Object|null} meta - Entrada do map_data para o item
@@ -54,12 +54,12 @@ function _itemWalkable(meta, itemId) {
     if (w === true) return true;
   }
 
-  // 3. game.flags.movement.unpass (novo) ou flags_raw.unpass (legado)
-  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  // 3. game.unpass (plano, novo) ou flags_raw.unpass (legado)
+  const unpass = meta?.game?.unpass ?? meta?.flags_raw?.unpass;
   if (unpass === true) return false;
 
   // 4. bank.waypoints > 0 = tile de chão walkable
-  const bankNew = meta?.game?.flags?.movement?.bank;
+  const bankNew = meta?.game?.bank;
   const bankOld = meta?.flags_raw?.bank;
   const bank = bankNew ?? bankOld;
   const waypoints = typeof bank === "object" ? bank?.waypoints : (bank != null ? 1 : null);
@@ -75,21 +75,21 @@ function _itemBlocksMovement(meta) {
     if (w === false) return true;
     if (meta.game.movement_cost === 0) return true;
   }
-  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  const unpass = meta?.game?.unpass ?? meta?.flags_raw?.unpass;
   return unpass === true;
 }
 
 function _itemBlocksMissiles(meta) {
   if (!meta) return false;
   if (meta.game) return meta.game.blocks_missiles === true;
-  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  const unpass = meta?.game?.unpass ?? meta?.flags_raw?.unpass;
   return unpass === true;
 }
 
 function _itemBlocksSight(meta) {
   if (!meta) return false;
   if (meta.game) return meta.game.blocks_sight === true;
-  const unpass = meta?.game?.flags?.movement?.unpass ?? meta?.flags_raw?.unpass;
+  const unpass = meta?.game?.unpass ?? meta?.flags_raw?.unpass;
   return unpass === true;
 }
 

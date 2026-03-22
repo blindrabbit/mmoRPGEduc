@@ -244,26 +244,31 @@ function classifyItemOT(metadata) {
   if (!metadata) return "common";
 
   const game = metadata.game || {};
-  // New format: flags are in game.flags.{movement,visual}
-  // Old format fallback: flags_raw at top level
-  const vflags = game.flags?.visual || metadata.flags_raw || {};
-  const mflags = game.flags?.movement || metadata.flags_raw || {};
+  const raw = metadata.flags_raw || {};
 
-  // ThingAttrGround (0) - bank flag or layer 0
-  // Paredes/montanhas com bank (ex: 1128) devem ser tratadas como bottom
-  if (mflags.bank || (game.layer ?? game.render_layer) === 0) {
+  // ✅ Novo formato: flags planos em game (sem nested flags.movement/visual)
+  // Fallback: flags_raw (formato legado do protobuf)
+  const bank      = game.bank      ?? raw.bank;
+  const clip      = game.clip      ?? raw.clip;
+  const bottom    = game.bottom    ?? raw.bottom;
+  const top       = game.top       ?? raw.top;
+  const topeffect = game.topeffect ?? raw.topeffect;
+
+  // ThingFlagAttrGround — bank (waypoints > 0) ou layer 0
+  // Paredes com bank (ex: 1128) → bottom, não ground
+  if (bank || (game.layer ?? game.render_layer) === 0) {
     if (game.category_type === "wall") return "bottom";
     return "ground";
   }
 
-  // ThingAttrGroundBorder (1) - clip sem bottom
-  if (vflags.clip && !vflags.bottom) return "groundBorder";
+  // ThingFlagAttrGroundBorder — clip sem bottom
+  if (clip && !bottom) return "groundBorder";
 
-  // ThingAttrOnBottom (2) - bottom flag
-  if (vflags.bottom) return "bottom";
+  // ThingFlagAttrOnBottom — bottom flag
+  if (bottom) return "bottom";
 
-  // ThingAttrOnTop (3) - top ou topeffect flag
-  if (vflags.top || vflags.topeffect) return "top";
+  // ThingFlagAttrOnTop — top ou topeffect flag
+  if (top || topeffect) return "top";
 
   // Default: common item
   return "common";
@@ -449,8 +454,8 @@ function calculateSpritePosition(
 ) {
   const _bb = metadata?.bounding_box;
   const bbox = (Array.isArray(_bb) ? _bb[0] : _bb) || { x: 0, y: 0 };
-  // New format: game.flags.visual.shift; old format fallback: flags_raw.shift
-  const shift = metadata?.game?.flags?.visual?.shift || metadata?.flags_raw?.shift || { x: 0, y: 0 };
+  // ✅ Novo: game.shift (plano); Fallback: flags_raw.shift (legado)
+  const shift = metadata?.game?.shift || metadata?.flags_raw?.shift || { x: 0, y: 0 };
 
   // Quantos tiles de 32px o sprite ocupa (dimensões REAIS do atlas)
   const sizeW = Math.ceil(spriteInfo.w / 32);

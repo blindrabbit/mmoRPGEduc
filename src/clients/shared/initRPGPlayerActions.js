@@ -623,25 +623,26 @@ function determineAction(player, tile, metadata) {
   if (!metadata) return PlayerAction.AUTOWALK_HIGHLIGHT;
 
   const game = metadata.game || {};
-  // New format: game.flags.*; old format fallback: flags_raw
-  const vflags = game.flags?.visual || metadata.flags_raw || {};
-  const mflags = game.flags?.movement || metadata.flags_raw || {};
+  const raw  = metadata.flags_raw || {};
+  // ✅ Novo: flags planos em game; Fallback: flags_raw (legado protobuf)
+  const bank      = game.bank      ?? raw.bank;
+  const clip      = game.clip      ?? raw.clip;
+  const bottom    = game.bottom    ?? raw.bottom;
 
   // Verifica default_action
-  const defaultActionRaw = game.flags?.interaction?.default_action
-    ?? metadata.flags_raw?.defaultAction;
+  const defaultActionRaw = game.default_action ?? raw.defaultAction;
   const defaultAction = typeof defaultActionRaw === "object"
     ? defaultActionRaw?.action
     : defaultActionRaw;
   if (defaultAction != null) return defaultAction;
 
   // Ground tile (bank ou layer 0) → autowalk
-  if (mflags.bank || (game.layer ?? game.render_layer) === 0) {
+  if (bank || (game.layer ?? game.render_layer) === 0) {
     return PlayerAction.AUTOWALK_HIGHLIGHT;
   }
 
   // GroundBorder (clip sem bottom) → autowalk
-  if (vflags.clip && !vflags.bottom) {
+  if (clip && !bottom) {
     return PlayerAction.AUTOWALK_HIGHLIGHT;
   }
 
@@ -651,7 +652,7 @@ function determineAction(player, tile, metadata) {
   }
 
   // Container → OPEN
-  if (game.container || game.flags?.interaction?.container) {
+  if (game.container) {
     return PlayerAction.OPEN;
   }
 
