@@ -4,11 +4,14 @@
 
 import { getActionSystem } from "../../core/actionSystem.js";
 import { registerDefaultActions } from "../../gameplay/defaultActions.js";
-import { PlayerAction } from "../../core/playerAction.js";
+import { PlayerAction, getActionCursor } from "../../core/playerAction.js";
 import { PathFinder } from "../../core/pathfinding.js";
 import { isTileWalkable } from "../../core/collision.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
 import { resolveStepOnEffects } from "../../core/TileEffects.js";
+import { calculateStepDuration } from "../../gameplay/gameCore.js";
+import { getDirectionFromDelta } from "../../gameplay/combatLogic.js";
+import { logger } from "../../core/logger.js";
 
 /**
  * Inicializa Player Actions específico para o RPG
@@ -26,7 +29,7 @@ export function initRPGPlayerActions({
   onPlayerMove,
   onPlayerAction,
 }) {
-  console.log("[RPG PlayerActions] Inicializando...");
+  logger.debug("[RPG PlayerActions] Inicializando...");
 
   // 1. Registra ações padrão
   registerDefaultActions(worldState);
@@ -50,7 +53,7 @@ export function initRPGPlayerActions({
   let _pendingItemMove = null;
 
   const handleItemOutOfReach = (eventData) => {
-    console.log("[RPG PlayerActions] ITEM_OUT_OF_REACH recebido:", eventData);
+    logger.debug("[RPG PlayerActions] ITEM_OUT_OF_REACH recebido:", eventData);
     const {
       targetPos,
       distance,
@@ -78,7 +81,7 @@ export function initRPGPlayerActions({
 
     // Valida posToMoveTo antes de usar
     if (!posToMoveTo || posToMoveTo.x == null || posToMoveTo.y == null) {
-      console.warn(
+      logger.warn(
         "[RPG PlayerActions] posToMoveTo inválido:",
         posToMoveTo,
         "moveToTarget:",
@@ -88,7 +91,7 @@ export function initRPGPlayerActions({
       return;
     }
 
-    console.log(
+    logger.debug(
       "[RPG PlayerActions] moveToTarget:",
       moveToTarget,
       "posToMoveTo:",
@@ -104,7 +107,7 @@ export function initRPGPlayerActions({
     );
 
     if (adjacentPos) {
-      console.log(
+      logger.debug(
         "[RPG PlayerActions] Movendo para posição adjacente:",
         adjacentPos,
         "para:",
@@ -113,7 +116,7 @@ export function initRPGPlayerActions({
       // Move player até posição adjacente
       executeWalkTo(player, adjacentPos, pathFinder, onPlayerMove, () => {
         // Após chegar, tenta mover o item automaticamente
-        console.log(
+        logger.debug(
           "[RPG PlayerActions] Player chegou perto,",
           moveToTarget ? "tentando soltar item" : "tentando pegar item",
         );
@@ -148,7 +151,7 @@ export function initRPGPlayerActions({
     onPlayerAction,
   });
 
-  console.log("[RPG PlayerActions] Sistema inicializado!");
+  logger.debug("[RPG PlayerActions] Sistema inicializado!");
   return { pathFinder };
 }
 
@@ -180,12 +183,12 @@ function setupRPGInputHandler({
 
     _dragOrigin = { x: tileX, y: tileY, z: player.z ?? 7 };
     _dragTarget = { x: tileX, y: tileY, z: player.z ?? 7 };
-    console.log("[RPG Input] pointerdown — origem do drag:", _dragOrigin);
+    logger.debug("[RPG Input] pointerdown — origem do drag:", _dragOrigin);
   };
 
   // Listener de pointerup — marca que houve drag recente
   const handlePointerUp = () => {
-    console.log(
+    logger.debug(
       "[RPG Input] pointerup — _dragTarget:",
       _dragTarget,
       "_dragOrigin:",
@@ -196,7 +199,7 @@ function setupRPGInputHandler({
     const hadActualDrag = document.body.classList.contains("item-dragging");
 
     if (hadActualDrag) {
-      console.log("[RPG Input] pointerup com drag detectado");
+      logger.debug("[RPG Input] pointerup com drag detectado");
       _wasDragging = true;
 
       // Limpa timeout anterior se existir
@@ -207,18 +210,14 @@ function setupRPGInputHandler({
         _wasDragging = false;
         _dragOrigin = null;
         _dragTarget = null;
-        console.log("[RPG Input] _wasDragging resetado");
+        logger.debug("[RPG Input] _wasDragging resetado");
       }, 200);
     } else {
-      console.log("[RPG Input] pointerup SEM drag");
+      logger.debug("[RPG Input] pointerup SEM drag");
     }
   };
 
-  // Adiciona listeners GLOBAIS (capturing phase) para garantir que pegamos o evento
-  document.addEventListener("pointerdown", handlePointerDown, true);
-  document.addEventListener("pointerup", handlePointerUp, true);
-
-  // Também adiciona no canvas
+  // Adiciona listeners no canvas (capturing phase)
   canvas.addEventListener("pointerdown", handlePointerDown, true);
   canvas.addEventListener("pointerup", handlePointerUp, true);
 
@@ -228,7 +227,7 @@ function setupRPGInputHandler({
 
   // Handler de clique no canvas
   const handleClick = (e) => {
-    console.log(
+    logger.debug(
       "[RPG Input] handleClick — _dragTarget:",
       _dragTarget,
       "_dragOrigin:",
@@ -240,7 +239,7 @@ function setupRPGInputHandler({
 
     // SE VEIO DE DRAG — Não processa como autowalk
     if (_wasDragging || isDraggingNow) {
-      console.log(
+      logger.debug(
         "[RPG Input] Ignorado — _wasDragging:",
         _wasDragging,
         "isDraggingNow:",
@@ -249,8 +248,8 @@ function setupRPGInputHandler({
       return;
     }
 
-    console.log("[RPG Input] Processando clique normal");
-    console.log(
+    logger.debug("[RPG Input] Processando clique normal");
+    logger.debug(
       "[RPG Input] _wasDragging:",
       _wasDragging,
       "isDraggingNow:",
@@ -273,7 +272,7 @@ function setupRPGInputHandler({
       z: player.z ?? 7,
     };
 
-    console.log(
+    logger.debug(
       "[RPG Input] targetTile:",
       targetTile,
       "_dragTarget foi usado:",
@@ -292,7 +291,7 @@ function setupRPGInputHandler({
     // Determina ação
     const action = determineAction(player, targetTile, metadata);
 
-    console.log("[RPG Input] Clique em", targetTile, "Ação:", action);
+    logger.debug("[RPG Input] Clique em", targetTile, "Ação:", action);
 
     // Executa ação
     if (action === PlayerAction.AUTOWALK_HIGHLIGHT || action === 4) {
@@ -372,7 +371,7 @@ function executeWalkTo(
   const result = pathFinder.findPath(start, goal);
 
   if (!result || result.path.length === 0) {
-    console.warn("[RPG PathFinder] Sem caminho para", goal);
+    logger.warn("[RPG PathFinder] Sem caminho para", goal);
     return;
   }
 
@@ -381,7 +380,7 @@ function executeWalkTo(
 
   function nextStep() {
     if (stepIndex >= result.path.length) {
-      console.log("[RPG Autowalk] Concluso!");
+      logger.debug("[RPG Autowalk] Concluso!");
       // Callback ao finalizar
       if (onComplete) onComplete();
       return;
@@ -400,13 +399,13 @@ function executeWalkTo(
     const effect = resolveStepOnEffects(nextPos.x, nextPos.y, nextPos.z, worldState);
     if (effect?.type === "teleport") {
       onPlayerMove(effect.dest.x, effect.dest.y, effect.dest.z, direction);
-      console.log(`[TileEffects] Teleporte → (${effect.dest.x},${effect.dest.y},${effect.dest.z})`);
+      logger.debug(`[TileEffects] Teleporte → (${effect.dest.x},${effect.dest.y},${effect.dest.z})`);
       if (onComplete) onComplete();
       return; // interrompe o autowalk
     }
     if (effect?.type === "floor_change") {
       onPlayerMove(effect.newX, effect.newY, effect.newZ, direction);
-      console.log(`[TileEffects] Mudança de andar → Z=${effect.newZ}`);
+      logger.debug(`[TileEffects] Mudança de andar → Z=${effect.newZ}`);
       if (onComplete) onComplete();
       return; // interrompe o autowalk
     }
@@ -459,7 +458,7 @@ function doFloorChange(player, metadata, onPlayerMove, onPlayerAction) {
   const floorChange = metadata?.game?.floor_change || -1;
   const newZ = (player.z ?? 7) + floorChange;
 
-  console.log("[FloorChange] Mudando para Z =", newZ);
+  logger.debug("[FloorChange] Mudando para Z =", newZ);
 
   // Notifica mudança
   if (onPlayerAction) {
@@ -482,7 +481,7 @@ function executeLook(targetTile, metadata) {
   const description = metadata?.description || "";
 
   const message = description ? `${name}: ${description}` : name;
-  console.log("[Look]", message);
+  logger.debug("[Look]", message);
 
   // Exibe no chat/log do RPG
   showRPGMessage(message, "look");
@@ -498,7 +497,7 @@ function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
     return;
   }
 
-  console.log("[Use]", metadata?.name || targetTile);
+  logger.debug("[Use]", metadata?.name || targetTile);
 
   if (onPlayerAction) {
     onPlayerAction({
@@ -531,7 +530,7 @@ function executeDoor(targetTile, metadata, worldState, onPlayerAction) {
   const isOpen = currentId === door.openId;
   const nextId = isOpen ? door.closedId : door.openId;
 
-  console.log(`[Door] ${isOpen ? "Fechando" : "Abrindo"} porta ${currentId} → ${nextId} em ${tileKey}`);
+  logger.debug(`[Door] ${isOpen ? "Fechando" : "Abrindo"} porta ${currentId} → ${nextId} em ${tileKey}`);
 
   // Troca o item no tile localmente (todos os layers)
   const layerKeys = Object.keys(tile).filter((k) => !isNaN(Number(k)));
@@ -574,7 +573,7 @@ function executeDoor(targetTile, metadata, worldState, onPlayerAction) {
  * Executa ação de Open
  */
 function executeOpen(player, targetTile, metadata, onPlayerAction) {
-  console.log("[Open]", metadata?.name || targetTile);
+  logger.debug("[Open]", metadata?.name || targetTile);
 
   if (onPlayerAction) {
     onPlayerAction({
@@ -600,7 +599,7 @@ function executeAttack(targetTile, worldState) {
       Math.round(mob.y) === targetTile.y
     ) {
       // Triggera ataque
-      console.log("[Attack] Alvo:", mob);
+      logger.debug("[Attack] Alvo:", mob);
 
       // Dispatch de evento para o sistema de combate
       window.dispatchEvent(
@@ -613,7 +612,7 @@ function executeAttack(targetTile, worldState) {
     }
   }
 
-  console.warn("[Attack] Nenhum alvo no tile");
+  logger.warn("[Attack] Nenhum alvo no tile");
 }
 
 /**
@@ -720,42 +719,6 @@ function getTileMetadata(tileData, nexoData) {
 }
 
 /**
- * Converte delta em direção
- */
-function getDirectionFromDelta(dx, dy) {
-  if (dx === 0 && dy === -1) return "costas";
-  if (dx === 0 && dy === 1) return "frente";
-  if (dx === -1 && dy === 0) return "lado-esquerdo";
-  if (dx === 1 && dy === 0) return "lado";
-  return "frente";
-}
-
-/**
- * Calcula duração do passo
- */
-function calculateStepDuration(speed) {
-  // Fórmula do RPG: speed 100 = 400ms, speed 200 = 200ms
-  return Math.max(100, Math.floor(40000 / speed));
-}
-
-/**
- * Retorna cursor baseado na ação
- */
-function getActionCursor(action) {
-  const cursorMap = {
-    0: "default",
-    1: "crosshair",
-    2: "pointer",
-    3: "pointer",
-    4: "move",
-    ATTACK: "crosshair",
-    TALK: "help",
-    TELEPORT: "alias",
-  };
-  return cursorMap[action] || "default";
-}
-
-/**
  * Mostra mensagem no chat do RPG
  */
 function showRPGMessage(message, type = "system") {
@@ -766,7 +729,7 @@ function showRPGMessage(message, type = "system") {
     }),
   );
 
-  console.log(`[RPG ${type}]`, message);
+  logger.debug(`[RPG ${type}]`, message);
 }
 
 /**
@@ -775,13 +738,13 @@ function showRPGMessage(message, type = "system") {
 function findAdjacentPosition(player, targetPos, map, nexoData) {
   // Valida player
   if (!player) {
-    console.warn("[findAdjacentPosition] Player undefined");
+    logger.warn("[findAdjacentPosition] Player undefined");
     return null;
   }
 
   // Valida targetPos
   if (!targetPos || targetPos.x == null || targetPos.y == null) {
-    console.warn("[findAdjacentPosition] targetPos inválido:", targetPos);
+    logger.warn("[findAdjacentPosition] targetPos inválido:", targetPos);
     return {
       x: Math.round(player.x),
       y: Math.round(player.y),
@@ -819,7 +782,7 @@ function findAdjacentPosition(player, targetPos, map, nexoData) {
  * Re-envia ação de mover item após player se aproximar
  */
 function retryItemMove(pendingMove, onPlayerAction) {
-  console.log("[RPG PlayerActions] Retry item move:", pendingMove);
+  logger.debug("[RPG PlayerActions] Retry item move:", pendingMove);
 
   const { source, slotIndex, worldItemId, targetPos } = pendingMove;
 
@@ -858,7 +821,7 @@ function retryItemMove(pendingMove, onPlayerAction) {
     });
   }
 
-  console.log("[RPG PlayerActions] Ação de move re-enviada");
+  logger.debug("[RPG PlayerActions] Ação de move re-enviada");
 }
 
 /**
@@ -876,24 +839,10 @@ export function cleanupRPGPlayerActions(canvas) {
   // Remove listeners de pointer (com capture=true)
   if (canvas?._rpgPointerUpHandler) {
     canvas.removeEventListener("pointerup", canvas._rpgPointerUpHandler, true);
-    document.removeEventListener(
-      "pointerup",
-      canvas._rpgPointerUpHandler,
-      true,
-    );
     canvas._rpgPointerUpHandler = null;
   }
   if (canvas?._rpgPointerDownHandler) {
-    canvas.removeEventListener(
-      "pointerdown",
-      canvas._rpgPointerDownHandler,
-      true,
-    );
-    document.removeEventListener(
-      "pointerdown",
-      canvas._rpgPointerDownHandler,
-      true,
-    );
+    canvas.removeEventListener("pointerdown", canvas._rpgPointerDownHandler, true);
     canvas._rpgPointerDownHandler = null;
   }
   // Remove listener de ITEM_OUT_OF_REACH

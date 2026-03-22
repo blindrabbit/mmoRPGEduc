@@ -162,6 +162,14 @@ async function _dispatch(actionId, action, now) {
       return _processAttack(normalizedAction, player, now);
     case "spell":
       return _processSpell(normalizedAction, player, now);
+    case "move":
+      return _processMove(normalizedAction, player, now);
+    case "map_tile_pickup":
+      return _processMapTilePickup(normalizedAction, player, now);
+    case "toggle_door":
+      return _processToggleDoor(normalizedAction, player, now);
+    case "change_floor":
+      return _processChangeFloor(normalizedAction, player, now);
     case "allocateStat":
       return _processAllocateStat(normalizedAction, player, now);
     case "item":
@@ -792,6 +800,119 @@ async function _processItem(action, player, now) {
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// MOVIMENTO — validado server-side
+// ---------------------------------------------------------------------------
+async function _processMove(action, player, now) {
+  const { playerId, x, y, z, direcao } = action;
+
+  const speedMs = Math.max(100, Math.floor(40000 / (player.speed ?? 120)));
+  if (_isOnCooldown(playerId, "move")) return;
+  _setCooldown(playerId, "move", speedMs);
+
+  const dx = Math.abs(x - (player.x ?? 0));
+  const dy = Math.abs(y - (player.y ?? 0));
+  if (dx > 1 || dy > 1) {
+    pushLog("error", `[${player.name}] movimento inválido: delta (${dx},${dy})`);
+    return;
+  }
+
+  if (z !== undefined && Math.abs(z - (player.z ?? 7)) > 1) {
+    pushLog("error", `[${player.name}] mudança de andar inválida`);
+    return;
+  }
+
+  await batchWrite({
+    [`${PATHS.playerData(playerId)}/x`]: x,
+    [`${PATHS.playerData(playerId)}/y`]: y,
+    [`${PATHS.playerData(playerId)}/z`]: z ?? player.z ?? 7,
+    [`${PATHS.playerData(playerId)}/direcao`]: direcao ?? "frente",
+    [`${PATHS.player(playerId)}/x`]: x,
+    [`${PATHS.player(playerId)}/y`]: y,
+    [`${PATHS.player(playerId)}/z`]: z ?? player.z ?? 7,
+    [`${PATHS.player(playerId)}/direcao`]: direcao ?? "frente",
+    [`${PATHS.player(playerId)}/lastMoveTime`]: now,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// MAP TILE PICKUP — converte tile do mapa em item via worldEngine
+// ---------------------------------------------------------------------------
+async function _processMapTilePickup(action, player, now) {
+  const { playerId, coord, tileId, mapLayer } = action;
+  if (!coord || !tileId || mapLayer == null) return;
+
+  const [tx, ty, tz] = String(coord).split(",").map(Number);
+  if (isNaN(tx) || isNaN(ty) || isNaN(tz)) return;
+
+  const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
+  if (dist > 1 || tz !== player.z) {
+    pushLog("error", `[${player.name}] tentou pegar tile fora de alcance`);
+    return;
+  }
+
+  const tempId = action.clientTempId ?? `maptile_${String(coord).replace(/,/g, "_")}_${tileId}_${now}`;
+  await batchWrite({
+    [`world_items/${tempId}`]: {
+      id: tempId, tileId: Number(tileId),
+      x: tx, y: ty, z: tz,
+      type: "material", quantity: 1, stackable: false,
+      fromMap: true, sourceCoord: coord,
+      sourceLayer: Number(mapLayer), sourceTileId: Number(tileId),
+      skipRangeCheck: false,
+      expiresAt: now + 60_000,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// TOGGLE DOOR — persiste troca de tile via evento
+// ---------------------------------------------------------------------------
+async function _processToggleDoor(action, player, now) {
+  const { playerId, target, fromId, toId } = action;
+  if (!target || fromId == null || toId == null) return;
+
+  const dist = Math.max(Math.abs(target.x - player.x), Math.abs(target.y - player.y));
+  if (dist > 1 || target.z !== player.z) {
+    pushLog("error", `[${player.name}] porta fora de alcance`);
+    return;
+  }
+
+  if (_isOnCooldown(playerId, "toggle_door")) return;
+  _setCooldown(playerId, "toggle_door", 500);
+
+  const { x, y, z } = target;
+  worldEvents.emit(EVENT_TYPES.DOOR_TOGGLED, {
+    x, y, z, fromId, toId, playerId, timestamp: now,
+  });
+
+  pushLog("system", `[${player.name}] ${fromId === action.fromId ? "abriu" : "fechou"} porta em ${x},${y}`);
+}
+
+// ---------------------------------------------------------------------------
+// CHANGE FLOOR — valida e persiste mudança de andar
+// ---------------------------------------------------------------------------
+async function _processChangeFloor(action, player, now) {
+  const { playerId, fromZ, toZ } = action;
+  if (fromZ == null || toZ == null) return;
+
+  if (Math.abs(toZ - fromZ) !== 1) {
+    pushLog("error", `[${player.name}] mudança de andar inválida: ${fromZ} → ${toZ}`);
+    return;
+  }
+
+  if (_isOnCooldown(playerId, "change_floor")) return;
+  _setCooldown(playerId, "change_floor", 600);
+
+  await batchWrite({
+    [`${PATHS.playerData(playerId)}/z`]: toZ,
+    [`${PATHS.player(playerId)}/z`]: toZ,
+    [`${PATHS.player(playerId)}/lastMoveTime`]: now,
+  });
+
+  pushLog("system", `[${player.name}] mudou de andar: Z${fromZ} → Z${toZ}`);
 }
 
 // ---------------------------------------------------------------------------

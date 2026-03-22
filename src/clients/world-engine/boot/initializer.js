@@ -781,29 +781,19 @@ export class Initializer {
               const coord = parts.join("_"); // "94,106,7"
               const [tx, ty, tz] = coord.split(",").map(Number);
 
-              const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${Date.now()}`;
-              await dbSet(`world_items/${tempId}`, {
-                id: tempId,
-                tileId,
-                name: itemDataService.getItemName(tileId) ?? `Item #${tileId}`,
-                x: tx,
-                y: ty,
-                z: tz,
-                type: "item",
-                quantity: 1,
-                stackable: itemDataService.isStackable(tileId),
-                fromMap: false,
-                sourceCoord: coord,
-                sourceLayer: Number(mapLayer),
-                sourceTileId: Number(tileId),
-                skipRangeCheck: true, // tile já está "no chão" do jogador
-                expiresAt: Date.now() + 60_000,
+              const _maptileTs = Date.now();
+              const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${_maptileTs}`;
+              const actionId = `${playerId}_map_tile_pickup_${_maptileTs}`;
+              await dbSet(`${PATHS.actions}/${actionId}`, {
+                id: actionId, playerId, type: "map_tile_pickup",
+                coord, tileId, mapLayer,
+                clientTempId: tempId,
+                ts: _maptileTs, expiresAt: _maptileTs + 5000,
               });
 
-              // Não remove localmente aqui. A remoção precisa ser dirigida pelo
-              // watcher de world_items para manter sincronia entre clientes.
+              // Aguarda o worldEngine processar e criar o world_item
               await new Promise((resolve) =>
-                setTimeout(resolve, MAP_SYNC_GRACE_MS),
+                setTimeout(resolve, Math.max(150, MAP_SYNC_GRACE_MS)),
               );
 
               payload = { ...payload, worldItemId: tempId };

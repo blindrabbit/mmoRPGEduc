@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // worldTick.js — Timer de tick do mundo + IA de monstros
 // ═══════════════════════════════════════════════════════════════
-import { initWorldStore, setTickRunning, getPlayers } from "../../../core/worldStore.js";
+import { initWorldStore, destroyWorldStore, setTickRunning, getPlayers } from "../../../core/worldStore.js";
 import {
   initMonsterManager,
   tickMonsters,
@@ -145,5 +145,6 @@ export class WorldTick {
   stop() {
     if (this._timer) clearInterval(this._timer);
     this._timer = null;
+    destroyWorldStore();
   }
 }

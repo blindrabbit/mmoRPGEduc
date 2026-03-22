@@ -25,6 +25,10 @@ import { initializePlayerStats } from "./progression/progressionSystem.js";
 // Atualiza players_data (persistente) e online_players (sessão) atomicamente.
 // ---------------------------------------------------------------------------
 
+/**
+ * @deprecated Use player_actions/{id} com type:"move" em vez de chamar diretamente.
+ * Esta função só deve ser usada internamente pelo worldEngine, nunca pelo cliente.
+ */
 export function handlePlayerSync(charId, myPos) {
   const normalized = makePlayer({ id: charId, ...myPos });
   // players_data: apenas subcampos de posição — NUNCA sobrescreve o nó inteiro

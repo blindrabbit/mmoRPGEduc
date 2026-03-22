@@ -1322,6 +1322,7 @@
     </div>
 
     <script type="module">
+      window.RPG_DEBUG = false; // Mude para true no console para ativar logs de debug
       import { AssetManager } from "./src/render/assetManager.js";
       import { AnimationController } from "./src/render/animationController.js";
       import {
@@ -1375,6 +1376,12 @@
         dbSet,
         PATHS,
       } from "./src/core/db.js";
+      import {
+        authSignIn,
+        authSignOut,
+        onAuthChange,
+        getCurrentUser,
+      } from "./src/core/firebaseClient.js";
       import {
         initWorldStore,
         getMonsters,
@@ -2227,10 +2234,10 @@
           errEl.textContent = "";
           btn.disabled = true;
           try {
+            const user = await authSignIn(email, pass);
             const account = await findAccountByEmail(email);
-            if (!account) throw new Error("E-mail não encontrado.");
-            if (account.pass !== pass) throw new Error("Senha incorreta.");
-            _currentAccount = account;
+            if (!account) throw new Error("Conta não encontrada no banco.");
+            _currentAccount = { ...account, uuid: user.uid };
             document.getElementById("auth-overlay").style.display = "none";
             showCharacterSelect();
           } catch (e) {
@@ -2240,10 +2247,11 @@
           }
         });
 
-      document.getElementById("btn-logout").addEventListener("click", () => {
+      document.getElementById("btn-logout").addEventListener("click", async () => {
         _cleanup();
         myPos = null;
         _currentAccount = null;
+        await authSignOut().catch(() => {});
         document.getElementById("game-wrapper").style.display = "none";
         document.getElementById("auth-overlay").style.display = "flex";
       });
@@ -2726,37 +2734,19 @@
                       LIQUID_TYPES[liquidIndex] ?? "empty";
                   }
 
-                  const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${Date.now()}`;
-                  await dbSet(`world_items/${tempId}`, {
-                    // Campos extras do tile original (ex: content_type)
-                    ...extraFields,
-
-                    id: tempId,
-                    tileId,
-                    name:
-                      itemDataService?.getItemName?.(tileId) ??
-                      `Item #${tileId}`,
-                    x: tx,
-                    y: ty,
-                    z: tz,
-                    type:
-                      itemDataService?.getEntry?.(tileId)?.game
-                        ?.category_type ?? "material",
-                    quantity: tileQuantity,
-                    count: tileQuantity,
-                    stackable: itemDataService?.isStackable?.(tileId) ?? false,
-                    fromMap: true,
-                    sourceCoord: coord,
-                    sourceLayer: Number(mapLayer),
-                    sourceTileId: Number(tileId),
-                    skipRangeCheck: true,
-                    expiresAt: Date.now() + 60_000,
+                  const _maptileTs = Date.now();
+                  const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${_maptileTs}`;
+                  const actionId = `${uid}_map_tile_pickup_${_maptileTs}`;
+                  await dbSet(`${PATHS.actions}/${actionId}`, {
+                    id: actionId, playerId: uid, type: "map_tile_pickup",
+                    coord, tileId, mapLayer,
+                    clientTempId: tempId,
+                    ts: _maptileTs, expiresAt: _maptileTs + 5000,
                   });
 
-                  // Não remove localmente aqui. A remoção do tile do mapa deve
-                  // acontecer via snapshot de world_items em TODOS os clientes.
+                  // Aguarda o worldEngine processar e criar o world_item
                   await new Promise((resolve) =>
-                    setTimeout(resolve, MAP_SYNC_GRACE_MS),
+                    setTimeout(resolve, Math.max(150, MAP_SYNC_GRACE_MS)),
                   );
 
                   payload = { ...payload, worldItemId: tempId, tileId };
@@ -3343,13 +3333,9 @@
             getMonsters,
           },
           canvas,
-          onPlayerMove: (nx, ny, nz, dir) => {
+          onPlayerMove: async (nx, ny, nz, dir) => {
             // Callback de movimento do Player Actions
             if (nx !== myPos.x || ny !== myPos.y || dir !== myPos.direcao) {
-              const oldX = myPos.x;
-              const oldY = myPos.y;
-              const oldZ = myPos.z;
-
               myPos.oldX = myPos.x;
               myPos.oldY = myPos.y;
               myPos.x = nx;
@@ -3357,7 +3343,15 @@
               myPos.z = nz;
               myPos.direcao = dir;
               myPos.lastMoveTime = Date.now();
-              handlePlayerSync(uid, myPos);
+
+              // Envia para validação pelo worldEngine (zero-trust)
+              const actionId = `${uid}_move_${Date.now()}`;
+              dbSet(`${PATHS.actions}/${actionId}`, {
+                id: actionId, playerId: uid, type: "move",
+                x: nx, y: ny, z: nz, direcao: dir,
+                ts: Date.now(), expiresAt: Date.now() + 5000,
+              }).catch(() => {});
+
               pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
 
               // Verifica se há position action registrada para esta posição

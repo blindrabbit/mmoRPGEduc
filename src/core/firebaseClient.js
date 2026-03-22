@@ -18,10 +18,32 @@ import {
   onChildChanged,
   onDisconnect,
 } from "https://www.gstatic.com/firebasejs/10.5.0/firebase-database.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged,
+} from "https://www.gstatic.com/firebasejs/10.5.0/firebase-auth.js";
 import { firebaseConfig } from "./firebase.config.js";
 
 export const app = initializeApp(firebaseConfig);
 export const db  = getDatabase(app);
+export const auth = getAuth(app);
+
+export async function authSignIn(email, password) {
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  return cred.user;
+}
+export async function authSignOut() {
+  return signOut(auth);
+}
+export function onAuthChange(callback) {
+  return onAuthStateChanged(auth, callback);
+}
+export function getCurrentUser() {
+  return auth.currentUser;
+}
 
 // ---------------------------------------------------------------------------
 // LEITURA

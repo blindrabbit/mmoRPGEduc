@@ -63,6 +63,7 @@ export function setTickRunning(val) {
 // INIT — chame uma vez no boot de qualquer tela
 // ---------------------------------------------------------------------------
 let initialized = false;
+const _watchers = [];
 
 export function initWorldStore() {
   if (initialized) return;
@@ -73,10 +74,10 @@ export function initWorldStore() {
   // de combat quando ticks se sobrepunham (async setInterval). mergeMonsters já preserva
   // os campos de AI local (lastAiTick, lastAttack) via spread order, portanto é seguro
   // atualizar o store mesmo durante um tick em andamento.
-  watchMonsters((data) => {
+  _watchers.push(watchMonsters((data) => {
     mergeMonsters(normalizeCollection(data, "monster"));
     notify("monsters", state.monsters);
-  });
+  }));
 
   // também faz uma leitura pontual imediata para garantir que qualquer
   // monstro persistido *antes* da conexão seja carregado mesmo que o
@@ -94,16 +95,16 @@ export function initWorldStore() {
     });
 
   // online_players — jogadores
-  watchPlayers((data) => {
+  _watchers.push(watchPlayers((data) => {
     mergePlayers(normalizeCollection(data, "player"));
     notify("players", state.players);
-  });
+  }));
 
   // world_effects — efeitos visuais e cadáveres
   // Usa child_added/removed em vez de onValue para que cada effect
   // apareça individualmente assim que chega — sem esperar todos os
   // filhos de um batchWrite (crítico para animações AOE em sequência).
-  watchEffectsChildren({
+  _watchers.push(watchEffectsChildren({
     onAdd: (id, data) => {
       if (!data) return;
       // Override startTime with client receive time so every client sees the
@@ -132,25 +133,38 @@ export function initWorldStore() {
       }
       notify("effects", state.effects);
     },
-  });
+  }));
 
   // world_fields — campos persistentes (fogo, veneno, etc.)
-  watchFields((data) => {
+  _watchers.push(watchFields((data) => {
     state.fields = normalizeCollection(data, "field");
     notify("fields", state.fields);
-  });
+  }));
 
   // monster_templates — catálogo remoto canônico (nome/species/ataques)
-  watchMonsterTemplates((data) => {
+  _watchers.push(watchMonsterTemplates((data) => {
     setMonsterTemplates(data || {});
-  });
+  }));
 
   // world_chat — mensagens de chat (child_added, entregue uma a uma)
-  watchChat((msg) => {
+  _watchers.push(watchChat((msg) => {
     state.chat.push(msg);
     if (state.chat.length > 200) state.chat.shift(); // cap local
     notify("chat", msg);
-  });
+  }));
+}
+
+export function destroyWorldStore() {
+  _watchers.forEach(unsub => { try { unsub(); } catch(e) {} });
+  _watchers.length = 0;
+  initialized = false;
+  state.monsters = {};
+  state.players = {};
+  state.effects = {};
+  state.fields = {};
+  state.chat = [];
+  _monsters.clear();
+  _players.clear();
 }
 
 // ---------------------------------------------------------------------------

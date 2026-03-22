@@ -30,7 +30,7 @@ export function getSpellCooldownRemaining(playerId, spellId) {
     (_cooldowns.get(_cdKey(playerId, spellId)) ?? 0) - Date.now(),
   );
 }
-function _setCooldown(playerId, spellId, ms) {
+function _setSpellCooldown(playerId, spellId, ms) {
   _cooldowns.set(_cdKey(playerId, spellId), Date.now() + ms);
 }
 

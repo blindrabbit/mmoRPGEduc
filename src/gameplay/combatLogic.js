@@ -291,19 +291,6 @@ export function getAreaTiles({ caster, shape = "cross", size = 1, direction }) {
 }
 
 /**
- * Verifica se um tile é walkable consultando mapData.
- *
- * @param {{ x: number, y: number }} tile
- * @param {Object} mapData - Mapa indexado por "x_y"
- * @returns {boolean}
- */
-export function isTileWalkable(tile, mapData) {
-  if (!mapData) return true;
-  const key = `${Math.round(tile.x)}_${Math.round(tile.y)}`;
-  return mapData[key]?.is_walkable !== false;
-}
-
-/**
  * Verifica se atacante está em alcance para atacar alvo
  */
 export function isInAttackRange(attacker, target, weaponRange = 1) {

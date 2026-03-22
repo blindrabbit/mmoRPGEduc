@@ -5,7 +5,8 @@
 
 import { getActionSystem } from "./actionSystem.js";
 import { PlayerAction } from "./playerAction.js";
-import { dbSet, PATHS } from "./db.js";
+import { dbSet, batchWrite, PATHS } from "./db.js";
+import { worldEvents, EVENT_TYPES } from "./events.js";
 
 // Função para acessar dbSet e PATHS (pode ser null em alguns contextos)
 function requireStorage() {
@@ -234,21 +235,34 @@ export class ActionConfigLoader {
 
     // Teleporte
     if (effects.teleportTo) {
-      player.x = effects.teleportTo.x;
-      player.y = effects.teleportTo.y;
-      player.z = effects.teleportTo.z ?? player.z;
-      console.log(
-        "[ActionEffect] Teleporte para",
-        player.x,
-        player.y,
-        player.z,
-      );
+      const { x, y, z } = effects.teleportTo;
+      player.x = x;
+      player.y = y;
+      player.z = z ?? player.z;
+
+      if (player.id) {
+        batchWrite({
+          [`${PATHS.playerData(player.id)}/x`]: x,
+          [`${PATHS.playerData(player.id)}/y`]: y,
+          [`${PATHS.playerData(player.id)}/z`]: z ?? player.z,
+          [`${PATHS.player(player.id)}/x`]: x,
+          [`${PATHS.player(player.id)}/y`]: y,
+          [`${PATHS.player(player.id)}/z`]: z ?? player.z,
+        }).catch(err => console.error("[ActionEffect] Erro ao salvar teleporte:", err));
+      }
     }
 
     // Mudança de floor
     if (effects.floorChange) {
-      player.z = (player.z ?? 7) + effects.floorChange;
-      console.log("[ActionEffect] Floor change para", player.z);
+      const newZ = (player.z ?? 7) + effects.floorChange;
+      player.z = newZ;
+
+      if (player.id) {
+        batchWrite({
+          [`${PATHS.playerData(player.id)}/z`]: newZ,
+          [`${PATHS.player(player.id)}/z`]: newZ,
+        }).catch(err => console.error("[ActionEffect] Erro ao salvar floorChange:", err));
+      }
     }
 
     // Dano
@@ -314,17 +328,15 @@ export class ActionConfigLoader {
       player.stats.hp = newHp;
     }
 
-    console.log(
-      `[ActionEffect] Dano: ${amount} (${type}) → HP: ${currentHp} → ${newHp}`,
-    );
+    if (player.id) {
+      batchWrite({
+        [`${PATHS.playerData(player.id)}/stats/hp`]: newHp,
+        [`${PATHS.player(player.id)}/stats/hp`]: newHp,
+      }).catch(err => console.error("[ActionEffect] Erro ao salvar dano:", err));
+    }
 
-    // Emite evento de dano
-    this.emitEvent("actionDamage", {
-      playerId: player.id,
-      amount,
-      type,
-      newHp,
-    });
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, { playerId: player.id, amount, type, newHp });
+    this.emitEvent("actionDamage", { playerId: player.id, amount, type, newHp });
   }
 
   /**
@@ -339,9 +351,14 @@ export class ActionConfigLoader {
       player.stats.hp = newHp;
     }
 
-    console.log(`[ActionEffect] Cura: ${amount} → HP: ${currentHp} → ${newHp}`);
+    if (player.id) {
+      batchWrite({
+        [`${PATHS.playerData(player.id)}/stats/hp`]: newHp,
+        [`${PATHS.player(player.id)}/stats/hp`]: newHp,
+      }).catch(err => console.error("[ActionEffect] Erro ao salvar cura:", err));
+    }
 
-    // Emite evento de cura
+    worldEvents.emit(EVENT_TYPES.HEAL_RECEIVED ?? "heal:received", { playerId: player.id, amount, newHp });
     this.emitEvent("actionHeal", { playerId: player.id, amount, newHp });
   }
 

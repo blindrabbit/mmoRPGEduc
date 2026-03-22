@@ -6,7 +6,15 @@
     "online_players": {
       "$playerId": {
         ".read": true,
-        ".write": true,
+        ".write": "auth != null && auth.uid === $playerId",
+
+        "isAdmin": { ".validate": "false" },
+        "isGM":    { ".validate": "false" },
+        "role":    { ".validate": "false" },
+        "appearance": {
+          "isAdmin": { ".validate": "false" },
+          "$other":  { ".validate": true }
+        },
 
         "x": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
@@ -58,7 +66,7 @@
     "players_data": {
       "$playerId": {
         ".read": true,
-        ".write": true,
+        ".write": "auth != null && auth.uid === $playerId",
 
         "x": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
@@ -110,7 +118,7 @@
     "world_entities": {
       "$monsterId": {
         ".read": true,
-        ".write": true,
+        ".write": "auth != null",
 
         "x": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
@@ -150,7 +158,7 @@
     "world_effects": {
       "$effectId": {
         ".read": true,
-        ".write": true,
+        ".write": "auth != null",
 
         "x": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
@@ -188,7 +196,7 @@
     "world_fields": {
       "$fieldId": {
         ".read": true,
-        ".write": true,
+        ".write": "auth != null",
 
         "x": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
@@ -232,11 +240,11 @@
     "player_actions": {
       "$actionId": {
         ".read":  true,
-        ".write": true,
+        ".write": "auth != null && (!newData.child('playerId').exists() || newData.child('playerId').val() === auth.uid)",
 
         "id":       { ".validate": "newData.isString()" },
         "playerId": { ".validate": "newData.isString()" },
-        "type":     { ".validate": "newData.isString() && newData.val().matches(/^(attack|spell)$/)" },
+        "type":     { ".validate": "newData.isString() && newData.val().matches(/^(attack|spell|move|item|map_tile_pickup|toggle_door|change_floor|allocateStat)$/)" },
         "ts":       { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "expiresAt":{ ".validate": "newData.isNumber() && newData.val() >= 0" },
 
@@ -249,27 +257,42 @@
 
     "world_state": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     },
 
     "monster_templates": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     },
 
     "world_tiles": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
     },
 
     "world_tiles_data": {
       ".read": true,
-      ".write": true
+      ".write": "auth != null"
+    },
+
+    "world_items": {
+      "$itemId": {
+        ".read": true,
+        ".write": "auth != null",
+        "skipRangeCheck": { ".validate": "false" },
+        "$other": { ".validate": true }
+      }
     },
 
     "accounts": {
-      ".read": true,
-      ".write": true
+      "$accountId": {
+        ".read": true,
+        ".write": "auth != null && auth.uid === $accountId",
+        "isAdmin": { ".validate": "false" },
+        "isGM":    { ".validate": "false" },
+        "role":    { ".validate": "newData.val() === 'player'" },
+        "$other":  { ".validate": true }
+      }
     }
   }
 }

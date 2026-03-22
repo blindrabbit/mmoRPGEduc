@@ -32,6 +32,7 @@ export const EVENT_TYPES = {
   PLAYER_MOVE: "player:move",
   MONSTER_MOVE: "monster:move",
   MAP_TRANSITION: "map:transition",
+  DOOR_TOGGLED: "map:doorToggled",
 
   // === PROGRESSÃO ===
   PROGRESSION_XP_GAIN: "progression:xpGain",

@@ -18,13 +18,28 @@ import { getVisibleFloors } from "../core/floorVisibility.js";
 const USE_NEW_ASSETS = true; // true = ASSETS_NOVO, false = ASSETS (legado)
 const MAX_DRAW_ELEVATION = 16; // Limite máximo de elevation (OTClient)
 
-const _variantCache = new Map();
-const _sortedKeysCache = new Map();
+function _boundedMap(maxSize = 2000) {
+  const m = new Map();
+  return {
+    get: (k) => m.get(k),
+    set: (k, v) => {
+      if (m.size >= maxSize) m.delete(m.keys().next().value);
+      m.set(k, v);
+    },
+    has: (k) => m.has(k),
+    delete: (k) => m.delete(k),
+    clear: () => m.clear(),
+    get size() { return m.size; },
+  };
+}
+
+const _variantCache = _boundedMap(5000);
+const _sortedKeysCache = _boundedMap(3000);
 let _floorAlphaCache = null;
 let _floorAlphaCacheKey = "";
-const _spriteCategoryCache = new Map(); // spriteId -> { meta, category }
-const _spriteElevationCache = new Map(); // spriteId -> { meta, elevation }
-const _anyVariantLookupCache = new Map(); // spriteId -> lookup|null
+const _spriteCategoryCache = _boundedMap(2000); // spriteId -> { meta, category }
+const _spriteElevationCache = _boundedMap(2000); // spriteId -> { meta, elevation }
+const _anyVariantLookupCache = _boundedMap(2000); // spriteId -> lookup|null
 
 function _flattenTileItems(tileLayers, layerKeys) {
   const keys =
@@ -927,6 +942,14 @@ function _calcFloorAlphas(
 /**
  * Renderiza mapa seguindo ordem OTClient (tile.cpp)
  *
+export function clearRenderCaches() {
+  _variantCache.clear();
+  _sortedKeysCache.clear();
+  _spriteCategoryCache.clear();
+  _spriteElevationCache.clear();
+  _anyVariantLookupCache.clear();
+}
+
  * PASSO 1: drawGround() para TODOS os tiles
  *   → Ground + GroundBorder
  *
