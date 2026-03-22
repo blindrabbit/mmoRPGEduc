@@ -12,7 +12,7 @@ import {
   GROUND_Z,
   UNIFIED_RENDER_OPTIONS,
 } from "../core/config.js";
-import { canSeeFloor, getVisibleFloors } from "../core/floorVisibility.js";
+import { canSeeFloor, getVisibleFloors, calcFirstVisibleFloor } from "../core/floorVisibility.js";
 import { renderMap, getTileDrawElevation } from "./mapRenderer.js";
 import { sortEntitiesForRender } from "../core/renderOrder.js";
 import { STACK_POSITION } from "../core/stackPosition.js";
@@ -196,6 +196,14 @@ function renderEntitiesFull(
       const entZ = Number.isFinite(entZRaw) ? entZRaw : floorRef;
       if (showBodiesAcrossVisibleFloors) {
         if (!canSeeFloor(floorRef, entZ)) return false;
+        // calcFirstVisibleFloor: oculta creatures em andares cobertos por teto/parede
+        // (replica OTClient MapView::calcFirstVisibleFloor com coveredUp())
+        if (map && mapData) {
+          const camTileX = Math.floor(_observer.x);
+          const camTileY = Math.floor(_observer.y);
+          const firstVisible = calcFirstVisibleFloor(camTileX, camTileY, floorRef, map, mapData);
+          if (entZ < firstVisible) return false;
+        }
       } else if (entZ !== floorRef) {
         return false;
       }
@@ -568,22 +576,41 @@ export function renderWorld({
   // Paredes/edifícios são itens "bottom" no OTClient — desenhados ANTES das criaturas.
   // Árvores/vegetação (obstacle com clip) são "top" — desenhados APÓS, cobrindo o player.
   const _wallCategories = new Set(["wall", "building"]);
+  // Categorias que são genuinamente top items (redesenhados APÓS o player).
+  // "obstacle" foi REMOVIDO: obstacles são bottom items no OTClient (OnBottom),
+  // NUNCA occluders. Bancadas, escadas e furniture não devem cobrir o player.
+  // Referência: OTClient tile.cpp — bottom items usam DrawOrder::THIRD fixo.
   const _vegetationCategories = new Set([
     "tree",
     "vegetation",
     "flora",
     "foliage",
-    "obstacle",
+    "top_decoration",
+    // "obstacle" REMOVIDO — obstacle+bottom=furniture, obstacle+clip=groundBorder
+    // Nenhum dos dois deve cobrir o player
   ]);
   const isOccluder = (spriteMeta) => {
-    const category = String(
-      spriteMeta?.game?.category_type ?? "",
-    ).toLowerCase();
-    // Paredes e edifícios nunca cobrem criaturas (são bottom items)
+    const game = spriteMeta?.game ?? {};
+    const raw  = spriteMeta?.flags_raw ?? {};
+
+    // Regra primária (OTClient): ThingFlagAttrOnTop = único flag que faz item cobrir creature
+    const hasTopFlag = game.top || raw.top || game.topeffect || raw.topeffect;
+    if (hasTopFlag) return true;
+
+    const category = String(game.category_type ?? "").toLowerCase();
+
+    // Paredes, edifícios, obstacles e furniture são bottom items — NUNCA occluders
     if (_wallCategories.has(category)) return false;
-    // Vegetação/árvores/obstáculos sempre são occluders (são top items)
+    if (category === "obstacle" || category === "furniture") return false;
+
+    // Vegetação visual e top_decoration → occluder
     if (_vegetationCategories.has(category)) return true;
-    // Sprites altos (maiores que 1 tile) são occluders por default
+
+    // floor_decoration e ground nunca cobrem o player
+    if (category === "floor_decoration" || category === "ground" ||
+        category === "ground_border") return false;
+
+    // Sprites visualmente altos (>1 tile) sem categoria explícita → occluder cauteloso
     return (spriteMeta?.grid_size ?? TILE_SIZE) > TILE_SIZE;
   };
 

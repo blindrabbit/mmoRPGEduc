@@ -73,9 +73,20 @@ export const UNIFIED_RENDER_OPTIONS = Object.freeze({
   upperFloorsBeforeEntities: true,
   topDecorBeforeEntities: false,
   labelsSameFloorOnly: true,
+
+  // true = criaturas de andares adjacentes visíveis com offset isométrico (Tibia original)
+  // false = apenas criaturas do andar ativo (mais simples, menos fiel)
   showBodiesAcrossVisibleFloors: true,
+
+  // true = y-sort ativo: tiles ao sul do player são redesenhados após o player
+  // Necessário para árvores/vegetação (top items) cobrirem o player corretamente
   useFrontOcclusionSort: true,
+
+  // true = andares superiores (Z<activeZ) renderizados sobre o andar ativo
+  // Necessário para telhados de prédios aparecerem quando player está dentro
   showUpperFloors: true,
+
+  // true = items com category=top (copas de árvore) redesenhados após player
   showTopDecor: true,
 });
 

@@ -198,51 +198,62 @@ export function getTileDrawElevation({
   const metaIndex = nexoData ?? assets?.mapData ?? null;
   if (!metaIndex || typeof metaIndex !== "object") return 0;
 
-  let items = null;
-  const coord = `${tx},${ty},${tz}`;
-  const fromIndex = floorIndex?.get?.(tz)?.get?.(coord);
-
-  if (fromIndex) {
-    items =
-      fromIndex.flatItems ??
-      (fromIndex.layers
-        ? _flattenTileItems(fromIndex.layers, fromIndex.layerKeys)
-        : (fromIndex.items ?? []));
-  } else {
-    const tileValue = map?.[coord];
-    if (!tileValue) return 0;
-    if (Array.isArray(tileValue)) {
-      items = tileValue;
-    } else if (Array.isArray(tileValue?.items)) {
-      items = tileValue.items;
-    } else if (tileValue && typeof tileValue === "object") {
-      const layerKeys = Object.keys(tileValue)
-        .map((k) => parseInt(k, 10))
-        .filter((n) => Number.isFinite(n))
-        .sort((a, b) => a - b);
-      items = _flattenTileItems(tileValue, layerKeys);
+  // Função auxiliar: extrai e soma elevation de um tile
+  function _elevFromTile(checkX, checkY, onlyMultiTile = false) {
+    const coord = `${checkX},${checkY},${tz}`;
+    let items = null;
+    const fromIndex = floorIndex?.get?.(tz)?.get?.(coord);
+    if (fromIndex) {
+      items = fromIndex.flatItems ??
+        (fromIndex.layers
+          ? _flattenTileItems(fromIndex.layers, fromIndex.layerKeys)
+          : (fromIndex.items ?? []));
+    } else {
+      const tileValue = map?.[coord];
+      if (!tileValue) return 0;
+      if (Array.isArray(tileValue)) items = tileValue;
+      else if (Array.isArray(tileValue?.items)) items = tileValue.items;
+      else if (typeof tileValue === "object") {
+        const lk = Object.keys(tileValue).map(k=>parseInt(k,10))
+          .filter(n=>Number.isFinite(n)).sort((a,b)=>a-b);
+        items = _flattenTileItems(tileValue, lk);
+      }
     }
+    if (!Array.isArray(items) || items.length === 0) return 0;
+
+    let elev = 0;
+    for (const item of items) {
+      const spriteId = typeof item === "object" && item !== null ? item.id : item;
+      if (!spriteId) continue;
+      const spriteMeta = metaIndex[String(spriteId)];
+      if (!spriteMeta) continue;
+      // Se só queremos multi-tile, pular sprites 32x32
+      if (onlyMultiTile) {
+        const gs = spriteMeta.grid_size ?? 32;
+        if (gs <= 32) continue;
+      }
+      const category = classifyItemOT(spriteMeta);
+      if (category === "ground" || category === "groundBorder" || category === "top") continue;
+      const e = _getSpriteElevation(spriteId, metaIndex);
+      elev = Math.min(elev + e, MAX_DRAW_ELEVATION);
+    }
+    return elev;
   }
 
-  if (!Array.isArray(items) || items.length === 0) return 0;
+  // Elevation do tile exato do player
+  let elevation = _elevFromTile(tx, ty, false);
 
-  let elevation = 0;
-  for (const item of items) {
-    const spriteId = typeof item === "object" && item !== null ? item.id : item;
-    if (spriteId == null || spriteId === 0) continue;
-
-    const spriteMeta = metaIndex[String(spriteId)];
-    const category = classifyItemOT(spriteMeta);
-    if (
-      category === "ground" ||
-      category === "groundBorder" ||
-      category === "top"
-    ) {
-      continue;
-    }
-
-    const elev = _getSpriteElevation(spriteId, metaIndex);
-    elevation = Math.min(elevation + elev, MAX_DRAW_ELEVATION);
+  // Verificar tiles vizinhos para sprites multi-tile (gs > 32) com âncora bottom-right.
+  // Um sprite 2x2 em (ax, ay) cobre (ax-1,ay-1),(ax,ay-1),(ax-1,ay),(ax,ay).
+  // Para o player em (tx, ty), verificar (tx+1,ty), (tx,ty+1), (tx+1,ty+1).
+  // Se algum desses tiles tem sprite multi-tile com h_elev, ele cobre o tile do player.
+  if (elevation === 0) {
+    const neighborElev = Math.max(
+      _elevFromTile(tx + 1, ty,     true),
+      _elevFromTile(tx,     ty + 1, true),
+      _elevFromTile(tx + 1, ty + 1, true),
+    );
+    elevation = neighborElev;
   }
 
   return elevation;
@@ -277,13 +288,45 @@ function classifyItemOT(metadata) {
   }
 
   // ThingFlagAttrGroundBorder — clip sem bottom
-  if (clip && !bottom) return "groundBorder";
+  // EXCEÇÃO: clip+unpass (arbustos bloqueantes) são OnBottom no OTClient,
+  // NÃO groundBorder. Devem aparecer no main pass SOBRE as bordas de grama.
+  const unpassForClip = game.unpass ?? raw.unpass;
+  if (clip && !bottom) {
+    if (unpassForClip) return "bottom";   // arbusto/pedra bloqueante → bottom
+    return "groundBorder";                // borda de grama, detalhe de chão → groundBorder
+  }
 
   // ThingFlagAttrOnBottom — bottom flag
   if (bottom) return "bottom";
 
   // ThingFlagAttrOnTop — top ou topeffect flag
   if (top || topeffect) return "top";
+
+  // Hangable items (tochas, quadros) são COMMON items no OTClient.
+  // ThingFlagAttrHangable → getStackPriority() = COMMON_ITEMS (5).
+  // Devem aparecer SOBRE paredes e marcos de porta (bottom items).
+  const hang = game.hang ?? raw.hang;
+  if (hang && !bottom && !top && !topeffect) return "common";
+
+  // Fallback: render_layer quando flags booleanas não definem a categoria.
+  // Convenção OTClient: 0=ground, 1=groundBorder, 2=OnBottom, 3=OnTop
+  const renderLayerFallback = game.render_layer ?? game.layer ?? null;
+  if (Number.isFinite(Number(renderLayerFallback))) {
+    const rl = Number(renderLayerFallback);
+    if (rl === 0) return game.category_type === "wall" ? "bottom" : "ground";
+    if (rl === 1 || rl === 2) return "bottom";
+    if (rl === 3) return "top";
+  }
+
+  // Fallback final: obstacle/furniture não-walkable sem flags explícitas = bottom.
+  // OTClient: unpass sem ground/top/clip → stackPriority=ON_BOTTOM — desenhado ANTES da creature.
+  const unpass = game.unpass ?? raw.unpass;
+  if (unpass && !bank && !clip) {
+    const cat = (game.category_type ?? "").toLowerCase();
+    if (cat === "obstacle" || cat === "furniture" || cat === "floor_decoration") {
+      return "bottom";
+    }
+  }
 
   // Default: common item
   return "common";
@@ -1344,18 +1387,30 @@ function _renderMainPass(opts) {
         }
 
         sortable.sort((a, b) => {
-          // 1. renderLayer: ground(0) → border(1) → items(2) → top(3)
+          // 1. renderLayer: ground(0) → groundBorder(1) → bottom/common(2) → top(3)
           const ar = Number(a?.renderLayer ?? 2);
           const br = Number(b?.renderLayer ?? 2);
           if (ar !== br) return ar - br;
-          // 2. stackPosition (dentro do mesmo renderLayer): bottom(3) < common(5) < top(10)
+
+          // 2. stackPosition: bottom(2-3) antes de common(5) antes de top(10)
           const as = Number(a?.stackPosition ?? 5);
           const bs = Number(b?.stackPosition ?? 5);
           if (as !== bs) return as - bs;
-          // 3. tileLayer: ordem de empilhamento dentro do tile
+
+          // 3. tileLayer:
+          //   • Bottom items → ASC (ordem normal de inserção no tile)
+          //   • Common items → DESC (OTClient: reverse_view(m_things))
+          //     O item de layer mais alta é desenhado PRIMEIRO (fica no fundo visual).
+          //     O item de layer mais baixa fica por CIMA — comportamento correto do Tibia.
           const atl = Number(a?.tileLayer ?? -1);
           const btl = Number(b?.tileLayer ?? -1);
-          if (atl !== btl) return atl - btl;
+          if (atl !== btl) {
+            const aIsCommon = a?.category === "common";
+            const bIsCommon = b?.category === "common";
+            if (aIsCommon && bIsCommon) return btl - atl; // DESC para common (OTClient reverse_view)
+            return atl - btl;                              // ASC para bottom
+          }
+
           return Number(a?.spriteId ?? 0) - Number(b?.spriteId ?? 0);
         });
 
