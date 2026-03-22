@@ -434,10 +434,28 @@ export function normalizeEntity(raw, type = "unknown") {
 // ITEM_SCHEMA — constantes e validação para itens do jogo
 // ---------------------------------------------------------------------------
 export const ITEM_SCHEMA = Object.freeze({
-  types: ['consumable', 'equipment', 'quest', 'material', 'currency'],
-  equipmentSlots: ['weapon', 'shield', 'helmet', 'armor', 'boots', 'ring', 'amulet', 'backpack'],
-  validStats: ['atk', 'def', 'agi', 'int', 'vit', 'hpBonus', 'mpBonus', 'critChance'],
-  validEffects: ['heal', 'mana', 'buff', 'teleport', 'reveal'],
+  types: ["consumable", "equipment", "quest", "material", "currency"],
+  equipmentSlots: [
+    "weapon",
+    "shield",
+    "helmet",
+    "armor",
+    "boots",
+    "ring",
+    "amulet",
+    "backpack",
+  ],
+  validStats: [
+    "atk",
+    "def",
+    "agi",
+    "int",
+    "vit",
+    "hpBonus",
+    "mpBonus",
+    "critChance",
+  ],
+  validEffects: ["heal", "mana", "buff", "teleport", "reveal"],
 });
 
 /**
@@ -448,7 +466,7 @@ export const ITEM_SCHEMA = Object.freeze({
 export function makeItem({
   id,
   name,
-  type = 'material',
+  type = "material",
   description = null,
   spriteId = null,
   weight = 0,
@@ -461,6 +479,7 @@ export function makeItem({
   // consumível
   effect = null,
   cooldown = 0,
+  charges = undefined,
   // posição no mundo (quando no chão)
   x = null,
   y = null,
@@ -468,28 +487,48 @@ export function makeItem({
   ownerId = null,
   expiresAt = null,
   schemaVersion = SCHEMA_VERSION,
+  quantity = 1,
+  count = undefined,
   ...extra
 } = {}) {
+  const normalizedQuantityRaw = toNumber(quantity ?? count ?? 1, 1);
+  const normalizedQuantity = Math.max(
+    1,
+    Math.floor(
+      Number.isFinite(normalizedQuantityRaw) ? normalizedQuantityRaw : 1,
+    ),
+  );
+  const normalizedChargesRaw = toNumber(charges, 0);
+  const normalizedCharges =
+    Number.isFinite(normalizedChargesRaw) && normalizedChargesRaw > 0
+      ? Math.max(1, Math.floor(normalizedChargesRaw))
+      : null;
+
   return {
     ...extra,
     schemaVersion: toNumber(schemaVersion, SCHEMA_VERSION),
-    id: toStringSafe(id, ''),
-    name: toStringSafe(name, 'Item'),
-    type: ITEM_SCHEMA.types.includes(type) ? type : 'material',
+    id: toStringSafe(id, ""),
+    name: toStringSafe(name, "Item"),
+    type: ITEM_SCHEMA.types.includes(type) ? type : "material",
     description: description ?? null,
     spriteId: spriteId != null ? toNumber(spriteId, 0) : null,
     weight: toNumber(weight, 0),
     value: toNumber(value, 0),
     stackable: Boolean(stackable),
     maxStack: Math.max(1, toNumber(maxStack, 1)),
-    ...(slot != null ? { slot: ITEM_SCHEMA.equipmentSlots.includes(slot) ? slot : null } : {}),
+    quantity: normalizedQuantity,
+    count: normalizedQuantity,
+    ...(slot != null
+      ? { slot: ITEM_SCHEMA.equipmentSlots.includes(slot) ? slot : null }
+      : {}),
     ...(stats != null ? { stats: { ...stats } } : {}),
     ...(effect != null ? { effect: { ...effect } } : {}),
+    ...(normalizedCharges != null ? { charges: normalizedCharges } : {}),
     ...(cooldown ? { cooldown: toNumber(cooldown, 0) } : {}),
     ...(x != null ? { x: toNumber(x, 0) } : {}),
     ...(y != null ? { y: toNumber(y, 0) } : {}),
     ...(z != null ? { z: toNumber(z, 7) } : {}),
-    ...(ownerId != null ? { ownerId: toStringSafe(ownerId, '') } : {}),
+    ...(ownerId != null ? { ownerId: toStringSafe(ownerId, "") } : {}),
     ...(expiresAt != null ? { expiresAt: toNumber(expiresAt, 0) } : {}),
   };
 }
@@ -500,19 +539,20 @@ export function makeItem({
  * @param {'inventory'|'world'|'equipment'} context
  * @returns {{ valid: boolean, errors: string[] }}
  */
-export function validateItem(item, context = 'inventory') {
+export function validateItem(item, context = "inventory") {
   const errors = [];
-  if (!item || typeof item !== 'object') return { valid: false, errors: ['Not an object'] };
+  if (!item || typeof item !== "object")
+    return { valid: false, errors: ["Not an object"] };
 
-  if (!item.id) errors.push('Missing required: id');
-  if (!item.name) errors.push('Missing required: name');
-  if (!item.type) errors.push('Missing required: type');
+  if (!item.id) errors.push("Missing required: id");
+  if (!item.name) errors.push("Missing required: name");
+  if (!item.type) errors.push("Missing required: type");
 
   if (item.type && !ITEM_SCHEMA.types.includes(item.type)) {
     errors.push(`Invalid type: ${item.type}`);
   }
 
-  if (item.type === 'equipment') {
+  if (item.type === "equipment") {
     if (!item.slot || !ITEM_SCHEMA.equipmentSlots.includes(item.slot)) {
       errors.push(`Invalid equipment slot: ${item.slot}`);
     }
@@ -525,18 +565,18 @@ export function validateItem(item, context = 'inventory') {
     }
   }
 
-  if (item.type === 'consumable' && item.effect) {
+  if (item.type === "consumable" && item.effect) {
     if (!ITEM_SCHEMA.validEffects.includes(item.effect.type)) {
       errors.push(`Invalid effect type: ${item.effect.type}`);
     }
   }
 
-  if (context === 'world' && (item.x == null || item.y == null)) {
-    errors.push('World items must have x/y coordinates');
+  if (context === "world" && (item.x == null || item.y == null)) {
+    errors.push("World items must have x/y coordinates");
   }
 
-  if (context === 'equipment' && item.type !== 'equipment') {
-    errors.push('Only equipment type items can be equipped');
+  if (context === "equipment" && item.type !== "equipment") {
+    errors.push("Only equipment type items can be equipped");
   }
 
   return { valid: errors.length === 0, errors };

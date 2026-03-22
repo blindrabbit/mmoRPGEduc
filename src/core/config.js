@@ -279,8 +279,9 @@ export const GM_ENGINE = {
 };
 
 // ───────────────────────────────────────────────────────────────────────────
-// ADMIN ENGINE — editor de mapa (admin.html)
-// O canvas do admin é dinâmico: ocupa a janela menos painéis laterais.
+// ADMIN ENGINE — compatibilidade legada
+// Mantido apenas para referências antigas; operações administrativas
+// ativas devem rodar pelo worldEngine + adminPanel.js.
 // ───────────────────────────────────────────────────────────────────────────
 export const ADMIN_ENGINE = {
   sidebarWidth: 280, // px — largura do painel lateral esquerdo
@@ -311,7 +312,7 @@ export const REGEN_TICK_MS = 2000;
 // Remova gradualmente à medida que os arquivos forem atualizados.
 //
 // Usado por:            Nome novo         → Nome antigo
-//   admin.html          WORLD_SETTINGS    → WORLDSETTINGS
+//   worldEngine (GM)    WORLD_SETTINGS    → WORLDSETTINGS
 //   rpg.html            ASSETS            → ASSETS         (sem mudança)
 //   rpg.html            RPG_ENGINE        → RPGCLIENT
 //   mapRenderer.js      TILE_SIZE         → TILESIZE

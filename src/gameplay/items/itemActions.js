@@ -17,7 +17,14 @@
 // Dependências: db.js, schema.js, events.js, worldStore.js, progressionSystem.js
 // =============================================================================
 
-import { batchWrite, dbGet, dbRemove, PATHS, TILE_CHUNK_SIZE } from "../../core/db.js";
+import {
+  batchWrite,
+  dbGet,
+  dbSet,
+  dbRemove,
+  PATHS,
+  TILE_CHUNK_SIZE,
+} from "../../core/db.js";
 import { RuntimeConfig } from "../../core/runtimeConfig.js";
 import { makeItem, validateItem, ITEM_SCHEMA } from "../../core/schema.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
@@ -71,6 +78,7 @@ const P = {
 };
 
 export const INVENTORY_SIZE = 20;
+const WORLD_ITEM_LOCK_TTL_MS = 4_000;
 
 const PRIVILEGED_ITEM_ACTOR_IDS = new Set([
   "worldengine",
@@ -204,6 +212,93 @@ function _sameItemIdentity(a, b) {
   return String(a.id ?? "") === String(b.id ?? "");
 }
 
+function _sameInventorySlotState(a, b) {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  if (!_sameItemIdentity(a, b)) return false;
+
+  const aQty = Number(a.quantity ?? a.count ?? 1);
+  const bQty = Number(b.quantity ?? b.count ?? 1);
+  const aCharges = Number(a.charges ?? 0);
+  const bCharges = Number(b.charges ?? 0);
+
+  return (
+    Number.isFinite(aQty) &&
+    Number.isFinite(bQty) &&
+    Math.floor(aQty) === Math.floor(bQty) &&
+    Math.floor(Number.isFinite(aCharges) ? aCharges : 0) ===
+      Math.floor(Number.isFinite(bCharges) ? bCharges : 0)
+  );
+}
+
+function _worldItemLockPath(worldItemId) {
+  return `world_item_locks/${worldItemId}`;
+}
+
+async function _acquireWorldItemLock(worldItemId, actorId) {
+  if (!worldItemId) return null;
+  const path = _worldItemLockPath(worldItemId);
+  const now = Date.now();
+  const current = await dbGet(path);
+
+  if (current && Number(current.expiresAt ?? 0) > now) {
+    return null;
+  }
+
+  const token = `${actorId}_${now}_${Math.random().toString(36).slice(2, 8)}`;
+  await dbSet(path, {
+    token,
+    actorId,
+    acquiredAt: now,
+    expiresAt: now + WORLD_ITEM_LOCK_TTL_MS,
+  });
+
+  const after = await dbGet(path);
+  if (!after || after.token !== token) return null;
+
+  return { path, token };
+}
+
+async function _releaseWorldItemLock(lock) {
+  if (!lock?.path || !lock?.token) return;
+  const current = await dbGet(lock.path);
+  if (current?.token === lock.token) {
+    await dbRemove(lock.path);
+  }
+}
+
+async function _assertWorldItemStillUnchanged(worldItemId, expected) {
+  const current = await dbGet(P.worldItem(worldItemId));
+  if (!current || typeof current !== "object") return false;
+
+  const expectedQty = Number(expected?.quantity ?? expected?.count ?? 1);
+  const currentQty = Number(current?.quantity ?? current?.count ?? 1);
+
+  return (
+    String(current?.id ?? "") === String(expected?.id ?? "") &&
+    Number(current?.x ?? 0) === Number(expected?.x ?? 0) &&
+    Number(current?.y ?? 0) === Number(expected?.y ?? 0) &&
+    Number(current?.z ?? 7) === Number(expected?.z ?? 7) &&
+    Math.floor(Number.isFinite(currentQty) ? currentQty : 1) ===
+      Math.floor(Number.isFinite(expectedQty) ? expectedQty : 1)
+  );
+}
+
+async function _assertInventorySlotsStillUnchanged(
+  playerId,
+  inventorySnapshot,
+  slotIndexes,
+) {
+  for (const slotIndex of slotIndexes) {
+    const current = await dbGet(P.inventorySlot(playerId, slotIndex));
+    const expected = inventorySnapshot?.[slotIndex] ?? null;
+    if (!_sameInventorySlotState(current, expected)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 async function _assertSlotStillHasItem(playerId, slotIndex, expectedItem) {
   const current = await dbGet(P.inventorySlot(playerId, slotIndex));
   if (!current || typeof current !== "object") return false;
@@ -228,152 +323,160 @@ export async function pickUpItem(playerId, worldItemId) {
   if (!worldItem)
     return { success: false, error: "Item não encontrado no mundo" };
 
-  // Verificar se o item pode ser pego (map_data.json: is_pickupable)
-  const ids = getItemDataService();
-  const parsedId = Number(worldItem.id);
-  const tileIdRaw =
-    worldItem.tileId ??
-    worldItem.spriteId ??
-    worldItem.sourceTileId ??
-    worldItem.originalItemId ??
-    parsedId;
-  const tileId = Number(tileIdRaw);
-  if (!Number.isFinite(tileId) || tileId <= 0) {
+  const worldItemLock = await _acquireWorldItemLock(worldItemId, playerId);
+  if (!worldItemLock) {
     return {
       success: false,
-      error: "Item inválido: tileId ausente para pickup",
+      error: "Item está sendo manipulado por outra ação. Tente novamente.",
     };
   }
-  if (ids && _isMapOriginWorldItem(worldItem)) {
-    if (!ids.canPickUp(tileId) && !ids.canMove(tileId)) {
-      return { success: false, error: "Este item não pode ser pego" };
-    }
-  }
 
-  // Verificar posse
-  if (
-    !bypassRestrictions &&
-    worldItem.ownerId &&
-    worldItem.ownerId !== playerId
-  ) {
-    return { success: false, error: "Item pertence a outro jogador" };
-  }
-
-  // Verificar expiração
-  if (worldItem.expiresAt && Date.now() > worldItem.expiresAt) {
-    await dbRemove(P.worldItem(worldItemId));
-    return { success: false, error: "Item expirou" };
-  }
-
-  // Verificar distância (pulado para tiles do mapa — já estão "no chão" do tile)
-  if (!bypassRestrictions && !worldItem.skipRangeCheck) {
-    if (
-      !_isWithinRange(
-        player,
-        worldItem.x ?? 0,
-        worldItem.y ?? 0,
-        RuntimeConfig.get("items.pickupRange", ITEM_CONFIG.pickupRange),
-      )
-    ) {
-      return { success: false, error: "Item fora de alcance" };
-    }
-  }
-
-  // Buscar inventário atual (do cache local ou Firebase)
-  const inventory = await _getAuthoritativeInventory(playerId, player);
-
-  const itemForSlot = {
-    ...worldItem,
-    id: String(tileId),
-    tileId,
-    stackable: ids?.isStackable(tileId) ?? !!worldItem.stackable,
-    maxStack: Number(worldItem.maxStack ?? (ids?.isStackable(tileId) ? 99 : 1)),
-  };
-  const slotIndex = _findFreeSlot(inventory, itemForSlot);
-  if (slotIndex === -1) return { success: false, error: "Inventário cheio" };
-
-  // Sanitizar item para inventário (remove campos de mundo)
-  const {
-    x,
-    y,
-    z,
-    ownerId,
-    expiresAt,
-    droppedBy,
-    droppedAt,
-    movedBy,
-    movedAt,
-    splitFrom,
-    splitAt,
-    skipRangeCheck,
-    fromMap,
-    sourceCoord,
-    sourceLayer,
-    sourceTileId,
-    ...rest
-  } = worldItem;
-  const inventoryItem = makeItem({
-    ...rest,
-    id: String(tileId),
-    tileId,
-    name: rest.name ?? ids?.getItemName?.(tileId) ?? `Item #${tileId}`,
-    stackable: itemForSlot.stackable,
-    maxStack: Number(rest.maxStack ?? (itemForSlot.stackable ? 99 : 1)),
-    quantity: Number(worldItem.quantity ?? worldItem.count ?? 1),
-  });
-
-  const { valid, errors } = validateItem(inventoryItem, "inventory");
-  if (!valid) return { success: false, error: errors.join("; ") };
-
-  const existingAtSlot = inventory?.[slotIndex] ?? null;
-  const isMapOrigin = _isMapOriginWorldItem(worldItem);
-  const mapClaimId = isMapOrigin
-    ? _buildMapClaimIdFromWorldItem(worldItem)
-    : null;
-
-  // Guard: re-verifica estado actual do slot antes de escrever.
-  // Previne sobrescrita quando worldEngine escreveu no slot entre o dbGet
-  // de _getAuthoritativeInventory e este batchWrite.
-  const isStackMerge =
-    existingAtSlot &&
-    _sameItemForStack(existingAtSlot, inventoryItem) &&
-    inventoryItem.stackable;
-  const currentAtSlotRaw = await dbGet(P.inventorySlot(playerId, slotIndex));
-  if (isStackMerge) {
-    if (!currentAtSlotRaw || !_sameItemForStack(currentAtSlotRaw, inventoryItem)) {
-      return { success: false, error: "Slot modificado durante a operação. Tente novamente." };
-    }
-  } else {
-    if (currentAtSlotRaw && typeof currentAtSlotRaw === "object") {
-      return { success: false, error: "Slot ocupado. Tente novamente." };
-    }
-  }
-
-  const updates = {};
-
-  if (
-    existingAtSlot &&
-    _sameItemForStack(existingAtSlot, inventoryItem) &&
-    inventoryItem.stackable
-  ) {
-    const { mergedQty, remainingQty } = _mergeStackableItem(
-      existingAtSlot,
-      inventoryItem,
-    );
-
-    updates[P.inventorySlot(playerId, slotIndex)] = {
-      ...existingAtSlot,
-      quantity: mergedQty,
-      count: mergedQty,
-    };
-
-    if (remainingQty > 0) {
-      updates[P.worldItem(worldItemId)] = {
-        ...worldItem,
-        quantity: remainingQty,
-        count: remainingQty,
+  try {
+    // Verificar se o item pode ser pego (map_data.json: is_pickupable)
+    const ids = getItemDataService();
+    const parsedId = Number(worldItem.id);
+    const tileIdRaw =
+      worldItem.tileId ??
+      worldItem.spriteId ??
+      worldItem.sourceTileId ??
+      worldItem.originalItemId ??
+      parsedId;
+    const tileId = Number(tileIdRaw);
+    if (!Number.isFinite(tileId) || tileId <= 0) {
+      return {
+        success: false,
+        error: "Item inválido: tileId ausente para pickup",
       };
+    }
+    if (ids && _isMapOriginWorldItem(worldItem)) {
+      if (!ids.canPickUp(tileId) && !ids.canMove(tileId)) {
+        return { success: false, error: "Este item não pode ser pego" };
+      }
+    }
+
+    // Verificar posse
+    if (
+      !bypassRestrictions &&
+      worldItem.ownerId &&
+      worldItem.ownerId !== playerId
+    ) {
+      return { success: false, error: "Item pertence a outro jogador" };
+    }
+
+    // Verificar expiração
+    if (worldItem.expiresAt && Date.now() > worldItem.expiresAt) {
+      await dbRemove(P.worldItem(worldItemId));
+      return { success: false, error: "Item expirou" };
+    }
+
+    // Verificar distância (pulado para tiles do mapa — já estão "no chão" do tile)
+    if (!bypassRestrictions && !worldItem.skipRangeCheck) {
+      if (
+        !_isWithinRange(
+          player,
+          worldItem.x ?? 0,
+          worldItem.y ?? 0,
+          RuntimeConfig.get("items.pickupRange", ITEM_CONFIG.pickupRange),
+        )
+      ) {
+        return { success: false, error: "Item fora de alcance" };
+      }
+    }
+
+    // Buscar inventário atual (do cache local ou Firebase)
+    const inventory = await _getAuthoritativeInventory(playerId, player);
+
+    const itemForSlot = {
+      ...worldItem,
+      id: String(tileId),
+      tileId,
+      stackable: ids?.isStackable(tileId) ?? !!worldItem.stackable,
+      maxStack: Number(worldItem.maxStack ?? ids?.getMaxStack?.(tileId) ?? 1),
+    };
+
+    // Sanitizar item para inventário (remove campos de mundo)
+    const {
+      x,
+      y,
+      z,
+      ownerId,
+      expiresAt,
+      droppedBy,
+      droppedAt,
+      movedBy,
+      movedAt,
+      splitFrom,
+      splitAt,
+      skipRangeCheck,
+      fromMap,
+      sourceCoord,
+      sourceLayer,
+      sourceTileId,
+      ...rest
+    } = worldItem;
+    const inventoryItem = makeItem({
+      ...rest,
+      id: String(tileId),
+      tileId,
+      name: rest.name ?? ids?.getItemName?.(tileId) ?? `Item #${tileId}`,
+      stackable: itemForSlot.stackable,
+      maxStack: Number(rest.maxStack ?? ids?.getMaxStack?.(tileId) ?? 1),
+      quantity: Number(worldItem.quantity ?? worldItem.count ?? 1),
+      ...(worldItem.charges != null
+        ? { charges: Number(worldItem.charges) }
+        : {}),
+    });
+
+    const { valid, errors } = validateItem(inventoryItem, "inventory");
+    if (!valid) return { success: false, error: errors.join("; ") };
+
+    const isMapOrigin = _isMapOriginWorldItem(worldItem);
+    const mapClaimId = isMapOrigin
+      ? _buildMapClaimIdFromWorldItem(worldItem)
+      : null;
+
+    const updates = {};
+
+    let slotIndex = null;
+    const newInventory = { ...inventory };
+
+    if (inventoryItem.stackable) {
+      const { slotUpdates, remainingQty, firstSlotIndex } =
+        _allocateStackableIntoInventory(inventory, inventoryItem);
+
+      if (Object.keys(slotUpdates).length === 0) {
+        return { success: false, error: "Inventário cheio" };
+      }
+
+      for (const [slot, value] of Object.entries(slotUpdates)) {
+        const slotNum = Number(slot);
+        updates[P.inventorySlot(playerId, slotNum)] = value;
+        newInventory[slotNum] = value;
+      }
+      slotIndex = firstSlotIndex;
+
+      if (remainingQty > 0) {
+        updates[P.worldItem(worldItemId)] = {
+          ...worldItem,
+          quantity: remainingQty,
+          count: remainingQty,
+        };
+      } else {
+        updates[P.worldItem(worldItemId)] = null;
+        if (mapClaimId) {
+          updates[P.worldMapClaim(mapClaimId)] = _buildMapClaimPayload(
+            worldItem,
+            playerId,
+          );
+        }
+      }
     } else {
+      slotIndex = _findFreeSlot(inventory, inventoryItem);
+      if (slotIndex === -1)
+        return { success: false, error: "Inventário cheio" };
+
+      updates[P.inventorySlot(playerId, slotIndex)] = inventoryItem;
+      newInventory[slotIndex] = inventoryItem;
       updates[P.worldItem(worldItemId)] = null;
       if (mapClaimId) {
         updates[P.worldMapClaim(mapClaimId)] = _buildMapClaimPayload(
@@ -382,45 +485,55 @@ export async function pickUpItem(playerId, worldItemId) {
         );
       }
     }
-  } else {
-    updates[P.inventorySlot(playerId, slotIndex)] = inventoryItem;
-    updates[P.worldItem(worldItemId)] = null;
-    if (mapClaimId) {
-      updates[P.worldMapClaim(mapClaimId)] = _buildMapClaimPayload(
-        worldItem,
-        playerId,
-      );
+    const touchedSlots = Object.keys(updates)
+      .filter((k) => k.startsWith(`players_data/${playerId}/inventory/`))
+      .map((k) => Number(k.split("/").pop()))
+      .filter((n) => Number.isFinite(n));
+
+    const slotsStable = await _assertInventorySlotsStillUnchanged(
+      playerId,
+      inventory,
+      touchedSlots,
+    );
+    if (!slotsStable) {
+      return {
+        success: false,
+        error: "Inventário alterado durante o pickup. Tente novamente.",
+      };
     }
+
+    const worldStillSame = await _assertWorldItemStillUnchanged(
+      worldItemId,
+      worldItem,
+    );
+    if (!worldStillSame) {
+      return {
+        success: false,
+        error: "Item alterado durante o pickup. Tente novamente.",
+      };
+    }
+
+    await batchWrite(updates);
+
+    // Atualizar cache local
+    applyPlayersLocal(playerId, { inventory: newInventory });
+
+    worldEvents.emit(EVENT_TYPES.ITEM_PICKED_UP, {
+      playerId,
+      itemId: worldItemId,
+      itemName: inventoryItem.name,
+      item: inventoryItem,
+      slotIndex,
+    });
+    worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
+      playerId,
+      inventory: newInventory,
+    });
+
+    return { success: true, slotIndex };
+  } finally {
+    await _releaseWorldItemLock(worldItemLock);
   }
-  await batchWrite(updates);
-
-  // Atualizar cache local
-  const newInventory = { ...inventory };
-  if (
-    existingAtSlot &&
-    _sameItemForStack(existingAtSlot, inventoryItem) &&
-    inventoryItem.stackable
-  ) {
-    const merged = updates[P.inventorySlot(playerId, slotIndex)];
-    newInventory[slotIndex] = merged;
-  } else {
-    newInventory[slotIndex] = inventoryItem;
-  }
-  applyPlayersLocal(playerId, { inventory: newInventory });
-
-  worldEvents.emit(EVENT_TYPES.ITEM_PICKED_UP, {
-    playerId,
-    itemId: worldItemId,
-    itemName: inventoryItem.name,
-    item: inventoryItem,
-    slotIndex,
-  });
-  worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
-    playerId,
-    inventory: newInventory,
-  });
-
-  return { success: true, slotIndex };
 }
 
 // =============================================================================
@@ -523,13 +636,15 @@ export async function dropItem(
   const updates = {
     [P.worldItem(worldItemId)]: worldItem,
     [P.inventorySlot(playerId, fromSlot)]:
-      remaining > 0 && item.stackable ? { ...item, quantity: remaining } : null,
+      remaining > 0 && item.stackable
+        ? { ...item, quantity: remaining, count: remaining }
+        : null,
   };
   await batchWrite(updates);
 
   const newInventory = { ...inventory };
   if (remaining > 0 && item.stackable) {
-    newInventory[fromSlot] = { ...item, quantity: remaining };
+    newInventory[fromSlot] = { ...item, quantity: remaining, count: remaining };
   } else {
     delete newInventory[fromSlot];
   }
@@ -574,101 +689,140 @@ export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
   if (!worldItem)
     return { success: false, error: "Item não encontrado no mundo" };
 
-  const nextX = Number(toX);
-  const nextY = Number(toY);
-  const nextZ = Number(toZ ?? worldItem.z ?? 7);
-  if (
-    !Number.isFinite(nextX) ||
-    !Number.isFinite(nextY) ||
-    !Number.isFinite(nextZ)
-  ) {
-    return { success: false, error: "Coordenadas de destino inválidas" };
+  const worldItemLock = await _acquireWorldItemLock(worldItemId, playerId);
+  if (!worldItemLock) {
+    return {
+      success: false,
+      error: "Item está sendo manipulado por outra ação. Tente novamente.",
+    };
   }
 
-  const currX = Number(worldItem.x ?? 0);
-  const currY = Number(worldItem.y ?? 0);
-  const currZ = Number(worldItem.z ?? 7);
-  const mapClaimId = _buildMapClaimIdFromWorldItem(worldItem);
-  const mapClaimPayload = _buildMapClaimPayload(worldItem, playerId);
+  try {
+    const nextX = Number(toX);
+    const nextY = Number(toY);
+    const nextZ = Number(toZ ?? worldItem.z ?? 7);
+    if (
+      !Number.isFinite(nextX) ||
+      !Number.isFinite(nextY) ||
+      !Number.isFinite(nextZ)
+    ) {
+      return { success: false, error: "Coordenadas de destino inválidas" };
+    }
 
-  if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
-    return { success: false, error: "Só é possível mover itens a até 2 SQM" };
-  }
-  if (!bypassRestrictions && !_isWithinRange(player, nextX, nextY, 2)) {
-    return { success: false, error: "Destino fora do alcance de 2 SQM" };
-  }
+    const currX = Number(worldItem.x ?? 0);
+    const currY = Number(worldItem.y ?? 0);
+    const currZ = Number(worldItem.z ?? 7);
+    const mapClaimId = _buildMapClaimIdFromWorldItem(worldItem);
+    const mapClaimPayload = _buildMapClaimPayload(worldItem, playerId);
 
-  if (!bypassRestrictions && (await _isBlockedByWallAt(nextX, nextY, nextZ))) {
-    return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
-  }
+    if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
+      return { success: false, error: "Só é possível mover itens a até 2 SQM" };
+    }
+    if (!bypassRestrictions && !_isWithinRange(player, nextX, nextY, 2)) {
+      return { success: false, error: "Destino fora do alcance de 2 SQM" };
+    }
 
-  if (currX === nextX && currY === nextY && currZ === nextZ) {
-    return { success: true };
-  }
+    if (
+      !bypassRestrictions &&
+      (await _isBlockedByWallAt(nextX, nextY, nextZ))
+    ) {
+      return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
+    }
 
-  // ── Empilhamento: se o item é empilhável, verificar se já existe o mesmo
-  // tileId no destino. Se sim, somar quantidades e remover o item arrastado.
-  const itemDataService = await getItemDataService();
-  const tileId = Number(worldItem.tileId ?? worldItem.id);
-  const stackable =
-    itemDataService?.isStackable(tileId) ?? !!worldItem.stackable;
+    if (currX === nextX && currY === nextY && currZ === nextZ) {
+      return { success: true };
+    }
 
-  if (stackable) {
-    const allWorldItems = await dbGet("world_items");
-    if (allWorldItems && typeof allWorldItems === "object") {
-      const targetEntry = Object.entries(allWorldItems).find(([id, it]) => {
-        if (id === worldItemId) return false; // não comparar consigo mesmo
-        const itTileId = Number(it?.tileId ?? it?.id);
-        return (
-          itTileId === tileId &&
-          Math.round(Number(it?.x)) === Math.round(nextX) &&
-          Math.round(Number(it?.y)) === Math.round(nextY) &&
-          Math.round(Number(it?.z ?? 7)) === Math.round(nextZ)
-        );
-      });
+    // ── Empilhamento: se o item é empilhável, verificar se já existe o mesmo
+    // tileId no destino. Se sim, somar quantidades e remover o item arrastado.
+    const itemDataService = await getItemDataService();
+    const tileId = Number(worldItem.tileId ?? worldItem.id);
+    const stackable =
+      itemDataService?.isStackable(tileId) ?? !!worldItem.stackable;
+    const worldItemQuantity = _normalizeQuantity(worldItem);
 
-      if (targetEntry) {
-        const [targetId, targetItem] = targetEntry;
-        const mergedQty =
-          Number(targetItem.quantity ?? targetItem.count ?? 1) +
-          Number(worldItem.quantity ?? worldItem.count ?? 1);
-
-        await batchWrite({
-          // Atualiza o item destino com a quantidade somada
-          [P.worldItem(targetId)]: {
-            ...targetItem,
-            quantity: mergedQty,
-            count: mergedQty,
-            mergedAt: Date.now(),
-          },
-          // Remove o item arrastado
-          [P.worldItem(worldItemId)]: null,
-          ...(mapClaimId && mapClaimPayload
-            ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
-            : {}),
+    if (stackable) {
+      const allWorldItems = await dbGet("world_items");
+      if (allWorldItems && typeof allWorldItems === "object") {
+        const targetEntry = Object.entries(allWorldItems).find(([id, it]) => {
+          if (id === worldItemId) return false; // não comparar consigo mesmo
+          const itTileId = Number(it?.tileId ?? it?.id);
+          return (
+            itTileId === tileId &&
+            Math.round(Number(it?.x)) === Math.round(nextX) &&
+            Math.round(Number(it?.y)) === Math.round(nextY) &&
+            Math.round(Number(it?.z ?? 7)) === Math.round(nextZ)
+          );
         });
 
-        return { success: true, merged: true, targetId, quantity: mergedQty };
+        if (targetEntry) {
+          const [targetId, targetItem] = targetEntry;
+          const targetQuantity = _normalizeQuantity(targetItem);
+          const mergedQty =
+            targetQuantity.quantity + worldItemQuantity.quantity;
+
+          const worldStillSame = await _assertWorldItemStillUnchanged(
+            worldItemId,
+            worldItem,
+          );
+          if (!worldStillSame) {
+            return {
+              success: false,
+              error: "Item alterado durante o movimento. Tente novamente.",
+            };
+          }
+
+          await batchWrite({
+            // Atualiza o item destino com a quantidade somada
+            [P.worldItem(targetId)]: {
+              ...targetItem,
+              quantity: mergedQty,
+              count: mergedQty,
+              mergedAt: Date.now(),
+            },
+            // Remove o item arrastado
+            [P.worldItem(worldItemId)]: null,
+            ...(mapClaimId && mapClaimPayload
+              ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
+              : {}),
+          });
+
+          return { success: true, merged: true, targetId, quantity: mergedQty };
+        }
       }
     }
+
+    // Sem empilhamento: mover normalmente
+    const worldStillSame = await _assertWorldItemStillUnchanged(
+      worldItemId,
+      worldItem,
+    );
+    if (!worldStillSame) {
+      return {
+        success: false,
+        error: "Item alterado durante o movimento. Tente novamente.",
+      };
+    }
+
+    await batchWrite({
+      [P.worldItem(worldItemId)]: {
+        ...worldItem,
+        ...worldItemQuantity,
+        x: Math.round(nextX),
+        y: Math.round(nextY),
+        z: Math.round(nextZ),
+        movedBy: playerId,
+        movedAt: Date.now(),
+      },
+      ...(mapClaimId && mapClaimPayload
+        ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
+        : {}),
+    });
+
+    return { success: true };
+  } finally {
+    await _releaseWorldItemLock(worldItemLock);
   }
-
-  // Sem empilhamento: mover normalmente
-  await batchWrite({
-    [P.worldItem(worldItemId)]: {
-      ...worldItem,
-      x: Math.round(nextX),
-      y: Math.round(nextY),
-      z: Math.round(nextZ),
-      movedBy: playerId,
-      movedAt: Date.now(),
-    },
-    ...(mapClaimId && mapClaimPayload
-      ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
-      : {}),
-  });
-
-  return { success: true };
 }
 
 // =============================================================================
@@ -707,74 +861,100 @@ export async function splitWorldItem(
   if (!worldItem)
     return { success: false, error: "Item não encontrado no mundo" };
 
-  const itemDataService = await getItemDataService();
-  const tileId = Number(worldItem.tileId ?? worldItem.id);
-  const stackable =
-    itemDataService?.isStackable(tileId) ?? !!worldItem.stackable;
-  if (!stackable) {
-    return { success: false, error: "Item não é empilhável" };
+  const worldItemLock = await _acquireWorldItemLock(worldItemId, playerId);
+  if (!worldItemLock) {
+    return {
+      success: false,
+      error: "Item está sendo manipulado por outra ação. Tente novamente.",
+    };
   }
 
-  const totalQty = Number(worldItem.quantity ?? worldItem.count ?? 1);
-  const qty = Math.max(1, Math.min(Math.floor(Number(splitQty)), totalQty));
+  try {
+    const itemDataService = await getItemDataService();
+    const tileId = Number(worldItem.tileId ?? worldItem.id);
+    const stackable =
+      itemDataService?.isStackable(tileId) ?? !!worldItem.stackable;
+    if (!stackable) {
+      return { success: false, error: "Item não é empilhável" };
+    }
 
-  const nextX = Math.round(Number(toX));
-  const nextY = Math.round(Number(toY));
-  const nextZ = Math.round(Number(toZ ?? worldItem.z ?? 7));
+    const totalQty = Number(worldItem.quantity ?? worldItem.count ?? 1);
+    const qty = Math.max(1, Math.min(Math.floor(Number(splitQty)), totalQty));
 
-  const currX = Number(worldItem.x ?? 0);
-  const currY = Number(worldItem.y ?? 0);
-  if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
-    return { success: false, error: "Só é possível mover itens a até 2 SQM" };
-  }
-  if (!bypassRestrictions && !_isWithinRange(player, nextX, nextY, 2)) {
-    return { success: false, error: "Destino fora do alcance de 2 SQM" };
-  }
+    const nextX = Math.round(Number(toX));
+    const nextY = Math.round(Number(toY));
+    const nextZ = Math.round(Number(toZ ?? worldItem.z ?? 7));
 
-  if (!bypassRestrictions && (await _isBlockedByWallAt(nextX, nextY, nextZ))) {
-    return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
-  }
+    const currX = Number(worldItem.x ?? 0);
+    const currY = Number(worldItem.y ?? 0);
+    if (!bypassRestrictions && !_isWithinRange(player, currX, currY, 2)) {
+      return { success: false, error: "Só é possível mover itens a até 2 SQM" };
+    }
+    if (!bypassRestrictions && !_isWithinRange(player, nextX, nextY, 2)) {
+      return { success: false, error: "Destino fora do alcance de 2 SQM" };
+    }
 
-  // Se pede toda a pilha, apenas mover (delega ao moveWorldItem)
-  if (qty >= totalQty) {
-    return moveWorldItem(playerId, worldItemId, nextX, nextY, nextZ);
-  }
+    if (
+      !bypassRestrictions &&
+      (await _isBlockedByWallAt(nextX, nextY, nextZ))
+    ) {
+      return { success: false, error: "Destino bloqueado (parede/obstáculo)" };
+    }
 
-  const remainingQty = totalQty - qty;
-  const newItemId = `item_${playerId}_${Date.now()}`;
-  const mapClaimId = _buildMapClaimIdFromWorldItem(worldItem);
-  const mapClaimPayload = _buildMapClaimPayload(worldItem, playerId);
+    // Se pede toda a pilha, apenas mover (delega ao moveWorldItem)
+    if (qty >= totalQty) {
+      return moveWorldItem(playerId, worldItemId, nextX, nextY, nextZ);
+    }
 
-  const newWorldItem = {
-    ...worldItem,
-    id: newItemId,
-    quantity: qty,
-    count: qty,
-    x: nextX,
-    y: nextY,
-    z: nextZ,
-    splitFrom: worldItemId,
-    splitAt: Date.now(),
-    movedBy: playerId,
-  };
-  delete newWorldItem.fromMap;
-  delete newWorldItem.sourceCoord;
-  delete newWorldItem.sourceLayer;
-  delete newWorldItem.sourceTileId;
+    const remainingQty = totalQty - qty;
+    const newItemId = `item_${playerId}_${Date.now()}`;
+    const mapClaimId = _buildMapClaimIdFromWorldItem(worldItem);
+    const mapClaimPayload = _buildMapClaimPayload(worldItem, playerId);
 
-  await batchWrite({
-    [P.worldItem(worldItemId)]: {
+    const newWorldItem = {
       ...worldItem,
-      quantity: remainingQty,
-      count: remainingQty,
-    },
-    [P.worldItem(newItemId)]: newWorldItem,
-    ...(mapClaimId && mapClaimPayload
-      ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
-      : {}),
-  });
+      id: newItemId,
+      quantity: qty,
+      count: qty,
+      x: nextX,
+      y: nextY,
+      z: nextZ,
+      splitFrom: worldItemId,
+      splitAt: Date.now(),
+      movedBy: playerId,
+    };
+    delete newWorldItem.fromMap;
+    delete newWorldItem.sourceCoord;
+    delete newWorldItem.sourceLayer;
+    delete newWorldItem.sourceTileId;
 
-  return { success: true, newItemId, quantity: qty, remaining: remainingQty };
+    const worldStillSame = await _assertWorldItemStillUnchanged(
+      worldItemId,
+      worldItem,
+    );
+    if (!worldStillSame) {
+      return {
+        success: false,
+        error: "Item alterado durante a divisão. Tente novamente.",
+      };
+    }
+
+    await batchWrite({
+      [P.worldItem(worldItemId)]: {
+        ...worldItem,
+        quantity: remainingQty,
+        count: remainingQty,
+      },
+      [P.worldItem(newItemId)]: newWorldItem,
+      ...(mapClaimId && mapClaimPayload
+        ? { [P.worldMapClaim(mapClaimId)]: mapClaimPayload }
+        : {}),
+    });
+
+    return { success: true, newItemId, quantity: qty, remaining: remainingQty };
+  } finally {
+    await _releaseWorldItemLock(worldItemLock);
+  }
 }
 
 // =============================================================================
@@ -1018,34 +1198,66 @@ export async function moveItem(playerId, fromSlot, toSlot) {
   }
 
   let updates;
+  const newInventory = { ...inventory };
 
   // Stack se mesmo id e stackável
   if (itemTo && _sameItemForStack(itemTo, itemFrom) && itemFrom.stackable) {
     const total = (itemFrom.quantity ?? 1) + (itemTo.quantity ?? 1);
     const newQtyTo = Math.min(total, itemFrom.maxStack ?? 99);
     const overflow = total - newQtyTo;
-    updates = {
-      [P.inventorySlot(playerId, dstSlot)]: { ...itemTo, quantity: newQtyTo },
-      [P.inventorySlot(playerId, srcSlot)]:
-        overflow > 0 ? { ...itemFrom, quantity: overflow } : null,
+    const mergedTarget = {
+      ...itemTo,
+      quantity: newQtyTo,
+      count: newQtyTo,
     };
+
+    updates = {
+      [P.inventorySlot(playerId, dstSlot)]: mergedTarget,
+      [P.inventorySlot(playerId, srcSlot)]: null,
+    };
+
+    newInventory[dstSlot] = mergedTarget;
+    delete newInventory[srcSlot];
+
+    if (overflow > 0) {
+      const overflowItem = {
+        ...itemFrom,
+        quantity: overflow,
+        count: overflow,
+      };
+
+      const inventoryForOverflow = { ...newInventory };
+      const { slotUpdates, remainingQty } = _allocateStackableIntoInventory(
+        inventoryForOverflow,
+        overflowItem,
+      );
+
+      if (remainingQty > 0) {
+        return {
+          success: false,
+          error: "Inventário sem espaço para distribuir o overflow da pilha",
+        };
+      }
+
+      for (const [slot, value] of Object.entries(slotUpdates)) {
+        const slotNum = Number(slot);
+        updates[P.inventorySlot(playerId, slotNum)] = value;
+        newInventory[slotNum] = value;
+      }
+    }
   } else {
     // Swap simples
     updates = {
       [P.inventorySlot(playerId, srcSlot)]: itemTo ?? null,
       [P.inventorySlot(playerId, dstSlot)]: itemFrom,
     };
+
+    if (itemTo == null) delete newInventory[srcSlot];
+    else newInventory[srcSlot] = itemTo;
+    newInventory[dstSlot] = itemFrom;
   }
 
   await batchWrite(updates);
-
-  const newInventory = { ...inventory };
-  if (updates[P.inventorySlot(playerId, srcSlot)] === null) {
-    delete newInventory[srcSlot];
-  } else {
-    newInventory[srcSlot] = updates[P.inventorySlot(playerId, srcSlot)];
-  }
-  newInventory[dstSlot] = updates[P.inventorySlot(playerId, dstSlot)];
   applyPlayersLocal(playerId, { inventory: newInventory });
 
   worldEvents.emit(EVENT_TYPES.ITEM_MOVED, {
@@ -1135,7 +1347,7 @@ export async function useItem(playerId, slotIndex) {
   // Consumir item (stack ou remover)
   const newQty = (item.quantity ?? 1) - 1;
   updates[P.inventorySlot(playerId, useSlot)] =
-    newQty > 0 ? { ...item, quantity: newQty } : null;
+    newQty > 0 ? { ...item, quantity: newQty, count: newQty } : null;
 
   // Registrar cooldown
   updates[`players_data/${playerId}/itemCooldowns/${item.id}`] = Date.now();
@@ -1144,7 +1356,7 @@ export async function useItem(playerId, slotIndex) {
 
   const newInventory = { ...inventory };
   if (newQty > 0) {
-    newInventory[useSlot] = { ...item, quantity: newQty };
+    newInventory[useSlot] = { ...item, quantity: newQty, count: newQty };
   } else {
     delete newInventory[useSlot];
   }
@@ -1257,6 +1469,79 @@ function _mergeStackableItem(existingItem, incomingItem) {
   const mergedQty = Math.min(total, maxStack);
   const remainingQty = Math.max(0, total - mergedQty);
   return { mergedQty, remainingQty, maxStack, total };
+}
+
+function _allocateStackableIntoInventory(inventory, incomingItem) {
+  const slotUpdates = {};
+  let firstSlotIndex = null;
+
+  const qtyRaw = Number(incomingItem?.quantity ?? incomingItem?.count ?? 1);
+  let remainingQty = Math.max(
+    1,
+    Math.floor(Number.isFinite(qtyRaw) ? qtyRaw : 1),
+  );
+  const incomingMaxStackRaw = Number(incomingItem?.maxStack ?? 100);
+  const incomingMaxStack = Math.max(
+    1,
+    Math.floor(
+      Number.isFinite(incomingMaxStackRaw) ? incomingMaxStackRaw : 100,
+    ),
+  );
+
+  // Prioriza completar pilhas existentes (LIFO: slots mais altos primeiro)
+  for (let i = INVENTORY_SIZE - 1; i >= 0 && remainingQty > 0; i--) {
+    const slotItem = inventory?.[i];
+    if (!slotItem || !_sameItemForStack(slotItem, incomingItem)) continue;
+
+    const slotQtyRaw = Number(slotItem.quantity ?? slotItem.count ?? 1);
+    const slotQty = Math.max(
+      1,
+      Math.floor(Number.isFinite(slotQtyRaw) ? slotQtyRaw : 1),
+    );
+    const slotMaxRaw = Number(slotItem.maxStack ?? incomingMaxStack);
+    const slotMax = Math.max(
+      1,
+      Math.floor(Number.isFinite(slotMaxRaw) ? slotMaxRaw : incomingMaxStack),
+    );
+    const free = Math.max(0, slotMax - slotQty);
+    if (free <= 0) continue;
+
+    const add = Math.min(free, remainingQty);
+    const nextQty = slotQty + add;
+    slotUpdates[i] = {
+      ...slotItem,
+      stackable: true,
+      maxStack: slotMax,
+      quantity: nextQty,
+      count: nextQty,
+    };
+    remainingQty -= add;
+    if (firstSlotIndex == null) firstSlotIndex = i;
+  }
+
+  // Se ainda sobrou, cria novas pilhas em slots vazios
+  for (let i = 0; i < INVENTORY_SIZE && remainingQty > 0; i++) {
+    if (inventory?.[i]) continue;
+
+    const placeQty = Math.min(incomingMaxStack, remainingQty);
+    slotUpdates[i] = {
+      ...incomingItem,
+      stackable: true,
+      maxStack: incomingMaxStack,
+      quantity: placeQty,
+      count: placeQty,
+    };
+    remainingQty -= placeQty;
+    if (firstSlotIndex == null) firstSlotIndex = i;
+  }
+
+  return { slotUpdates, remainingQty, firstSlotIndex };
+}
+
+function _normalizeQuantity(item) {
+  const qtyRaw = Number(item?.quantity ?? item?.count ?? 1);
+  const qty = Math.max(1, Math.floor(Number.isFinite(qtyRaw) ? qtyRaw : 1));
+  return { quantity: qty, count: qty };
 }
 
 function _canEquipInSlot(player, item, slot, equipment) {

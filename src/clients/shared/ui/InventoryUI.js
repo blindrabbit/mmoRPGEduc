@@ -307,14 +307,34 @@ export class InventoryUI {
       if (item.rarity)
         el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? "";
 
+      const quantityRaw = Number(item.quantity);
+      const countRaw = Number(item.count);
+      const chargesRaw = Number(item.charges);
+      const hasQuantity = Number.isFinite(quantityRaw) && quantityRaw > 0;
+      const hasCount = Number.isFinite(countRaw) && countRaw > 0;
+      const hasCharges = Number.isFinite(chargesRaw) && chargesRaw > 0;
+      const isLikelyLiquidContainer =
+        item.content_type != null && !item.stackable;
+      const stackQtyRaw =
+        hasQuantity && hasCount && !isLikelyLiquidContainer
+          ? Math.max(quantityRaw, countRaw)
+          : hasQuantity
+            ? quantityRaw
+            : hasCount && !isLikelyLiquidContainer
+              ? countRaw
+              : hasCharges
+                ? chargesRaw
+                : 1;
+      const stackQty = Math.max(1, Math.floor(stackQtyRaw));
+
       // Resolve variante visual baseada na quantidade (ex: moedas mudam de sprite)
       // Usa mapeamento OTClient para coincidir com o sprite exibido no mapa.
-      const qty = item.quantity ?? 1;
       const variantKey =
         item.stackable && this._itemDataService && item.tileId != null
-          ? this._itemDataService.getVariantForQuantity(item.tileId, qty)
+          ? this._itemDataService.getVariantForQuantity(item.tileId, stackQty)
           : "0";
-      const displayItem = variantKey !== "0" ? { ...item, _variantKey: variantKey } : item;
+      const displayItem =
+        variantKey !== "0" ? { ...item, _variantKey: variantKey } : item;
 
       const icon = document.createElement("div");
       const builtIcon = this._buildItemIcon(displayItem);
@@ -323,17 +343,18 @@ export class InventoryUI {
         el.appendChild(builtIcon);
       } else {
         icon.className = "item-icon";
-        if (displayItem.spriteId != null) icon.dataset.spriteId = displayItem.spriteId;
+        if (displayItem.spriteId != null)
+          icon.dataset.spriteId = displayItem.spriteId;
         if (variantKey !== "0") icon.dataset.variantKey = variantKey;
         icon.setAttribute("aria-label", item.name);
         el.appendChild(icon);
       }
 
-      if (item.stackable && qty > 1) {
-        const qty = document.createElement("span");
-        qty.className = "item-qty";
-        qty.textContent = item.quantity;
-        el.appendChild(qty);
+      if (item.stackable && stackQty > 1) {
+        const qtyLabel = document.createElement("span");
+        qtyLabel.className = "item-qty";
+        qtyLabel.textContent = String(stackQty);
+        el.appendChild(qtyLabel);
       }
 
       el.title = this._buildTooltipText(item);
@@ -420,8 +441,7 @@ export class InventoryUI {
   _showFeedback(type, message) {
     const el = this._container.querySelector(".inventory-feedback");
     if (!el) return;
-    el.textContent = message
-      ?? (type === "invalid" ? "Local inválido" : "");
+    el.textContent = message ?? (type === "invalid" ? "Local inválido" : "");
     el.className = `inventory-feedback feedback-${type}`;
     clearTimeout(this._feedbackTimeout);
     this._feedbackTimeout = setTimeout(() => {
@@ -554,8 +574,13 @@ export class InventoryUI {
 
       .item-qty {
         position: absolute; bottom: 1px; right: 3px;
-        font-size: 9px; color: #ff8; font-weight: bold;
-        text-shadow: 0 0 2px #000;
+        font-size: 10px; color: #fff; font-weight: 700;
+        text-shadow: 0 1px 0 #000, 0 0 2px #000;
+        z-index: 2;
+        background: rgba(0, 0, 0, 0.72);
+        border-radius: 3px;
+        padding: 0 3px;
+        line-height: 1.1;
         pointer-events: none;
       }
 

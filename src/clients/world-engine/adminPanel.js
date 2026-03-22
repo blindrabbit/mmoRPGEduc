@@ -1,10 +1,11 @@
 // =============================================================================
-// adminPanel.js — WorldEngine Admin Panel
+// adminPanel.js — WorldEngine GM Panel (painel administrativo oficial)
 //
 // Painel de ferramentas GM desacoplado para o WorldEngine.
 // Responsabilidades:
 //   • Spawn e remoção de monstros
 //   • Teleporte para jogadores ("Go to Player")
+//   • Ações administrativas globais (heal all, kick, upload de mapa)
 //   • Chat GM → broadcast para todos os jogadores
 //   • Log de eventos e mensagens recebidas
 //
@@ -23,12 +24,15 @@ import {
   watchMonsters,
   syncChat,
   watchChat,
+  dbSet,
+  dbUpdate,
+  PATHS,
+  setMapChunks,
 } from "../../core/db.js";
-import { getPlayers, getMonsters } from "../../core/worldStore.js";
 import { makeMonster } from "../../core/schema.js";
 import { MONSTER_TEMPLATES } from "../../gameplay/monsterData.js";
 import { migrateMonstersToCurrentTemplates } from "../../gameplay/monsterMigration.js";
-import { runMigration as runPlayerStatsMigration, previewPlayerMigration } from "../../gameplay/progression/migratePlayerStats.js";
+import { runMigration as runPlayerStatsMigration } from "../../gameplay/progression/migratePlayerStats.js";
 
 // ---------------------------------------------------------------------------
 // CONSTANTES
@@ -49,6 +53,7 @@ let _adminName = "WorldEngine";
 let _getGameTime = () => Date.now();
 let _monsterCount = 0;
 let _unsubscribers = [];
+let _playersCache = {};
 
 // ---------------------------------------------------------------------------
 // INICIALIZAÇÃO PÚBLICA
@@ -187,6 +192,19 @@ function _buildUI(container) {
         <button id="btn-goto-player" style="flex:1">📍 Ir Até o Jogador</button>
         <button id="btn-select-inventory-player" style="flex:1" title="Abre o inventário deste jogador (tecla I)">🎒 Inventário</button>
       </div>
+      <button id="btn-kick-player" class="danger">⛔ Kickar Jogador Selecionado</button>
+
+      <!-- AÇÕES GLOBAIS -->
+      <h3>🌍 Ações Globais</h3>
+      <button id="btn-heal-all">❤ Curar Todos os Jogadores</button>
+      <button id="btn-clear-mobs" class="danger">🗑 Limpar Monstros</button>
+
+      <!-- MAPA JSON -->
+      <h3>🗺 Upload de Mapa</h3>
+      <div class="row">
+        <input id="map-file-input" type="file" accept=".json,application/json">
+      </div>
+      <button id="btn-upload-map">⬆ Enviar Mapa para Firebase</button>
 
       <!-- CHAT GM -->
       <h3>💬 Chat (GM)</h3>
@@ -230,6 +248,18 @@ function _bindButtons() {
   document
     .getElementById("btn-select-inventory-player")
     .addEventListener("click", _selectInventoryPlayer);
+  document
+    .getElementById("btn-kick-player")
+    .addEventListener("click", _kickSelectedPlayer);
+  document
+    .getElementById("btn-heal-all")
+    .addEventListener("click", _healAllPlayers);
+  document
+    .getElementById("btn-clear-mobs")
+    .addEventListener("click", _removeAllMonsters);
+  document
+    .getElementById("btn-upload-map")
+    .addEventListener("click", _uploadMapFromFile);
 
   const chatInput = document.getElementById("chat-input");
   document.getElementById("chat-send").addEventListener("click", _sendChat);
@@ -330,6 +360,44 @@ async function _removeAllMonsters() {
   _logSystem("🗑 Todos os monstros removidos.");
 }
 
+async function _healAllPlayers() {
+  const players = _playersCache ?? {};
+  const ids = Object.keys(players).filter((id) => id && id !== _adminId);
+  if (!ids.length) {
+    _logSystem("Nenhum jogador online para curar.");
+    return;
+  }
+
+  const updates = {};
+  let healed = 0;
+
+  for (const playerId of ids) {
+    const p = players[playerId] ?? {};
+    const maxHp = Number(p?.stats?.maxHp ?? p?.maxHp ?? 100);
+    const maxMp = Number(p?.stats?.maxMp ?? p?.maxMp ?? 0);
+
+    if (Number.isFinite(maxHp) && maxHp > 0) {
+      const hp = Math.floor(maxHp);
+      updates[`online_players/${playerId}/stats/hp`] = hp;
+      updates[`players_data/${playerId}/stats/hp`] = hp;
+    }
+    if (Number.isFinite(maxMp) && maxMp >= 0) {
+      const mp = Math.floor(maxMp);
+      updates[`online_players/${playerId}/stats/mp`] = mp;
+      updates[`players_data/${playerId}/stats/mp`] = mp;
+    }
+    healed += 1;
+  }
+
+  if (!Object.keys(updates).length) {
+    _logSystem("Não foi possível calcular HP/MP para cura global.");
+    return;
+  }
+
+  await dbUpdate(updates);
+  _logSystem(`❤ Cura global aplicada em ${healed} jogador(es).`);
+}
+
 async function _migratePlayersDry() {
   _logSystem("🔍 Calculando preview da migração (sem salvar)...");
   const result = await runPlayerStatsMigration({ dryRun: true });
@@ -337,7 +405,9 @@ async function _migratePlayersDry() {
     _logSystem(`❌ Erro no preview: ${result.error}`);
     return;
   }
-  _logSystem(`🔍 Preview: ${result.migrated} jogador(es). Veja o console para detalhes.`);
+  _logSystem(
+    `🔍 Preview: ${result.migrated} jogador(es). Veja o console para detalhes.`,
+  );
   for (const r of result.results) {
     _logSystem(
       `  ${r.playerId} (${r.class}): nível ${r.oldLevel}→${r.newLevel} | ${r.totalXp} XP | ${r.pointsRestored} pts`,
@@ -349,13 +419,14 @@ async function _migratePlayers() {
   if (
     !confirm(
       "Migrar TODOS os jogadores?\n\n" +
-      "• Recalcula nível pela nova curva 100×n^1.75\n" +
-      "• Reseta allocatedStats para zero\n" +
-      "• Devolve todos os pontos como disponíveis\n" +
-      "• Restaura HP/MP ao máximo\n\n" +
-      "Esta ação não pode ser desfeita automaticamente.",
+        "• Recalcula nível pela nova curva 100×n^1.75\n" +
+        "• Reseta allocatedStats para zero\n" +
+        "• Devolve todos os pontos como disponíveis\n" +
+        "• Restaura HP/MP ao máximo\n\n" +
+        "Esta ação não pode ser desfeita automaticamente.",
     )
-  ) return;
+  )
+    return;
 
   _logSystem("⚗ Aplicando migração de stats dos jogadores...");
   const result = await runPlayerStatsMigration({ dryRun: false });
@@ -417,13 +488,104 @@ function _gotoPlayer() {
 function _selectInventoryPlayer() {
   const sel = document.getElementById("player-select");
   const val = sel.value;
-  if (!val) { _logSystem("Nenhum jogador selecionado."); return; }
+  if (!val) {
+    _logSystem("Nenhum jogador selecionado.");
+    return;
+  }
   const [playerId] = val.split("|");
   if (typeof window._we_selectPlayer === "function") {
     window._we_selectPlayer(playerId);
     _logSystem(`🎒 Inventário: jogador ${playerId}`);
   } else {
     _logSystem("⚠ _we_selectPlayer não disponível.");
+  }
+}
+
+async function _kickSelectedPlayer() {
+  const sel = document.getElementById("player-select");
+  const val = sel.value;
+  if (!val) {
+    _logSystem("Nenhum jogador selecionado.");
+    return;
+  }
+
+  const [playerId] = val.split("|");
+  if (!playerId || playerId === _adminId) {
+    _logSystem("Jogador inválido para kick.");
+    return;
+  }
+
+  const playerName = _playersCache?.[playerId]?.name ?? playerId;
+  await removePlayer(playerId);
+  _logSystem(`⛔ ${playerName} removido do servidor.`);
+}
+
+function _isFlatMapPayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  const keys = Object.keys(payload);
+  if (!keys.length) return false;
+  return /^-?\d+,-?\d+,-?\d+$/.test(keys[0]);
+}
+
+function _parseOtbmToFlatMap(node, ctx = { z: 7 }, result = {}) {
+  if (!node || typeof node !== "object") return result;
+
+  if (node.type === 4 && node.props) {
+    ctx = { z: Number(node.props.base_z ?? 7) };
+  }
+
+  if (node.type === 5 && node.props) {
+    const x = Number(node.props.x);
+    const y = Number(node.props.y);
+    const z = Number(ctx.z ?? 7);
+    if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+      const layers = {};
+      const items = (node.children ?? [])
+        .filter((c) => c?.type === 6 && c?.props?.itemid)
+        .map((c) => ({ id: Number(c.props.itemid), count: 1 }));
+      if (items.length > 0) {
+        layers["2"] = items;
+      }
+      result[`${x},${y},${z}`] = layers;
+    }
+  }
+
+  for (const child of node.children ?? []) {
+    _parseOtbmToFlatMap(child, ctx, result);
+  }
+  return result;
+}
+
+async function _uploadMapFromFile() {
+  const input = document.getElementById("map-file-input");
+  const file = input?.files?.[0];
+  if (!file) {
+    _logSystem("Selecione um arquivo JSON de mapa.");
+    return;
+  }
+
+  try {
+    _logSystem(`Lendo ${file.name}...`);
+    const parsed = JSON.parse(await file.text());
+    const flatMap = _isFlatMapPayload(parsed)
+      ? parsed
+      : _parseOtbmToFlatMap(parsed);
+
+    const tileCount = Object.keys(flatMap ?? {}).length;
+    if (!tileCount) {
+      _logSystem("JSON de mapa inválido ou sem tiles.");
+      return;
+    }
+
+    _logSystem("Limpando world_tiles atual...");
+    await dbSet(PATHS.tiles, null);
+    _logSystem(`Enviando ${tileCount} tiles em chunks...`);
+    await setMapChunks(flatMap);
+    _logSystem(`✅ Upload concluído: ${tileCount} tiles publicados.`);
+  } catch (error) {
+    _logSystem(`❌ Erro no upload do mapa: ${error?.message ?? error}`);
   }
 }
 
@@ -459,6 +621,7 @@ function _bindFirebase() {
   // Watcher de jogadores
   const unsubPlayers = watchPlayers((data) => {
     const players = data ?? {};
+    _playersCache = players;
     const count = Object.keys(players).length;
     const el = document.getElementById("stat-players");
     if (el) el.textContent = count;
@@ -500,7 +663,8 @@ function _bindFirebase() {
       // Exclui entradas órfãs (sem espécie real, mortas ou sem posição válida)
       const valid = Object.values(monsters).filter(
         (m) =>
-          m.species && m.species !== "unknown" &&
+          m.species &&
+          m.species !== "unknown" &&
           !m.dead &&
           (m.stats?.hp ?? 0) > 0 &&
           (m.x !== 0 || m.y !== 0),

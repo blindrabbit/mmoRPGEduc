@@ -66,7 +66,11 @@ export class ItemDataService {
   canPickUp(tileId) {
     const entry = this._get(tileId);
     if (!entry) return false;
-    return !!(entry.game?.pickupable || entry.game?.is_pickupable || entry.flags_raw?.take);
+    return !!(
+      entry.game?.pickupable ||
+      entry.game?.is_pickupable ||
+      entry.flags_raw?.take
+    );
   }
 
   /**
@@ -95,7 +99,34 @@ export class ItemDataService {
    * @param {number|string} tileId
    */
   isStackable(tileId) {
-    return !!this._get(tileId)?.game?.is_stackable;
+    const entry = this._get(tileId);
+    if (!entry) return false;
+    return !!(
+      entry.game?.is_stackable ||
+      entry.game?.stackable ||
+      entry.flags_raw?.stackable
+    );
+  }
+
+  /**
+   * Retorna o stack máximo para o item.
+   * Fallback para 100 em itens empilháveis sem metadado explícito.
+   * @param {number|string} tileId
+   * @returns {number}
+   */
+  getMaxStack(tileId) {
+    const entry = this._get(tileId);
+    if (!entry) return 1;
+
+    const raw = Number(
+      entry.stackable?.stack_size ??
+        entry.game?.stack_size ??
+        entry.game?.max_stack ??
+        entry.flags_raw?.stack_size,
+    );
+    if (Number.isFinite(raw) && raw > 0) return Math.max(1, Math.floor(raw));
+
+    return this.isStackable(tileId) ? 100 : 1;
   }
 
   /**
@@ -143,8 +174,10 @@ export class ItemDataService {
 
     // 4. Flags planos (novo formato) e flags_raw (legado)
     const bank = entry.game?.bank ?? entry.flags_raw?.bank;
-    if (typeof bank === "object" ? bank?.waypoints > 0 : bank != null) return WALKABILITY.WALKABLE;
-    if (entry.game?.unpass === true || entry.flags_raw?.unpass === true) return WALKABILITY.NOT_WALKABLE;
+    if (typeof bank === "object" ? bank?.waypoints > 0 : bank != null)
+      return WALKABILITY.WALKABLE;
+    if (entry.game?.unpass === true || entry.flags_raw?.unpass === true)
+      return WALKABILITY.NOT_WALKABLE;
 
     return WALKABILITY.NOT_WALKABLE;
   }

@@ -630,6 +630,23 @@
         border-color: #2ecc71;
         cursor: pointer;
       }
+      .inv-item-qty {
+        position: absolute;
+        right: 2px;
+        bottom: 1px;
+        z-index: 3;
+        font-size: 10px;
+        font-weight: 700;
+        color: #fff;
+        background: rgba(0, 0, 0, 0.72);
+        border-radius: 3px;
+        padding: 0 3px;
+        line-height: 1.1;
+        text-shadow:
+          0 1px 0 #000,
+          0 0 2px #000;
+        pointer-events: none;
+      }
 
       /* Logout */
       #btn-logout {
@@ -1589,8 +1606,37 @@
           slot.dataset.itemSlot = String(i);
 
           const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
-          const qty = Number(item.quantity ?? 1);
-          const variantKey = item.stackable
+          const itemEntry =
+            mapData?.[tileId] ?? mapData?.[String(tileId)] ?? null;
+          const isLiquidContainer =
+            itemEntry?.game?.is_liquid_container === true;
+          const isStackable =
+            itemDataService?.isStackable?.(tileId) ??
+            itemEntry?.game?.is_stackable ??
+            !!item.stackable;
+          const quantityRaw = Number(item.quantity);
+          const countRaw = Number(item.count);
+          const amountRaw = Number(item.amount);
+          const stackCountRaw = Number(item.stackCount);
+          const chargesRaw = Number(item.charges);
+          const hasQuantity = Number.isFinite(quantityRaw) && quantityRaw > 0;
+          const hasCount = Number.isFinite(countRaw) && countRaw > 0;
+          const hasAmount = Number.isFinite(amountRaw) && amountRaw > 0;
+          const hasStackCount =
+            Number.isFinite(stackCountRaw) && stackCountRaw > 0;
+          const hasCharges = Number.isFinite(chargesRaw) && chargesRaw > 0;
+          const numericCandidates = [
+            hasQuantity ? quantityRaw : null,
+            !isLiquidContainer && hasCount ? countRaw : null,
+            hasAmount ? amountRaw : null,
+            hasStackCount ? stackCountRaw : null,
+            hasCharges ? chargesRaw : null,
+          ].filter((value) => value != null);
+          const qtyRaw =
+            numericCandidates.length > 0 ? Math.max(...numericCandidates) : 1;
+          const qty = Math.max(1, Math.floor(qtyRaw));
+          const hasExplicitQty = numericCandidates.length > 0;
+          const variantKey = isStackable
             ? (itemDataService?.getVariantForQuantity(tileId, qty) ?? "0")
             : item.content_type != null
               ? getLiquidVariantKey(item.content_type)
@@ -1615,20 +1661,14 @@
             fallback.textContent = "?";
             slot.appendChild(fallback);
           }
-          if (qty > 1) {
+          if (isStackable && qty > 1) {
             const badge = document.createElement("span");
+            badge.className = "inv-item-qty";
             badge.textContent = String(qty);
-            badge.style.position = "absolute";
-            badge.style.right = "2px";
-            badge.style.bottom = "1px";
-            badge.style.fontSize = "10px";
-            badge.style.fontWeight = "bold";
-            badge.style.color = "#ffdf7a";
-            badge.style.textShadow = "0 0 2px #000";
             slot.appendChild(badge);
           }
 
-          slot.title = buildDesc(item);
+          slot.title = `${buildDesc(item)}\nQtd: ${qty}`;
         }
       }
 
@@ -1771,7 +1811,7 @@
 
         const _rendTile = {
           id: tileId,
-          count: Number(item?.quantity ?? 1),
+          count: Number(item?.quantity ?? item?.count ?? 1),
           __worldItemId: worldItemId,
         };
         // Para liquid containers, o count do mapa indica o tipo de líquido
@@ -2467,9 +2507,8 @@
             blog("tilesData vazio no Firebase", "warn");
           }
         } catch (e) {
-          mapData = {};
-          itemDataService = initItemDataService({});
           blog(`Falha ao carregar tilesData do Firebase: ${e.message}`, "err");
+          return false;
         }
 
         // Assets: atlas segmentados (sprites locais) + sprites legados
@@ -2716,6 +2755,15 @@
                     "fruitjuice",
                   ];
                   const itemEntry = itemDataService?.getEntry?.(tileId);
+                  const mapStackable =
+                    itemDataService?.isStackable?.(tileId) ??
+                    itemEntry?.game?.is_stackable ??
+                    false;
+                  const mapMaxStack =
+                    itemDataService?.getMaxStack?.(tileId) ??
+                    (mapStackable
+                      ? Number(itemEntry?.stackable?.stack_size ?? 100)
+                      : 1);
                   let extraFields = { ...srcTileExtraFields };
                   if (
                     itemEntry?.game?.is_liquid_container &&
@@ -2731,10 +2779,19 @@
                   const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${_maptileTs}`;
                   const actionId = `${uid}_map_tile_pickup_${_maptileTs}`;
                   await dbSet(`${PATHS.actions}/${actionId}`, {
-                    id: actionId, playerId: uid, type: "map_tile_pickup",
-                    coord, tileId, mapLayer,
+                    id: actionId,
+                    playerId: uid,
+                    type: "map_tile_pickup",
+                    coord,
+                    tileId,
+                    mapLayer,
                     clientTempId: tempId,
-                    ts: _maptileTs, expiresAt: _maptileTs + 5000,
+                    tileCount: Number(tileQuantity ?? 1),
+                    stackable: mapStackable,
+                    maxStack: mapMaxStack,
+                    content_type: extraFields.content_type ?? null,
+                    ts: _maptileTs,
+                    expiresAt: _maptileTs + 5000,
                   });
 
                   // Aguarda o worldEngine processar e criar o world_item
@@ -3298,7 +3355,10 @@
               playerActionOnMove(nx, ny, nz, dir);
 
               // Verifica efeito de tile (teleporte ou escada)
-              const effect = resolveStepOnEffects(nx, ny, nz, { map, assets: { mapData } });
+              const effect = resolveStepOnEffects(nx, ny, nz, {
+                map,
+                assets: { mapData },
+              });
               if (effect?.type === "teleport") {
                 myPos.x = effect.dest.x;
                 myPos.y = effect.dest.y;
@@ -3340,9 +3400,15 @@
               // Envia para validação pelo worldEngine (zero-trust)
               const actionId = `${uid}_move_${Date.now()}`;
               dbSet(`${PATHS.actions}/${actionId}`, {
-                id: actionId, playerId: uid, type: "move",
-                x: nx, y: ny, z: nz, direcao: dir,
-                ts: Date.now(), expiresAt: Date.now() + 5000,
+                id: actionId,
+                playerId: uid,
+                type: "move",
+                x: nx,
+                y: ny,
+                z: nz,
+                direcao: dir,
+                ts: Date.now(),
+                expiresAt: Date.now() + 5000,
               }).catch(() => {});
 
               pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);

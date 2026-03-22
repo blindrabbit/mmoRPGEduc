@@ -29,7 +29,9 @@ function _boundedMap(maxSize = 2000) {
     has: (k) => m.has(k),
     delete: (k) => m.delete(k),
     clear: () => m.clear(),
-    get size() { return m.size; },
+    get size() {
+      return m.size;
+    },
   };
 }
 
@@ -78,7 +80,9 @@ function _flattenTileEntries(tileLayers, layerKeys) {
 
 function _resolveRenderLayer(metadata, category = "common") {
   // New format: game.layer; old format fallback: game.render_layer
-  const rawLayer = Number(metadata?.game?.layer ?? metadata?.game?.render_layer);
+  const rawLayer = Number(
+    metadata?.game?.layer ?? metadata?.game?.render_layer,
+  );
   if (Number.isFinite(rawLayer)) {
     return Math.max(0, Math.min(3, Math.floor(rawLayer)));
   }
@@ -198,13 +202,32 @@ export function getTileDrawElevation({
   const metaIndex = nexoData ?? assets?.mapData ?? null;
   if (!metaIndex || typeof metaIndex !== "object") return 0;
 
+  // OTClient: apenas "coisas" com footprint real > 1 tile devem propagar
+  // elevação para tiles vizinhos. Tamanho de sprite em pixels (w/h, grid_size)
+  // NÃO implica footprint multi-tile.
+  function _isTrueMultiTile(spriteMeta) {
+    const widthTiles = Number(
+      spriteMeta?.game?.width ?? spriteMeta?.width ?? spriteMeta?.dimensions?.w,
+    );
+    const heightTiles = Number(
+      spriteMeta?.game?.height ??
+        spriteMeta?.height ??
+        spriteMeta?.dimensions?.h,
+    );
+    return (
+      (Number.isFinite(widthTiles) && widthTiles > 1) ||
+      (Number.isFinite(heightTiles) && heightTiles > 1)
+    );
+  }
+
   // Função auxiliar: extrai e soma elevation de um tile
   function _elevFromTile(checkX, checkY, onlyMultiTile = false) {
     const coord = `${checkX},${checkY},${tz}`;
     let items = null;
     const fromIndex = floorIndex?.get?.(tz)?.get?.(coord);
     if (fromIndex) {
-      items = fromIndex.flatItems ??
+      items =
+        fromIndex.flatItems ??
         (fromIndex.layers
           ? _flattenTileItems(fromIndex.layers, fromIndex.layerKeys)
           : (fromIndex.items ?? []));
@@ -214,8 +237,10 @@ export function getTileDrawElevation({
       if (Array.isArray(tileValue)) items = tileValue;
       else if (Array.isArray(tileValue?.items)) items = tileValue.items;
       else if (typeof tileValue === "object") {
-        const lk = Object.keys(tileValue).map(k=>parseInt(k,10))
-          .filter(n=>Number.isFinite(n)).sort((a,b)=>a-b);
+        const lk = Object.keys(tileValue)
+          .map((k) => parseInt(k, 10))
+          .filter((n) => Number.isFinite(n))
+          .sort((a, b) => a - b);
         items = _flattenTileItems(tileValue, lk);
       }
     }
@@ -223,17 +248,22 @@ export function getTileDrawElevation({
 
     let elev = 0;
     for (const item of items) {
-      const spriteId = typeof item === "object" && item !== null ? item.id : item;
+      const spriteId =
+        typeof item === "object" && item !== null ? item.id : item;
       if (!spriteId) continue;
       const spriteMeta = metaIndex[String(spriteId)];
       if (!spriteMeta) continue;
-      // Se só queremos multi-tile, pular sprites 32x32
+      // Se só queremos multi-tile, aceitar apenas footprint real > 1 tile.
       if (onlyMultiTile) {
-        const gs = spriteMeta.grid_size ?? 32;
-        if (gs <= 32) continue;
+        if (!_isTrueMultiTile(spriteMeta)) continue;
       }
       const category = classifyItemOT(spriteMeta);
-      if (category === "ground" || category === "groundBorder" || category === "top") continue;
+      if (
+        category === "ground" ||
+        category === "groundBorder" ||
+        category === "top"
+      )
+        continue;
       const e = _getSpriteElevation(spriteId, metaIndex);
       elev = Math.min(elev + e, MAX_DRAW_ELEVATION);
     }
@@ -243,14 +273,15 @@ export function getTileDrawElevation({
   // Elevation do tile exato do player
   let elevation = _elevFromTile(tx, ty, false);
 
-  // Verificar tiles vizinhos para sprites multi-tile (gs > 32) com âncora bottom-right.
+  // Verificar tiles vizinhos para sprites com footprint multi-tile real
+  // (largura/altura em tiles > 1) com âncora bottom-right.
   // Um sprite 2x2 em (ax, ay) cobre (ax-1,ay-1),(ax,ay-1),(ax-1,ay),(ax,ay).
   // Para o player em (tx, ty), verificar (tx+1,ty), (tx,ty+1), (tx+1,ty+1).
   // Se algum desses tiles tem sprite multi-tile com h_elev, ele cobre o tile do player.
   if (elevation === 0) {
     const neighborElev = Math.max(
-      _elevFromTile(tx + 1, ty,     true),
-      _elevFromTile(tx,     ty + 1, true),
+      _elevFromTile(tx + 1, ty, true),
+      _elevFromTile(tx, ty + 1, true),
       _elevFromTile(tx + 1, ty + 1, true),
     );
     elevation = neighborElev;
@@ -274,10 +305,10 @@ function classifyItemOT(metadata) {
 
   // ✅ Novo formato: flags planos em game (sem nested flags.movement/visual)
   // Fallback: flags_raw (formato legado do protobuf)
-  const bank      = game.bank      ?? raw.bank;
-  const clip      = game.clip      ?? raw.clip;
-  const bottom    = game.bottom    ?? raw.bottom;
-  const top       = game.top       ?? raw.top;
+  const bank = game.bank ?? raw.bank;
+  const clip = game.clip ?? raw.clip;
+  const bottom = game.bottom ?? raw.bottom;
+  const top = game.top ?? raw.top;
   const topeffect = game.topeffect ?? raw.topeffect;
 
   // ThingFlagAttrGround — bank (waypoints > 0) ou layer 0
@@ -292,8 +323,8 @@ function classifyItemOT(metadata) {
   // NÃO groundBorder. Devem aparecer no main pass SOBRE as bordas de grama.
   const unpassForClip = game.unpass ?? raw.unpass;
   if (clip && !bottom) {
-    if (unpassForClip) return "bottom";   // arbusto/pedra bloqueante → bottom
-    return "groundBorder";                // borda de grama, detalhe de chão → groundBorder
+    if (unpassForClip) return "bottom"; // arbusto/pedra bloqueante → bottom
+    return "groundBorder"; // borda de grama, detalhe de chão → groundBorder
   }
 
   // ThingFlagAttrOnBottom — bottom flag
@@ -323,7 +354,11 @@ function classifyItemOT(metadata) {
   const unpass = game.unpass ?? raw.unpass;
   if (unpass && !bank && !clip) {
     const cat = (game.category_type ?? "").toLowerCase();
-    if (cat === "obstacle" || cat === "furniture" || cat === "floor_decoration") {
+    if (
+      cat === "obstacle" ||
+      cat === "furniture" ||
+      cat === "floor_decoration"
+    ) {
       return "bottom";
     }
   }
@@ -513,7 +548,8 @@ function calculateSpritePosition(
   const _bb = metadata?.bounding_box;
   const bbox = (Array.isArray(_bb) ? _bb[0] : _bb) || { x: 0, y: 0 };
   // ✅ Novo: game.shift (plano); Fallback: flags_raw.shift (legado)
-  const shift = metadata?.game?.shift || metadata?.flags_raw?.shift || { x: 0, y: 0 };
+  const shift = metadata?.game?.shift ||
+    metadata?.flags_raw?.shift || { x: 0, y: 0 };
 
   // Quantos tiles de 32px o sprite ocupa (dimensões REAIS do atlas)
   const sizeW = Math.ceil(spriteInfo.w / 32);
@@ -1408,7 +1444,7 @@ function _renderMainPass(opts) {
             const aIsCommon = a?.category === "common";
             const bIsCommon = b?.category === "common";
             if (aIsCommon && bIsCommon) return btl - atl; // DESC para common (OTClient reverse_view)
-            return atl - btl;                              // ASC para bottom
+            return atl - btl; // ASC para bottom
           }
 
           return Number(a?.spriteId ?? 0) - Number(b?.spriteId ?? 0);

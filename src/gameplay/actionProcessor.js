@@ -150,10 +150,22 @@ async function _dispatch(actionId, action, now) {
   if (type === "item" && _isPrivilegedActor(playerId)) {
     return _processItem(action, { id: playerId, name: "WorldEngine" }, now);
   }
+  if (type === "map_tile_pickup" && _isPrivilegedActor(playerId)) {
+    return _processMapTilePickup(
+      action,
+      { id: playerId, name: "WorldEngine", x: 0, y: 0, z: 7 },
+      now,
+    );
+  }
 
   const players = getPlayers();
   const playerKey = resolvePlayerKey(players, playerId);
-  if (!playerKey) return;
+  if (!playerKey) {
+    console.warn(
+      `[actionProcessor] ação descartada sem player online: type=${type} playerId=${playerId}`,
+    );
+    return;
+  }
 
   const player = players[playerKey];
   if (!player) return;
@@ -591,15 +603,18 @@ export async function tickExpiredBuffs(now = Date.now()) {
 
     const updates = {};
     if (buff.targetType === "player") {
-      updates[`${PATHS.playerDataStats(buff.targetId)}/${buff.stat}`] = buff.originalValue;
-      updates[`${PATHS.playerStats(buff.targetId)}/${buff.stat}`]     = buff.originalValue;
+      updates[`${PATHS.playerDataStats(buff.targetId)}/${buff.stat}`] =
+        buff.originalValue;
+      updates[`${PATHS.playerStats(buff.targetId)}/${buff.stat}`] =
+        buff.originalValue;
     } else {
-      updates[`world_entities/${buff.targetId}/stats/${buff.stat}`] = buff.originalValue;
+      updates[`world_entities/${buff.targetId}/stats/${buff.stat}`] =
+        buff.originalValue;
     }
 
     if (Object.keys(updates).length > 0) {
       await batchWrite(updates).catch((e) =>
-        console.error("[tickExpiredBuffs] Erro ao reverter buff:", e)
+        console.error("[tickExpiredBuffs] Erro ao reverter buff:", e),
       );
     }
   }
@@ -644,43 +659,44 @@ let _itemMoveValidator = null;
  * @returns {{ from: Object, to: Object, count?: number } | null}
  */
 function _buildMovePayload(src, playerId) {
-  const { itemAction, slotIndex, toSlot, worldItemId, equipSlot, quantity } = src;
+  const { itemAction, slotIndex, toSlot, worldItemId, equipSlot, quantity } =
+    src;
 
   switch (itemAction) {
     case "drop":
       return {
         from: { type: "inventory", slotIndex },
-        to:   { type: "map", position: { x: src.toX, y: src.toY, z: src.toZ } },
+        to: { type: "map", position: { x: src.toX, y: src.toY, z: src.toZ } },
         count: quantity ?? null,
       };
     case "moveWorld":
       return {
         from: { type: "world", itemId: worldItemId },
-        to:   { type: "map", position: { x: src.toX, y: src.toY, z: src.toZ } },
+        to: { type: "map", position: { x: src.toX, y: src.toY, z: src.toZ } },
         count: quantity ?? null,
       };
     case "pickUp":
       return {
         from: { type: "world", itemId: worldItemId },
-        to:   { type: "inventory" },
+        to: { type: "inventory" },
         count: null,
       };
     case "equip":
       return {
         from: { type: "inventory", slotIndex },
-        to:   { type: "equipment", slotId: equipSlot },
+        to: { type: "equipment", slotId: equipSlot },
         count: null,
       };
     case "unequip":
       return {
         from: { type: "equipment", slotId: equipSlot },
-        to:   { type: "inventory", slotIndex: slotIndex ?? undefined },
+        to: { type: "inventory", slotIndex: slotIndex ?? undefined },
         count: null,
       };
     case "move":
       return {
         from: { type: "inventory", slotIndex },
-        to:   { type: "inventory", slotIndex: toSlot },
+        to: { type: "inventory", slotIndex: toSlot },
         count: null,
       };
     default:
@@ -699,13 +715,13 @@ async function _processItem(action, player, now) {
       ? action.payload
       : action;
 
-  const playerId       = action.playerId ?? src.playerId;
-  const itemAction     = src.itemAction;
-  const slotIndex      = src.slotIndex;
-  const toSlot         = src.toSlot;
-  const worldItemId    = src.worldItemId;
-  const equipSlot      = src.equipSlot;
-  const quantity       = src.quantity;
+  const playerId = action.playerId ?? src.playerId;
+  const itemAction = src.itemAction;
+  const slotIndex = src.slotIndex;
+  const toSlot = src.toSlot;
+  const worldItemId = src.worldItemId;
+  const equipSlot = src.equipSlot;
+  const quantity = src.quantity;
   // ID gerado pelo DragDropManager — permite emitir ACTION_CONFIRMED/REJECTED
   const clientActionId = src.actionId ?? null;
 
@@ -725,9 +741,8 @@ async function _processItem(action, player, now) {
   // Ações sem mapeamento (use, splitWorld) seguem pelo caminho legado.
   const movePayload = _buildMovePayload(src, playerId);
   if (movePayload) {
-    const { ItemMoveValidator } = await import(
-      "../server/worldEngine/validators/ItemMoveValidator.js"
-    );
+    const { ItemMoveValidator } =
+      await import("../server/worldEngine/validators/ItemMoveValidator.js");
     if (!_itemMoveValidator) _itemMoveValidator = new ItemMoveValidator();
 
     const validationResult = await _itemMoveValidator.validate({
@@ -849,7 +864,10 @@ async function _processMove(action, player, now) {
   const dx = Math.abs(x - (player.x ?? 0));
   const dy = Math.abs(y - (player.y ?? 0));
   if (dx > 1 || dy > 1) {
-    pushLog("error", `[${player.name}] movimento inválido: delta (${dx},${dy})`);
+    pushLog(
+      "error",
+      `[${player.name}] movimento inválido: delta (${dx},${dy})`,
+    );
     return;
   }
 
@@ -881,20 +899,56 @@ async function _processMapTilePickup(action, player, now) {
   const [tx, ty, tz] = String(coord).split(",").map(Number);
   if (isNaN(tx) || isNaN(ty) || isNaN(tz)) return;
 
-  const dist = Math.max(Math.abs(tx - player.x), Math.abs(ty - player.y));
-  if (dist > 1 || tz !== player.z) {
+  const bypassRangeCheck =
+    _isPrivilegedActor(playerId) || _isPrivilegedActor(player?.id);
+  const dist = Math.max(
+    Math.abs(tx - Number(player?.x ?? tx)),
+    Math.abs(ty - Number(player?.y ?? ty)),
+  );
+  if (!bypassRangeCheck && (dist > 1 || tz !== Number(player?.z ?? tz))) {
     pushLog("error", `[${player.name}] tentou pegar tile fora de alcance`);
     return;
   }
 
-  const tempId = action.clientTempId ?? `maptile_${String(coord).replace(/,/g, "_")}_${tileId}_${now}`;
+  const tileCountRaw = Number(
+    action.tileCount ?? action.quantity ?? action.count ?? 1,
+  );
+  const tileCount =
+    Number.isFinite(tileCountRaw) && tileCountRaw > 0
+      ? Math.max(1, Math.floor(tileCountRaw))
+      : 1;
+  const stackable = Boolean(action.stackable);
+  const normalizedQty = stackable ? tileCount : 1;
+  const normalizedMaxStackRaw = Number(action.maxStack);
+  const normalizedMaxStack =
+    Number.isFinite(normalizedMaxStackRaw) && normalizedMaxStackRaw > 0
+      ? Math.max(1, Math.floor(normalizedMaxStackRaw))
+      : stackable
+        ? 99
+        : 1;
+  const contentType = action.content_type ?? action.contentType ?? null;
+
+  const tempId =
+    action.clientTempId ??
+    `maptile_${String(coord).replace(/,/g, "_")}_${tileId}_${now}`;
   await batchWrite({
     [`world_items/${tempId}`]: {
-      id: tempId, tileId: Number(tileId),
-      x: tx, y: ty, z: tz,
-      type: "material", quantity: 1, stackable: false,
-      fromMap: true, sourceCoord: coord,
-      sourceLayer: Number(mapLayer), sourceTileId: Number(tileId),
+      id: tempId,
+      tileId: Number(tileId),
+      x: tx,
+      y: ty,
+      z: tz,
+      type: "material",
+      quantity: normalizedQty,
+      count: normalizedQty,
+      stackable,
+      maxStack: normalizedMaxStack,
+      ...(contentType != null ? { content_type: contentType } : {}),
+      fromMap: true,
+      sourceCoord: coord,
+      sourceLayer: Number(mapLayer),
+      sourceTileId: Number(tileId),
+      sourceTileCount: tileCount,
       skipRangeCheck: false,
       expiresAt: now + 60_000,
     },
@@ -908,7 +962,10 @@ async function _processToggleDoor(action, player, now) {
   const { playerId, target, fromId, toId } = action;
   if (!target || fromId == null || toId == null) return;
 
-  const dist = Math.max(Math.abs(target.x - player.x), Math.abs(target.y - player.y));
+  const dist = Math.max(
+    Math.abs(target.x - player.x),
+    Math.abs(target.y - player.y),
+  );
   if (dist > 1 || target.z !== player.z) {
     pushLog("error", `[${player.name}] porta fora de alcance`);
     return;
@@ -919,10 +976,19 @@ async function _processToggleDoor(action, player, now) {
 
   const { x, y, z } = target;
   worldEvents.emit(EVENT_TYPES.DOOR_TOGGLED, {
-    x, y, z, fromId, toId, playerId, timestamp: now,
+    x,
+    y,
+    z,
+    fromId,
+    toId,
+    playerId,
+    timestamp: now,
   });
 
-  pushLog("system", `[${player.name}] ${fromId === action.fromId ? "abriu" : "fechou"} porta em ${x},${y}`);
+  pushLog(
+    "system",
+    `[${player.name}] ${fromId === action.fromId ? "abriu" : "fechou"} porta em ${x},${y}`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -933,7 +999,10 @@ async function _processChangeFloor(action, player, now) {
   if (fromZ == null || toZ == null) return;
 
   if (Math.abs(toZ - fromZ) !== 1) {
-    pushLog("error", `[${player.name}] mudança de andar inválida: ${fromZ} → ${toZ}`);
+    pushLog(
+      "error",
+      `[${player.name}] mudança de andar inválida: ${fromZ} → ${toZ}`,
+    );
     return;
   }
 

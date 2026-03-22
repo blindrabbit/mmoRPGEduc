@@ -141,14 +141,17 @@ export class Initializer {
     this.logger.info("[1/4] tilesData (Firebase)");
     const [mapData, flagDefs] = await Promise.all([
       loadFirebaseTilesData(),
-      getFlagDefinitions().catch(() => null),
+      getFlagDefinitions(),
     ]);
+    if (!flagDefs || typeof flagDefs !== "object") {
+      throw new Error("world_flag_definitions indisponivel no Firebase");
+    }
     this.worldState.mapData = mapData;
-    this.worldState.flagDefs = flagDefs ?? {};
+    this.worldState.flagDefs = flagDefs;
     FlagResolver.init(this.worldState.flagDefs);
     this.logger.ok(
       `Metadata: ${Object.keys(this.worldState.mapData).length} itens, ` +
-      `${Object.keys(this.worldState.flagDefs).length} flags`,
+        `${Object.keys(this.worldState.flagDefs).length} flags`,
     );
 
     // [2/4] Atlas segmentados (usa metadata já lida do Firebase)
@@ -526,7 +529,6 @@ export class Initializer {
         `✓ ItemDataService: ${itemDataService.getAllItemIds().length} itens indexados`,
       );
 
-
       // ── Cache local de world_items (Firebase) indexado por coordenada ──
       // Chave primária: ID Firebase  Chave secundária: "x,y,z"
       const WORLD_ITEM_LAYER = 99;
@@ -780,15 +782,62 @@ export class Initializer {
               const mapLayer = parts.pop(); // "2"
               const coord = parts.join("_"); // "94,106,7"
               const [tx, ty, tz] = coord.split(",").map(Number);
+              const srcTileArr = ws.map?.[coord]?.[mapLayer];
+              const srcTile = Array.isArray(srcTileArr)
+                ? srcTileArr.find((t) => Number(t?.id) === Number(tileId))
+                : null;
+              const tileCount = Number(srcTile?.count ?? 1);
+              const itemEntry = itemDataService?.getEntry?.(tileId);
+              const mapStackable =
+                itemDataService?.isStackable?.(tileId) ??
+                itemEntry?.game?.is_stackable ??
+                false;
+              const mapMaxStack =
+                itemDataService?.getMaxStack?.(tileId) ??
+                (mapStackable
+                  ? Number(itemEntry?.stackable?.stack_size ?? 100)
+                  : 1);
+
+              const LIQUID_TYPES = [
+                "empty",
+                "water",
+                "blood",
+                "beer",
+                "slime",
+                "lemonade",
+                "milk",
+                "mana",
+                "lifefluid",
+                "urine",
+                "rum",
+                "fruitjuice",
+              ];
+              let contentType = srcTile?.content_type ?? null;
+              if (
+                (contentType === undefined || contentType === null) &&
+                itemEntry?.game?.is_liquid_container
+              ) {
+                const liquidIndex = Number(srcTile?.count ?? 0);
+                contentType = LIQUID_TYPES[liquidIndex] ?? "empty";
+              }
 
               const _maptileTs = Date.now();
               const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${_maptileTs}`;
               const actionId = `${playerId}_map_tile_pickup_${_maptileTs}`;
               await dbSet(`${PATHS.actions}/${actionId}`, {
-                id: actionId, playerId, type: "map_tile_pickup",
-                coord, tileId, mapLayer,
+                id: actionId,
+                playerId,
+                type: "map_tile_pickup",
+                coord,
+                tileId,
+                mapLayer,
                 clientTempId: tempId,
-                ts: _maptileTs, expiresAt: _maptileTs + 5000,
+                tileCount: Number.isFinite(tileCount) ? tileCount : 1,
+                stackable: mapStackable,
+                maxStack: mapMaxStack,
+                content_type: contentType ?? null,
+                ts: _maptileTs,
+                expiresAt: _maptileTs + 5000,
               });
 
               // Aguarda o worldEngine processar e criar o world_item

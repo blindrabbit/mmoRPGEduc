@@ -1,7 +1,7 @@
 // =============================================================================
 // worldStore.js — mmoRPGGame  [FASE IMEDIATA — refatorado]
 // Estado global do mundo — fonte única de verdade.
-// Usado por: worldEngine.html, rpg.html, admin.html
+// Usado por: worldEngine.html, rpg.html
 //
 // MUDANÇA: import { dbWatch } from './firebaseClient.js'
 //       → import { watchMonsters, watchPlayers,
@@ -74,10 +74,12 @@ export function initWorldStore() {
   // de combat quando ticks se sobrepunham (async setInterval). mergeMonsters já preserva
   // os campos de AI local (lastAiTick, lastAttack) via spread order, portanto é seguro
   // atualizar o store mesmo durante um tick em andamento.
-  _watchers.push(watchMonsters((data) => {
-    mergeMonsters(normalizeCollection(data, "monster"));
-    notify("monsters", state.monsters);
-  }));
+  _watchers.push(
+    watchMonsters((data) => {
+      mergeMonsters(normalizeCollection(data, "monster"));
+      notify("monsters", state.monsters);
+    }),
+  );
 
   // também faz uma leitura pontual imediata para garantir que qualquer
   // monstro persistido *antes* da conexão seja carregado mesmo que o
@@ -95,67 +97,84 @@ export function initWorldStore() {
     });
 
   // online_players — jogadores
-  _watchers.push(watchPlayers((data) => {
-    mergePlayers(normalizeCollection(data, "player"));
-    notify("players", state.players);
-  }));
+  _watchers.push(
+    watchPlayers((data) => {
+      mergePlayers(normalizeCollection(data, "player"));
+      notify("players", state.players);
+    }),
+  );
 
   // world_effects — efeitos visuais e cadáveres
   // Usa child_added/removed em vez de onValue para que cada effect
   // apareça individualmente assim que chega — sem esperar todos os
   // filhos de um batchWrite (crítico para animações AOE em sequência).
-  _watchers.push(watchEffectsChildren({
-    onAdd: (id, data) => {
-      if (!data) return;
-      // Override startTime with client receive time so every client sees the
-      // full animation duration regardless of network latency.
-      const normalized = normalizeEntity({ id, ...data, startTime: Date.now() }, "effect");
-      if (normalized) {
-        state.effects[id] = normalized;
-        notify("effects", state.effects);
-      }
-    },
-    onRemove: (id) => {
-      delete state.effects[id];
-      notify("effects", state.effects);
-    },
-    onChange: (id, data) => {
-      if (!data) {
+  _watchers.push(
+    watchEffectsChildren({
+      onAdd: (id, data) => {
+        if (!data) return;
+        // Override startTime with client receive time so every client sees the
+        // full animation duration regardless of network latency.
+        const normalized = normalizeEntity(
+          { id, ...data, startTime: Date.now() },
+          "effect",
+        );
+        if (normalized) {
+          state.effects[id] = normalized;
+          notify("effects", state.effects);
+        }
+      },
+      onRemove: (id) => {
         delete state.effects[id];
-      } else {
-        // Preserve existing startTime so animation isn't reset on partial updates.
-        const existing = state.effects[id];
-        const effectData = existing?.startTime
-          ? { ...data, startTime: existing.startTime }
-          : { ...data, startTime: Date.now() };
-        const normalized = normalizeEntity({ id, ...effectData }, "effect");
-        if (normalized) state.effects[id] = normalized;
-      }
-      notify("effects", state.effects);
-    },
-  }));
+        notify("effects", state.effects);
+      },
+      onChange: (id, data) => {
+        if (!data) {
+          delete state.effects[id];
+        } else {
+          // Preserve existing startTime so animation isn't reset on partial updates.
+          const existing = state.effects[id];
+          const effectData = existing?.startTime
+            ? { ...data, startTime: existing.startTime }
+            : { ...data, startTime: Date.now() };
+          const normalized = normalizeEntity({ id, ...effectData }, "effect");
+          if (normalized) state.effects[id] = normalized;
+        }
+        notify("effects", state.effects);
+      },
+    }),
+  );
 
   // world_fields — campos persistentes (fogo, veneno, etc.)
-  _watchers.push(watchFields((data) => {
-    state.fields = normalizeCollection(data, "field");
-    notify("fields", state.fields);
-  }));
+  _watchers.push(
+    watchFields((data) => {
+      state.fields = normalizeCollection(data, "field");
+      notify("fields", state.fields);
+    }),
+  );
 
   // monster_templates — catálogo remoto canônico (nome/species/ataques)
-  _watchers.push(watchMonsterTemplates((data) => {
-    setMonsterTemplates(data || {});
-  }));
+  _watchers.push(
+    watchMonsterTemplates((data) => {
+      setMonsterTemplates(data || {});
+    }),
+  );
 
   // world_chat — mensagens de chat (child_added, entregue uma a uma)
-  _watchers.push(watchChat((msg) => {
-    state.chat.push(msg);
-    if (state.chat.length > 200) state.chat.shift(); // cap local
-    notify("chat", msg);
-  }));
+  _watchers.push(
+    watchChat((msg) => {
+      state.chat.push(msg);
+      if (state.chat.length > 200) state.chat.shift(); // cap local
+      notify("chat", msg);
+    }),
+  );
 }
 
 export function destroyWorldStore() {
-  _watchers.forEach(unsub => { try { unsub(); } catch(e) {} });
+  _watchers.forEach((unsub) => {
+    try {
+      unsub();
+    } catch (e) {}
+  });
   _watchers.length = 0;
   initialized = false;
   state.monsters = {};

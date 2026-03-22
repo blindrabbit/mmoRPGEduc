@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // eventLog.js — Painel de log unificado com deduplicação
-// Usado por: worldEngine.html, RPG.html, ADMIN.html
+// Usado por: worldEngine.html, RPG.html
 // ═══════════════════════════════════════════════════════════════
 
 const ICONS = {
@@ -145,7 +145,12 @@ export function pushLog(sourceOrType, typeOrMsg, msgOrDetail, detailOrUndef) {
     // pushLog(source, type, msg)  ou  pushLog(type, msg, detail)
     const knownTypes = Object.keys(ICONS);
     if (knownTypes.includes(typeOrMsg)) {
-      [source, type, msg, detail] = [sourceOrType, typeOrMsg, msgOrDetail, undefined];
+      [source, type, msg, detail] = [
+        sourceOrType,
+        typeOrMsg,
+        msgOrDetail,
+        undefined,
+      ];
     } else {
       [source, type, msg, detail] = ["", sourceOrType, typeOrMsg, msgOrDetail];
     }
@@ -195,11 +200,16 @@ function _pushToInstance(inst, source, type, msg, detail) {
     "line-height:1.6",
     "transition:background 0.2s",
   ].join(";");
-  row.onmouseenter = () => { row.style.background = "#111827"; };
-  row.onmouseleave = () => { row.style.background = ""; };
+  row.onmouseenter = () => {
+    row.style.background = "#111827";
+  };
+  row.onmouseleave = () => {
+    row.style.background = "";
+  };
 
   const tsEl = document.createElement("span");
-  tsEl.style.cssText = "color:#4a5568;font-size:10px;flex-shrink:0;min-width:56px";
+  tsEl.style.cssText =
+    "color:#4a5568;font-size:10px;flex-shrink:0;min-width:56px";
   tsEl.textContent = ts;
 
   const icon = ICONS[type] || "•";
@@ -234,7 +244,8 @@ function _pushToInstance(inst, source, type, msg, detail) {
   }
 
   const countEl = document.createElement("span");
-  countEl.style.cssText = "color:#f1c40f;font-size:10px;flex-shrink:0;display:none";
+  countEl.style.cssText =
+    "color:#f1c40f;font-size:10px;flex-shrink:0;display:none";
 
   row.appendChild(tsEl);
   row.appendChild(iconEl);
@@ -252,6 +263,7 @@ function _pushToInstance(inst, source, type, msg, detail) {
   const maxLines = opts.maxLines || 120;
   while (body.children.length > maxLines) {
     body.removeChild(body.firstChild);
-    if (inst.lastEntry && !body.contains(inst.lastEntry.el)) inst.lastEntry = null;
+    if (inst.lastEntry && !body.contains(inst.lastEntry.el))
+      inst.lastEntry = null;
   }
 }
