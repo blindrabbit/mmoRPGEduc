@@ -599,8 +599,18 @@ export function renderWorld({
 
     const category = String(game.category_type ?? "").toLowerCase();
 
-    // Paredes, edifícios, obstacles e furniture são bottom items — NUNCA occluders
+    // Paredes e edifícios são bottom items — NUNCA occluders
     if (_wallCategories.has(category)) return false;
+
+    // Árvores (primaryType/category = "trees") têm copa que deve cobrir o player.
+    // Arbustos (primaryType = "bushes") ficam abaixo — NÃO occluders.
+    // Ambos chegam aqui com game.category_type="furniture", então a distinção
+    // vem do campo de topo do spriteMeta, não dos flags de jogo.
+    const spriteType = String(spriteMeta?.primaryType ?? spriteMeta?.category ?? "").toLowerCase();
+    if (spriteType === "trees") return true;
+    if (spriteType === "bushes") return false;
+
+    // Obstacles e furniture restantes são bottom items — NUNCA occluders
     if (category === "obstacle" || category === "furniture") return false;
 
     // Vegetação visual e top_decoration → occluder
