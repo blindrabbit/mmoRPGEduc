@@ -13,6 +13,39 @@ import { calculateStepDuration } from "../../gameplay/gameCore.js";
 import { getDirectionFromDelta } from "../../gameplay/combatLogic.js";
 import { logger } from "../../core/logger.js";
 
+function bumpWalkGeneration(player) {
+  const nextGeneration = Number(player?._walkGeneration ?? 0) + 1;
+  if (player) player._walkGeneration = nextGeneration;
+  return nextGeneration;
+}
+
+function stopActiveWalk(player) {
+  if (player?._walkTimerId != null) {
+    clearTimeout(player._walkTimerId);
+    player._walkTimerId = null;
+  }
+}
+
+function resolveWalkStart(player) {
+  const serverMoveTime = Number(player?._serverMoveTime ?? 0);
+  const lastClientMoveAt = Number(player?._lastClientMoveAt ?? 0);
+  const hasPendingLocalMove = lastClientMoveAt > serverMoveTime;
+
+  if (hasPendingLocalMove) {
+    return {
+      x: player.x,
+      y: player.y,
+      z: player.z,
+    };
+  }
+
+  return {
+    x: player._serverX ?? player.x,
+    y: player._serverY ?? player.y,
+    z: player._serverZ ?? player.z,
+  };
+}
+
 /**
  * Inicializa Player Actions específico para o RPG
  * @param {Object} opts
@@ -114,6 +147,7 @@ export function initRPGPlayerActions({
         "para:",
         posToMoveTo,
       );
+      const walkGeneration = bumpWalkGeneration(player);
       // Move player até posição adjacente
       executeWalkTo(
         player,
@@ -135,6 +169,7 @@ export function initRPGPlayerActions({
           }, 300);
         },
         worldState,
+        walkGeneration,
       );
     }
   };
@@ -181,6 +216,10 @@ function setupRPGInputHandler({
   let _dragTimeout = null;
   let _dragOrigin = null; // Posição onde o drag começou
   let _dragTarget = null; // Posição do tile sob o mouse no pointerdown
+
+  if (!Number.isFinite(Number(player._walkGeneration))) {
+    player._walkGeneration = 0;
+  }
 
   // Listener de pointerdown — salva origem do drag
   const handlePointerDown = (e) => {
@@ -305,6 +344,7 @@ function setupRPGInputHandler({
 
     // Executa ação
     if (action === PlayerAction.AUTOWALK_HIGHLIGHT || action === 4) {
+      const walkGeneration = bumpWalkGeneration(player);
       // Move para o tile clicado (ou origem do drag)
       executeWalkTo(
         player,
@@ -313,6 +353,7 @@ function setupRPGInputHandler({
         onPlayerMove,
         undefined,
         worldState,
+        walkGeneration,
       );
     } else if (action === PlayerAction.CHANGE_FLOOR) {
       // Muda floor (escada)
@@ -417,8 +458,11 @@ function executeWalkTo(
   onPlayerMove,
   onComplete,
   worldState,
+  generation,
 ) {
-  const start = { x: player.x, y: player.y, z: player.z };
+  const myGeneration = generation ?? Number(player?._walkGeneration ?? 0);
+  stopActiveWalk(player);
+  const start = resolveWalkStart(player);
   const goal = targetTile;
 
   // Encontra caminho
@@ -433,8 +477,15 @@ function executeWalkTo(
   let stepIndex = 1;
 
   function nextStep() {
+    if (Number(player?._walkGeneration ?? 0) !== myGeneration) {
+      logger.debug("[RPG Autowalk] Cancelado por nova geração:", myGeneration);
+      stopActiveWalk(player);
+      return;
+    }
+
     if (stepIndex >= result.path.length) {
       logger.debug("[RPG Autowalk] Concluso!");
+      stopActiveWalk(player);
       // Callback ao finalizar
       if (onComplete) onComplete();
       return;
@@ -461,12 +512,14 @@ function executeWalkTo(
       logger.debug(
         `[TileEffects] Teleporte → (${effect.dest.x},${effect.dest.y},${effect.dest.z})`,
       );
+      stopActiveWalk(player);
       if (onComplete) onComplete();
       return; // interrompe o autowalk
     }
     if (effect?.type === "floor_change") {
       onPlayerMove(effect.newX, effect.newY, effect.newZ, direction);
       logger.debug(`[TileEffects] Mudança de andar → Z=${effect.newZ}`);
+      stopActiveWalk(player);
       if (onComplete) onComplete();
       return; // interrompe o autowalk
     }
@@ -476,7 +529,7 @@ function executeWalkTo(
     // Próximo passo após delay
     const speed = player.speed ?? 100;
     const stepDuration = calculateStepDuration(speed);
-    setTimeout(nextStep, stepDuration);
+    player._walkTimerId = setTimeout(nextStep, stepDuration);
   }
 
   nextStep();
@@ -534,6 +587,7 @@ function executeFloorChange(
         }, 120);
       },
       worldState,
+      bumpWalkGeneration(player),
     );
   } else {
     // Já está adjacente

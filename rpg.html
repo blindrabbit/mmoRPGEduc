@@ -1423,13 +1423,11 @@
         getDefense,
       } from "./src/gameplay/progression/progressionSystem.js";
       import { setupMovement } from "./src/gameplay/input.js";
-      import { resolveStepOnEffects } from "./src/core/TileEffects.js";
       import {
         initRPGPlayerActions,
         cleanupRPGPlayerActions,
       } from "./src/clients/shared/initRPGPlayerActions.js";
       import { createActionConfigLoader } from "./src/core/actionConfigLoader.js";
-      import { handlePlayerSync } from "./src/gameplay/playerManager.js";
       import {
         startRegen,
         stopRegen,
@@ -2688,6 +2686,9 @@
           type: "player",
         };
 
+        myPos._serverMoveTime = Number(playerData.lastMoveTime ?? 0) || 0;
+        myPos._lastClientMoveAt = 0;
+
         _lastPlayerXp = Number(myPos.stats?.xp ?? 0);
         _lastPlayerTotalXp = Number(myPos.stats?.totalXp);
         if (!Number.isFinite(_lastPlayerTotalXp)) _lastPlayerTotalXp = null;
@@ -3196,9 +3197,42 @@
           }
           if (serverData.appearance)
             myPos.appearance = _normalizeAppearance(serverData.appearance);
-          myPos.x = _numOr(serverData.x, myPos.x);
-          myPos.y = _numOr(serverData.y, myPos.y);
-          myPos.z = _numOr(serverData.z, myPos.z);
+          const serverX = _numOr(serverData.x, myPos._serverX ?? myPos.x);
+          const serverY = _numOr(serverData.y, myPos._serverY ?? myPos.y);
+          const serverZ = _numOr(serverData.z, myPos._serverZ ?? myPos.z);
+          const serverMoveTime = Number(
+            serverData.lastMoveTime ?? myPos._serverMoveTime ?? 0,
+          );
+          const prevServerMoveTime = Number(myPos._serverMoveTime ?? 0);
+          const serverMoveAdvanced =
+            Number.isFinite(serverMoveTime) &&
+            serverMoveTime > prevServerMoveTime;
+          const localPendingMove =
+            Number(myPos._lastClientMoveAt ?? 0) > prevServerMoveTime;
+          const serverMatchesLocal =
+            Math.round(serverX) === Math.round(myPos.x) &&
+            Math.round(serverY) === Math.round(myPos.y) &&
+            Number(serverZ) === Number(myPos.z);
+
+          // Sempre mantém a última posição confirmada pelo servidor separada
+          // da posição local otimista usada na renderização.
+          myPos._serverX = serverX;
+          myPos._serverY = serverY;
+          myPos._serverZ = serverZ;
+          if (Number.isFinite(serverMoveTime)) {
+            myPos._serverMoveTime = serverMoveTime;
+          }
+
+          // Só aplica x/y/z do servidor no estado visual quando:
+          // 1) houve avanço de move no servidor, ou
+          // 2) não existe move local pendente, ou
+          // 3) servidor já está alinhado com a posição local.
+          // Isso evita "puxar para trás" ao receber snapshots antigos.
+          if (serverMoveAdvanced || !localPendingMove || serverMatchesLocal) {
+            myPos.x = serverX;
+            myPos.y = serverY;
+            myPos.z = serverZ;
+          }
           // Atualiza chunks se o player mudou de tile ou de andar
           if (_chunkSubscriber) {
             const tx = Math.round(myPos.x),
@@ -3354,80 +3388,79 @@
         updateRegenHint(getCurrentRegenRates());
 
         // Movimento
-        const playerActionOnMove = (nx, ny, nz, dir) => {
-          // Callback de movimento do Player Actions (para position actions)
+        let _moveActionSeq = 0;
+        const runPositionActionOnMove = (nx, ny, nz) => {
           const actionSystem = getActionSystem();
-          if (actionSystem) {
-            const posKey = `${nx},${ny},${nz}`;
-            const posHandler = actionSystem.positionActions?.get(posKey);
-            if (posHandler) {
+          if (!actionSystem) return;
+          const posKey = `${nx},${ny},${nz}`;
+          const posHandler = actionSystem.positionActions?.get(posKey);
+          if (!posHandler) return;
+
+          console.log(`[ActionConfig] Position action encontrada em ${posKey}`);
+          const context = {
+            player: myPos,
+            target: { x: nx, y: ny, z: nz },
+            metadata: null,
+          };
+          try {
+            const result = posHandler(context);
+            if (result !== false) {
               console.log(
-                `[ActionConfig] Position action encontrada em ${posKey}`,
+                `[ActionConfig] Position action executada com sucesso`,
               );
-              const context = {
-                player: myPos,
-                target: { x: nx, y: ny, z: nz },
-                metadata: null,
-              };
-              try {
-                const result = posHandler(context);
-                if (result !== false) {
-                  console.log(
-                    `[ActionConfig] Position action executada com sucesso`,
-                  );
-                }
-              } catch (error) {
-                console.error(
-                  `[ActionConfig] Erro ao executar position action:`,
-                  error,
-                );
-              }
             }
+          } catch (error) {
+            console.error(
+              `[ActionConfig] Erro ao executar position action:`,
+              error,
+            );
           }
+        };
+
+        const requestPlayerMove = (nx, ny, nz, dir, source = "input") => {
+          if (
+            nx === myPos.x &&
+            ny === myPos.y &&
+            nz === myPos.z &&
+            dir === myPos.direcao
+          ) {
+            return;
+          }
+
+          myPos.oldX = myPos.x;
+          myPos.oldY = myPos.y;
+          myPos.x = nx;
+          myPos.y = ny;
+          myPos.z = nz;
+          myPos.direcao = dir;
+          myPos.lastMoveTime = Date.now();
+
+          // Envia para validação pelo worldEngine (zero-trust) em todos os fluxos.
+          const now = Date.now();
+          myPos._lastClientMoveAt = now;
+          const actionId = `${uid}_move_${now}_${++_moveActionSeq}`;
+          dbSet(`${PATHS.actions}/${actionId}`, {
+            id: actionId,
+            playerId: uid,
+            type: "move",
+            x: nx,
+            y: ny,
+            z: nz,
+            direcao: dir,
+            source,
+            ts: now,
+            expiresAt: now + 5000,
+          }).catch(() => {});
+
+          pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
+          runPositionActionOnMove(nx, ny, nz);
         };
 
         setupMovement(
           myPos,
           map,
           getMonsters,
-          (nx, ny, nz, dir) => {
-            if (
-              nx !== myPos.x ||
-              ny !== myPos.y ||
-              nz !== myPos.z ||
-              dir !== myPos.direcao
-            ) {
-              myPos.oldX = myPos.x;
-              myPos.oldY = myPos.y;
-              myPos.x = nx;
-              myPos.y = ny;
-              myPos.z = nz;
-              myPos.direcao = dir;
-              myPos.lastMoveTime = Date.now();
-              handlePlayerSync(uid, myPos);
-              pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
-
-              // Chama o callback do Player Actions para verificar position actions
-              playerActionOnMove(nx, ny, nz, dir);
-
-              // Verifica efeito de tile (teleporte ou escada)
-              const effect = resolveStepOnEffects(nx, ny, nz, {
-                map,
-                assets: { mapData },
-              });
-              if (effect?.type === "teleport") {
-                myPos.x = effect.dest.x;
-                myPos.y = effect.dest.y;
-                myPos.z = effect.dest.z;
-                handlePlayerSync(uid, myPos);
-              } else if (effect?.type === "floor_change") {
-                myPos.x = effect.newX;
-                myPos.y = effect.newY;
-                myPos.z = effect.newZ;
-                handlePlayerSync(uid, myPos);
-              }
-            }
-          },
+          (nx, ny, nz, dir) => requestPlayerMove(nx, ny, nz, dir, "keyboard"),
           false, // isAdmin
           mapData, // metadados de sprites para colisão (is_walkable, etc.)
         );
@@ -3442,71 +3475,8 @@
             getMonsters,
           },
           canvas,
-          onPlayerMove: async (nx, ny, nz, dir) => {
-            // Callback de movimento do Player Actions
-            if (
-              nx !== myPos.x ||
-              ny !== myPos.y ||
-              nz !== myPos.z ||
-              dir !== myPos.direcao
-            ) {
-              myPos.oldX = myPos.x;
-              myPos.oldY = myPos.y;
-              myPos.x = nx;
-              myPos.y = ny;
-              myPos.z = nz;
-              myPos.direcao = dir;
-              myPos.lastMoveTime = Date.now();
-
-              // Envia para validação pelo worldEngine (zero-trust)
-              const actionId = `${uid}_move_${Date.now()}`;
-              dbSet(`${PATHS.actions}/${actionId}`, {
-                id: actionId,
-                playerId: uid,
-                type: "move",
-                x: nx,
-                y: ny,
-                z: nz,
-                direcao: dir,
-                ts: Date.now(),
-                expiresAt: Date.now() + 5000,
-              }).catch(() => {});
-
-              pushLog("rpg", "move", `${myPos.name} → ${nx},${ny} [${dir}]`);
-
-              // Verifica se há position action registrada para esta posição
-              // e executa automaticamente quando o player entra no tile
-              // Executa imediatamente após atualizar a posição
-              const actionSystem = getActionSystem();
-              if (actionSystem) {
-                const posKey = `${nx},${ny},${nz}`;
-                const posHandler = actionSystem.positionActions?.get(posKey);
-                if (posHandler) {
-                  console.log(
-                    `[ActionConfig] Position action encontrada em ${posKey}`,
-                  );
-                  const context = {
-                    player: myPos,
-                    target: { x: nx, y: ny, z: nz },
-                    metadata: null,
-                  };
-                  try {
-                    const result = posHandler(context);
-                    if (result !== false) {
-                      console.log(
-                        `[ActionConfig] Position action executada com sucesso`,
-                      );
-                    }
-                  } catch (error) {
-                    console.error(
-                      `[ActionConfig] Erro ao executar position action:`,
-                      error,
-                    );
-                  }
-                }
-              }
-            }
-          },
+          onPlayerMove: async (nx, ny, nz, dir) =>
+            requestPlayerMove(nx, ny, nz, dir, "player-actions"),
           onPlayerAction: (actionData) => {
             // Callback de ação (use, open, change_floor, etc)
             console.log("[RPG] Player action:", actionData);

@@ -883,6 +883,7 @@ async function _processMove(action, player, now) {
     [`${PATHS.playerData(playerId)}/y`]: y,
     [`${PATHS.playerData(playerId)}/z`]: z ?? player.z ?? 7,
     [`${PATHS.playerData(playerId)}/direcao`]: direcao ?? "frente",
+    [`${PATHS.playerData(playerId)}/lastMoveTime`]: now,
     [`${PATHS.player(playerId)}/x`]: x,
     [`${PATHS.player(playerId)}/y`]: y,
     [`${PATHS.player(playerId)}/z`]: z ?? player.z ?? 7,
@@ -1088,6 +1089,7 @@ async function _processChangeFloor(action, player, now) {
 
   await batchWrite({
     [`${PATHS.playerData(playerId)}/z`]: toZ,
+    [`${PATHS.playerData(playerId)}/lastMoveTime`]: now,
     [`${PATHS.player(playerId)}/z`]: toZ,
     [`${PATHS.player(playerId)}/lastMoveTime`]: now,
   });

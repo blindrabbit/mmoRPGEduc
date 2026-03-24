@@ -30,6 +30,9 @@ export function setupMovement(
     const move = keys[e.key.toLowerCase()];
     if (!move) return;
 
+    // Qualquer intenção de movimento manual invalida autowalks antigos.
+    entity._walkGeneration = Number(entity._walkGeneration ?? 0) + 1;
+
     const speed = entity.speed ?? entity.appearance?.speed ?? 100;
     const stepDuration = calculateStepDuration(speed);
 
