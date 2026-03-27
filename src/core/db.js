@@ -638,10 +638,16 @@ export function flatMapToChunks(flatMap, chunkSize = TILE_CHUNK_SIZE) {
 
 /**
  * Faz upload do mapa para Firebase em chunks.
+ * ATENÇÃO: Esta função deve ser chamada APENAS pelo botão "Reload World".
  * @param {Object} flatMap - formato flat do map_compacto.json
  * @param {function} [onProgress] - callback(done, total)
  */
 export async function setMapChunks(flatMap, onProgress) {
+  console.log(
+    `[⚠️ setMapChunks] INICIANDO UPLOAD DO MAPA: ${Object.keys(flatMap ?? {}).length} tiles`,
+  );
+  console.trace("[setMapChunks] Call stack:");
+
   const chunks = flatMapToChunks(flatMap);
   const entries = Object.entries(chunks);
   const BATCH = 20;
@@ -654,6 +660,9 @@ export async function setMapChunks(flatMap, onProgress) {
     await _dbUpdateClient(update);
     onProgress?.(Math.min(i + BATCH, entries.length), entries.length);
   }
+  console.log(
+    `[✅ setMapChunks] UPLOAD CONCLUÍDO: ${entries.length} chunks enviados`,
+  );
 }
 export const setMapData = (data) => dbSet(PATHS.tilesData, data);
 export const getFlagDefinitions = () => dbGet(PATHS.flagDefs);

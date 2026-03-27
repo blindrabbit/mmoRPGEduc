@@ -410,6 +410,47 @@ function setupRPGInputHandler({
     } else if (action === PlayerAction.ATTACK) {
       // Attack - delega para sistema de combate existente
       executeAttack(targetTile, worldState);
+    } else if (action === PlayerAction.PICKUP) {
+      // ✅ PICKUP - Pegar item do chão
+      logger.debug(
+        "[RPG Input] Ação PICKUP detectada em",
+        targetTile,
+        metadata,
+      );
+
+      if (!isAdjacentToPlayer(player, targetTile)) {
+        // Caminha até o item primeiro
+        const adjacentPos = findAdjacentPosition(
+          player,
+          targetTile,
+          worldState.map,
+          worldState.assets?.mapData,
+        );
+        if (adjacentPos) {
+          const walkGeneration = bumpWalkGeneration(player);
+          executeWalkTo(
+            player,
+            adjacentPos,
+            pathFinder,
+            onPlayerMove,
+            () => {
+              setTimeout(() => {
+                executePickup(
+                  player,
+                  targetTile,
+                  metadata,
+                  onPlayerAction,
+                  worldState,
+                );
+              }, 120);
+            },
+            worldState,
+            walkGeneration,
+          );
+        }
+      } else {
+        executePickup(player, targetTile, metadata, onPlayerAction, worldState);
+      }
     }
   };
 
@@ -744,7 +785,13 @@ function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
       resolvedMetadata,
       worldState?.assets?.mapData,
     );
-    executeDoor(targetTile, enrichedDoorMetadata, worldState, onPlayerAction, player);
+    executeDoor(
+      targetTile,
+      enrichedDoorMetadata,
+      worldState,
+      onPlayerAction,
+      player,
+    );
     return;
   }
 
@@ -765,6 +812,40 @@ function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
 }
 
 /**
+ * Verifica se um item é uma chave (key) baseado em suas propriedades.
+ * @param {Object} item - Item do inventário
+ * @param {Object} mapData - map_data.json para consulta de metadata
+ * @returns {boolean} True se o item for uma chave
+ */
+function _isKeyItem(item, mapData) {
+  if (!item || typeof item !== "object") return false;
+  
+  const itemId = Number(item.id ?? item.tileId);
+  if (!Number.isFinite(itemId)) return false;
+  
+  // Verifica category/primaryType no map_data
+  const itemMeta = mapData?.[String(itemId)];
+  if (itemMeta) {
+    const category = String(itemMeta.category ?? "").toLowerCase();
+    const primaryType = String(itemMeta.primaryType ?? "").toLowerCase();
+    const categoryType = String(itemMeta.game?.category_type ?? "").toLowerCase();
+    
+    // É chave se category ou primaryType for "keys"
+    if (category === "keys" || primaryType === "keys") {
+      return true;
+    }
+  }
+  
+  // Fallback: verifica nome do item (silver key, gold key, etc)
+  const itemName = String(item.name ?? "").toLowerCase();
+  if (itemName.includes("key") || itemName.includes("chave")) {
+    return true;
+  }
+  
+  return false;
+}
+
+/**
  * Retorna o action_id encontrado em qualquer item dos layers do tile.
  * Usado para validar chave em portas trancadas.
  */
@@ -782,14 +863,19 @@ function _getTileActionId(tile) {
 }
 
 /**
- * Verifica se o player possui alguma chave com unique_id igual ao actionId.
+ * Verifica se o player possui alguma CHAVE com unique_id igual ao actionId.
+ * Validação cruzada: item deve ser chave (category: "keys") E ter unique_id = action_id da porta.
  */
-function _playerHasKeyForActionId(player, actionId) {
+function _playerHasKeyForActionId(player, actionId, mapData) {
   const inventory = player?.inventory ?? {};
   return Object.values(inventory).some(
     (item) =>
       item &&
       typeof item === "object" &&
+      // ✅ VALIDAÇÃO CRUZADA:
+      // 1. Item deve ser uma chave
+      _isKeyItem(item, mapData) &&
+      // 2. unique_id do item deve bater com action_id da porta
       (item.unique_id === actionId || item.uniqueId === actionId),
   );
 }
@@ -875,7 +961,8 @@ function executeDoor(targetTile, metadata, worldState, onPlayerAction, player) {
   if (!isOpen && (door?.requiresKey || door?.uidMatchField != null)) {
     const tileActionId = _getTileActionId(tile);
     if (tileActionId != null) {
-      const hasKey = _playerHasKeyForActionId(player, tileActionId);
+      // ✅ VALIDAÇÃO CRUZADA: passa mapData para verificar se item é chave
+      const hasKey = _playerHasKeyForActionId(player, tileActionId, mapData);
       if (!hasKey) {
         showRPGMessage("A porta está fechada com chave.", "system");
         return;
@@ -960,6 +1047,91 @@ function executeOpen(player, targetTile, metadata, onPlayerAction) {
 }
 
 /**
+ * ✅ Executa ação de Pickup (pegar item do chão)
+ */
+function executePickup(player, targetTile, metadata, onPlayerAction, worldState) {
+  if (!isAdjacentToPlayer(player, targetTile)) {
+    logger.info("[Pickup] Bloqueado: alvo fora de alcance", {
+      player: { x: player?.x, y: player?.y, z: player?.z },
+      target: targetTile,
+      itemName: metadata?.name,
+    });
+    return;
+  }
+
+  logger.debug("[Pickup] Pegando item", metadata?.name || targetTile, metadata);
+
+  // Extrai informações do item no tile
+  const tileKey = `${targetTile.x},${targetTile.y},${targetTile.z}`;
+  const tileData = worldState?.map?.[tileKey];
+  
+  // Encontra o item pickupable no tile
+  let itemInfo = null;
+  if (tileData) {
+    const items = [];
+    if (Array.isArray(tileData)) {
+      items.push(...tileData);
+    } else {
+      const layerKeys = Object.keys(tileData)
+        .map(Number)
+        .filter((n) => Number.isFinite(n))
+        .sort((a, b) => b - a);
+      for (const k of layerKeys) {
+        const layer = tileData[String(k)];
+        if (Array.isArray(layer)) items.push(...layer);
+      }
+    }
+    
+    // Encontra item pickupable (layer 2 ou superior)
+    for (const item of items) {
+      const itemId = typeof item === "object" ? readItemId(item) : item;
+      const itemMeta = worldState?.assets?.mapData?.[String(itemId)];
+      const isPickupable = itemMeta?.game?.pickupable ?? 
+                          itemMeta?.game?.is_pickupable ?? 
+                          item?.pickupable ?? false;
+      const renderLayer = itemMeta?.game?.render_layer ?? 2;
+      
+      if (isPickupable && renderLayer >= 2) {
+        // Extrai unique_id se existir
+        const uniqueId = typeof item === "object" ? 
+                        (item.unique_id ?? item.uniqueId) : null;
+        
+        itemInfo = {
+          id: itemId,
+          unique_id: uniqueId,
+          count: item?.count ?? item?.quantity ?? 1,
+          x: targetTile.x,
+          y: targetTile.y,
+          z: targetTile.z,
+        };
+        break;
+      }
+    }
+  }
+
+  if (!itemInfo) {
+    logger.warn("[Pickup] Nenhum item pickupable encontrado em", targetTile);
+    return;
+  }
+
+  // Gera ID do item do mapa
+  const worldItemId = `map_${targetTile.x},${targetTile.y},${targetTile.z}_${itemInfo.id}`;
+  
+  logger.debug("[Pickup] Enviando ação para", itemInfo, worldItemId);
+
+  if (onPlayerAction) {
+    onPlayerAction({
+      type: "item",
+      payload: {
+        itemAction: "pickUp",
+        worldItemId: worldItemId,
+        slotIndex: null,
+      },
+    });
+  }
+}
+
+/**
  * Executa ONUSE de item (clique direito).
  * Prioriza ActionSystem (itemAction/positionAction) e cai para USE padrao.
  */
@@ -1015,6 +1187,14 @@ function executeItemOnUse(
         worldState,
       );
     }
+    return;
+  }
+
+  // Porta: bypass do actionSystem e delega direto para executeDoor/executeUse
+  // Esta verificacao deve ocorrer ANTES de chamar actionSystem para evitar
+  // que o fallback USE padrao retorne true e bloqueie a execucao
+  if (isDoorMetadata(targetMetadata)) {
+    executeDoor(targetTile, targetMetadata, worldState, onPlayerAction, player);
     return;
   }
 
@@ -1462,8 +1642,12 @@ function determineAction(player, tile, metadata) {
     return PlayerAction.AUTOWALK_HIGHLIGHT;
   }
 
-  // Porta → USE (toggle abre/fecha)
-  if (metadata.door) {
+  // ✅ PORTA → USE (toggle abre/fecha)
+  // Verifica metadata.door OU se o nome contém "door"
+  if (
+    metadata.door ||
+    (metadata.name && metadata.name.toLowerCase().includes("door"))
+  ) {
     return PlayerAction.USE;
   }
 
@@ -1486,6 +1670,17 @@ function determineAction(player, tile, metadata) {
 
   if (metadata.floorChange || game.category_type === "floor_change") {
     return PlayerAction.CHANGE_FLOOR;
+  }
+
+  // ✅ ITEM PICKUPABLE NO CHÃO → PICKUP
+  // Verifica se é item pickupable/movable no layer de items (layer 2)
+  const isPickupable =
+    game.pickupable ?? game.is_pickupable ?? raw.take ?? false;
+  const isMovable = game.is_movable ?? true;
+  const renderLayer = game.render_layer ?? game.layer ?? 2;
+
+  if (isPickupable && isMovable && renderLayer >= 2) {
+    return PlayerAction.PICKUP;
   }
 
   return PlayerAction.AUTOWALK_HIGHLIGHT;
@@ -1517,7 +1712,38 @@ function getTileMetadata(tileData, nexoData) {
     }
   }
 
-  // Prioriza primeiro item que não é ground (layer 0)
+  // ✅ PRIORIZAÇÃO DE METADATA
+  // 1. Primeiro busca PORTAS (mesmo no layer 2)
+  for (const item of items) {
+    const spriteId = typeof item === "object" ? readItemId(item) : item;
+    if (!Number.isFinite(Number(spriteId))) continue;
+    const metadata = nexoData[String(spriteId)];
+
+    // Porta tem prioridade máxima
+    if (
+      metadata?.door ||
+      (metadata?.name && metadata.name.toLowerCase().includes("door"))
+    ) {
+      return { ...metadata, id: Number(spriteId) };
+    }
+  }
+
+  // 2. Busca itens pickupable no layer de items (2+)
+  for (const item of items) {
+    const spriteId = typeof item === "object" ? readItemId(item) : item;
+    if (!Number.isFinite(Number(spriteId))) continue;
+    const metadata = nexoData[String(spriteId)];
+
+    if (
+      metadata &&
+      (metadata.game?.render_layer ?? metadata.game?.layer ?? 0) >= 2 &&
+      (metadata.game?.pickupable ?? metadata.game?.is_pickupable ?? false)
+    ) {
+      return { ...metadata, id: Number(spriteId) };
+    }
+  }
+
+  // 3. Fallback: primeiro item que não é ground (layer 0)
   for (const item of items) {
     const spriteId = typeof item === "object" ? readItemId(item) : item;
     if (!Number.isFinite(Number(spriteId))) continue;
@@ -1531,7 +1757,7 @@ function getTileMetadata(tileData, nexoData) {
     }
   }
 
-  // Fallback: primeiro item encontrado
+  // 4. Fallback final: primeiro item encontrado
   if (items.length > 0) {
     const first = items[0];
     const spriteId = typeof first === "object" ? readItemId(first) : first;

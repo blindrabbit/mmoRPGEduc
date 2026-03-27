@@ -324,6 +324,10 @@ export async function pickUpItem(playerId, worldItemId) {
     sourceTileId,
     ...rest
   } = worldItem;
+
+  // ✅ PRESERVAR unique_id/uniqueId - CRÍTICO PARA CHAVES E PORTAS
+  const uniqueIdValue = worldItem.unique_id ?? worldItem.uniqueId ?? null;
+
   const inventoryItem = makeItem({
     ...rest,
     id: String(tileId),
@@ -332,6 +336,8 @@ export async function pickUpItem(playerId, worldItemId) {
     stackable: itemForSlot.stackable,
     maxStack: Number(rest.maxStack ?? (itemForSlot.stackable ? 99 : 1)),
     quantity: Number(worldItem.quantity ?? worldItem.count ?? 1),
+    // ✅ PRESERVAR unique_id EXPLICITAMENTE
+    ...(uniqueIdValue != null ? { unique_id: uniqueIdValue } : {}),
   });
 
   const { valid, errors } = validateItem(inventoryItem, "inventory");
@@ -518,6 +524,10 @@ export async function dropItem(
 
   const worldItemId = `item_${playerId}_${Date.now()}`;
   const inferredTileId = _resolveItemTileId(item);
+
+  // ✅ PRESERVAR unique_id/uniqueId - CRÍTICO PARA CHAVES E PORTAS
+  const uniqueIdValue = item.unique_id ?? item.uniqueId ?? null;
+
   const worldItem = makeItem({
     ...item,
     id: worldItemId,
@@ -533,6 +543,8 @@ export async function dropItem(
     droppedBy: playerId,
     droppedAt: Date.now(),
     quantity: dropQty,
+    // ✅ PRESERVAR unique_id EXPLICITAMENTE
+    ...(uniqueIdValue != null ? { unique_id: uniqueIdValue } : {}),
   });
 
   const { valid, errors } = validateItem(worldItem, "world");

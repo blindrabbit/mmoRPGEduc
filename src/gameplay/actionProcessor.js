@@ -762,7 +762,7 @@ async function _processItem(action, player, now) {
   const itemAction = src.itemAction;
   const slotIndex = src.slotIndex;
   const toSlot = src.toSlot;
-  const worldItemId = src.worldItemId;
+  let worldItemId = src.worldItemId; // ✅ DEVE SER 'let' PARA REATRIBUIÇÃO
   const equipSlot = src.equipSlot;
   const quantity = src.quantity;
   // ID gerado pelo DragDropManager — permite emitir ACTION_CONFIRMED/REJECTED
@@ -801,7 +801,7 @@ async function _processItem(action, player, now) {
       tsBase,
     );
 
-    worldItemId = tempId;
+    worldItemId = tempId; // ✅ REATRIBUIÇÃO PERMITIDA AGORA
   }
 
   const effectiveSrc =
@@ -1173,17 +1173,13 @@ async function _processToggleDoor(action, player, now) {
   }
 
   // Porta com chave: extrai action_id diretamente do tile (server-authoritative)
-  // Se o tile contém um item com action_id, valida que o player possui a chave
+  // Se o tile contém um item com action_id, valida que o player possui a CHAVE
   if (isOpening) {
     let tileActionId = null;
     for (const layer of Object.values(tileData)) {
       if (!Array.isArray(layer)) continue;
       for (const entry of layer) {
-        if (
-          entry &&
-          typeof entry === "object" &&
-          entry.action_id != null
-        ) {
+        if (entry && typeof entry === "object" && entry.action_id != null) {
           tileActionId = entry.action_id;
           break;
         }
@@ -1193,17 +1189,51 @@ async function _processToggleDoor(action, player, now) {
     if (tileActionId != null) {
       const inventory =
         (await dbGet(`players_data/${playerId}/inventory`)) ?? {};
-      const hasKey = Object.values(inventory).some(
-        (item) =>
-          item &&
-          typeof item === "object" &&
-          (item.unique_id === tileActionId ||
-            item.uniqueId === tileActionId),
-      );
+
+      // ✅ VALIDAÇÃO CRUZADA:
+      // 1. Carregar map_data para verificar se item é chave
+      const mapData =
+        worldState?.assets?.mapData ?? (await dbGet("map_data")) ?? {};
+
+      const hasKey = Object.values(inventory).some((item) => {
+        if (!item || typeof item !== "object") return false;
+
+        // Verificar unique_id/uniqueId
+        const itemUniqueId = item.unique_id ?? item.uniqueId;
+        if (itemUniqueId !== tileActionId) return false;
+
+        // ✅ Verificar se o item é uma CHAVE (category: "keys" ou primaryType: "keys")
+        const itemId = Number(item.id ?? item.tileId);
+        const itemMeta = mapData[String(itemId)];
+
+        if (itemMeta) {
+          const category = String(itemMeta.category ?? "").toLowerCase();
+          const primaryType = String(itemMeta.primaryType ?? "").toLowerCase();
+
+          // Deve ser category "keys" ou primaryType "keys"
+          if (category === "keys" || primaryType === "keys") {
+            return true;
+          }
+        }
+
+        // Fallback: verificar nome do item
+        const itemName = String(item.name ?? "").toLowerCase();
+        if (itemName.includes("key") || itemName.includes("chave")) {
+          return true;
+        }
+
+        return false;
+      });
+
       if (!hasKey) {
         pushLog(
           "warn",
           `[${player.name}] tentou abrir porta trancada (actionId=${tileActionId}) sem chave`,
+        );
+        showRPGMessage(
+          "Esta porta está trancada com chave.",
+          "system",
+          playerId,
         );
         return;
       }

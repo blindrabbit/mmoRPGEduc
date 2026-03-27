@@ -115,7 +115,8 @@ export class ItemMoveValidator {
     // 3. PROPRIEDADE
     // ──────────────────────────────────────────────────────────
 
-    if (item.ownerId && item.ownerId !== playerId) {
+    // ✅ ITENS DO MAPA (fromMap=true) não têm ownerId até serem pegos
+    if (!item.fromMap && item.ownerId && item.ownerId !== playerId) {
       return deny(
         MOVE_ERRORS.ITEMISNOTYOURS,
         `ownerId=${item.ownerId} !== playerId=${playerId}`,
@@ -203,6 +204,23 @@ export class ItemMoveValidator {
   async _resolveFromItem(from, playerId) {
     switch (from.type) {
       case "world":
+        // ✅ ITENS DO MAPA (maptile_x_y_z_id_timestamp) ainda não existem no world_items
+        // Eles serão materializados pelo _processMapTilePickup antes da validação real
+        if (typeof from.itemId === "string" && from.itemId.startsWith("maptile_")) {
+          // Retorna um objeto sintético para permitir a validação
+          const parsed = this._parseMapTileItemId(from.itemId);
+          if (parsed) {
+            return {
+              id: from.itemId,
+              tileId: parsed.tileId,
+              x: parsed.x,
+              y: parsed.y,
+              z: parsed.z,
+              fromMap: true,
+              sourceCoord: `${parsed.x},${parsed.y},${parsed.z}`,
+            };
+          }
+        }
         return await wsGetWorldItem(from.itemId);
       case "inventory":
         return await wsGetInventorySlot(playerId, from.slotIndex);
@@ -216,6 +234,23 @@ export class ItemMoveValidator {
       default:
         return null;
     }
+  }
+
+  // ── Parser de ID de item do mapa ───────────────────────────
+
+  _parseMapTileItemId(worldItemId) {
+    // Formato: maptile_x_y_z_tileId_timestamp
+    // Ex: maptile_127_119_7_2969_1774647470411
+    const match = worldItemId.match(/^maptile_(\d+)_(\d+)_(\d+)_(\d+)_(\d+)$/);
+    if (!match) return null;
+
+    return {
+      x: parseInt(match[1]),
+      y: parseInt(match[2]),
+      z: parseInt(match[3]),
+      tileId: parseInt(match[4]),
+      timestamp: parseInt(match[5]),
+    };
   }
 
   // ── DROP NO MAPA ───────────────────────────────────────────

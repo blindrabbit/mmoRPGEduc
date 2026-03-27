@@ -107,6 +107,14 @@
         setupCanvas(canvas, WORLD_ENGINE.canvasCols, WORLD_ENGINE.canvasRows);
         await loadAllSprites(assets, "./assets/");
 
+        // ⚠️ ATENÇÃO: Este código é LEGADO e NÃO deve ser usado em produção.
+        // O carregamento local do mapa contorna o Firebase e pode causar inconsistências.
+        // Use worldEngine.html que carrega os tiles do Firebase corretamente.
+        console.warn(
+          "[⚠️ LEGADO] index.html está carregando map_compacto.json localmente. " +
+            "Isso deve ser APENAS para desenvolvimento. Use worldEngine.html para produção.",
+        );
+
         let mapRes = await fetch("./assets/map_compacto.json");
         if (!mapRes.ok) mapRes = await fetch("./assets_novo/map_compacto.json");
         map = await mapRes.json();

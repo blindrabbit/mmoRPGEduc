@@ -152,19 +152,20 @@ export class AssetManager {
         : `${basePath}/`;
       this.atlasManager = new AtlasManager({ basePath: normalizedBasePath });
 
-      // 1. Carregar metadata do mapa (preferência: Firebase)
+      // 1. Carregar metadata do mapa (OBRIGATÓRIO vir do Firebase)
+      // NUNCA carregar do arquivo local - isso deve ser injetado via options.mapData
       const remoteMapData = options?.mapData;
-      if (remoteMapData && typeof remoteMapData === "object") {
-        this.mapData = remoteMapData;
-      } else {
-        const dataRes = await fetch(`${basePath}map_data.json`);
-        if (!dataRes.ok) throw new Error("map_data.json não encontrado");
-        this.mapData = await dataRes.json();
+      if (!remoteMapData || typeof remoteMapData !== "object") {
+        throw new Error(
+          "mapData é obrigatório e deve vir do Firebase. " +
+            "Nunca carregue map_data.json localmente no runtime.",
+        );
       }
+      this.mapData = remoteMapData;
       this._useMapDataVariantCoords =
         options?.useMapDataVariantCoords !== false;
       console.log(
-        `[AssetManager] ✅ ${Object.keys(this.mapData).length} itens de mapa carregados`,
+        `[AssetManager] ✅ ${Object.keys(this.mapData).length} itens de mapa carregados (Firebase)`,
       );
 
       // 2. Carregar atlas de mapa (segmentado por categoria)

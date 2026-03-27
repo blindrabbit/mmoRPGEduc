@@ -1574,7 +1574,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -1675,7 +1675,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -1771,8 +1771,8 @@
       "type": "custom",
       "openId": 1641,
       "closedId": 1640,
-      "uidMatchField": "action_id",
-      "state": "closed"
+      "state": "closed",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material",
@@ -2841,8 +2841,8 @@
       "type": "custom",
       "openId": 2180,
       "closedId": 2179,
-      "uidMatchField": "action_id",
-      "state": "closed"
+      "state": "closed",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "doors",
@@ -7253,8 +7253,8 @@
       "type": "level",
       "openId": 5112,
       "closedId": 5111,
-      "uidMatchField": "action_id",
-      "state": "closed"
+      "state": "closed",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material",
@@ -7307,7 +7307,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -7410,7 +7410,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -7513,7 +7513,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -7560,8 +7560,8 @@
       "type": "key",
       "openId": 5141,
       "closedId": 5140,
-      "requiresKey": true,
       "lockedId": 5139,
+      "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
       "state": "closed"
@@ -7641,7 +7641,9 @@
       "openId": 5161,
       "closedId": 5160,
       "requiresKey": true,
-      "uniqueId": 1001
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
     },
     "type": "material",
     "category": "material"
@@ -7682,7 +7684,9 @@
       "openId": 5161,
       "closedId": 5160,
       "requiresKey": true,
-      "uniqueId": 1001
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
     },
     "type": "material",
     "category": "material"
@@ -7834,7 +7838,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -7937,7 +7941,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -8035,8 +8039,8 @@
       "type": "custom",
       "openId": 5284,
       "closedId": 5283,
-      "uidMatchField": "action_id",
-      "state": "closed"
+      "state": "closed",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material",
@@ -9251,7 +9255,7 @@
       "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
-      "state": "locked"
+      "state": "open"
     },
     "type": "material",
     "category": "material",
@@ -9521,8 +9525,8 @@
       "type": "custom",
       "openId": 6895,
       "closedId": 6894,
-      "uidMatchField": "action_id",
-      "state": "closed"
+      "state": "closed",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material",
@@ -25951,7 +25955,9 @@
       "openId": 5151,
       "closedId": 5150,
       "requiresKey": true,
-      "uniqueId": 1000
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "closed"
     },
     "type": "material",
     "category": "walls",
@@ -26012,7 +26018,9 @@
       "openId": 5151,
       "closedId": 5150,
       "requiresKey": true,
-      "uniqueId": 1000
+      "uidRequired": true,
+      "uidMatchField": "action_id",
+      "state": "open"
     },
     "type": "material",
     "category": "walls",
@@ -70172,8 +70180,8 @@
       "type": "custom",
       "openId": 1641,
       "closedId": 1640,
-      "uidMatchField": "action_id",
-      "state": "open"
+      "state": "open",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material"
@@ -70213,8 +70221,8 @@
       "type": "custom",
       "openId": 2180,
       "closedId": 2179,
-      "uidMatchField": "action_id",
-      "state": "open"
+      "state": "open",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "doors",
@@ -70255,8 +70263,8 @@
       "type": "level",
       "openId": 5112,
       "closedId": 5111,
-      "uidMatchField": "action_id",
-      "state": "open"
+      "state": "open",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material"
@@ -70393,8 +70401,8 @@
       "type": "key",
       "openId": 5141,
       "closedId": 5140,
-      "requiresKey": true,
       "lockedId": 5139,
+      "requiresKey": true,
       "uidRequired": true,
       "uidMatchField": "action_id",
       "state": "open"
@@ -70534,8 +70542,8 @@
       "type": "custom",
       "openId": 5284,
       "closedId": 5283,
-      "uidMatchField": "action_id",
-      "state": "open"
+      "state": "open",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material"
@@ -70773,8 +70781,8 @@
       "type": "custom",
       "openId": 6895,
       "closedId": 6894,
-      "uidMatchField": "action_id",
-      "state": "open"
+      "state": "open",
+      "uidMatchField": "action_id"
     },
     "type": "material",
     "category": "material"
