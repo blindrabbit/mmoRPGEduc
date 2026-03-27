@@ -49,6 +49,16 @@ export function registerDefaultActions(worldState) {
     floorChange: -1,
   });
 
+  // Sistema USE WITH: Usar corda (3003) em ROPE ROLE (368)
+  registerUseWithAction(actionSystem, worldState, {
+    useItemIds: [3003], // Corda
+    onTargetIds: [368], // ROPE ROLE
+    action: "rope_use",
+  });
+
+  // Rope Hole (386) - requer corda (3003) no inventário para subir
+  registerRopeHoleOnUseAction(actionSystem);
+
   // ═══════════════════════════════════════════════════════════
   // TELEPORTES
   // ═══════════════════════════════════════════════════════════
@@ -219,6 +229,10 @@ function registerStairAction(actionSystem, worldState, config) {
 /**
  * Registra ação de ONUSE para escadas/ladder.
  * Usado no clique direito para forcar mudanca de floor em itens utilizaveis.
+ *
+ * Suporta regras específicas por ID:
+ * - Ladder (1948): sempre joga player para Y+1, Z-1 (sobe andar)
+ * - Outras escadas: usa floorChange padrão
  */
 function registerLadderOnUseAction(actionSystem, config) {
   const { spriteIds, floorChange = -1 } = config;
@@ -235,22 +249,36 @@ function registerLadderOnUseAction(actionSystem, config) {
         return false;
       }
 
-      const newZ = (player.z ?? 7) + floorChange;
+      // Regra específica para Ladder (ID 1948)
+      // Sempre joga o player para target.y+1 (posição da ladder + 1) e Z-1 (sobe 1 andar)
+      let newX, newY, newZ;
+
+      if (spriteId === 1948) {
+        // Ladder: sobe um andar (Z diminui = subir)
+        // Destino é baseado na posição da escada: (target.x, target.y+1, target.z-1)
+        newX = target.x;
+        newY = target.y + 1;
+        newZ = (target.z ?? player.z ?? 7) - 1; // Sobe 1 floor relativo à escada
+      } else {
+        // Escadas normais usam floorChange padrão
+        newZ = newZ + floorChange;
+      }
 
       if (onChangeFloor) {
         return (
           onChangeFloor({
             ...ctx,
-            newX: player.x,
-            newY: player.y,
+            newX,
+            newY,
             newZ,
-            floorChange,
+            floorChange: spriteId === 1948 ? -1 : floorChange,
           }) !== false
         );
       }
 
+      player.x = newX;
+      player.y = newY;
       player.z = newZ;
-      console.log(`[LadderOnUse] Player mudou para floor ${newZ}`);
       return true;
     });
   }
@@ -538,4 +566,142 @@ export function registerPositionAction(x, y, z, handler) {
 export function registerCustomItemAction(spriteId, handler) {
   const actionSystem = getActionSystem();
   actionSystem.registerItemAction(spriteId, handler);
+}
+
+/**
+ * Registra ação de Rope Hole (ID 386).
+ * Ao usar o tile, verifica se o player possui uma corda (ID 3003) no inventário.
+ * Se sim, sobe um andar (Z-1). Se não, exibe mensagem.
+ */
+function registerRopeHoleOnUseAction(actionSystem) {
+  const ROPE_HOLE_ID = 386;
+  const ROPE_ID = 3003;
+
+  actionSystem.registerItemAction(ROPE_HOLE_ID, (ctx) => {
+    const { player, target, onChangeFloor, showMessage } = ctx;
+    if (!player || !target) return false;
+
+    const inventory = player?.inventory ?? {};
+    const hasRope = Object.values(inventory).some(
+      (item) =>
+        item &&
+        (Number(item.id) === ROPE_ID || Number(item.tileId) === ROPE_ID),
+    );
+
+    if (!hasRope) {
+      if (showMessage) showMessage("Você precisa de uma corda.");
+      return true; // Consome a ação sem executar
+    }
+
+    // Player tem corda: sobe um andar (Z-1)
+    if (onChangeFloor) {
+      return (
+        onChangeFloor({
+          ...ctx,
+          newX: player.x,
+          newY: player.y,
+          newZ: (player.z ?? 7) - 1,
+          floorChange: -1,
+          actionType: "rope_hole_use",
+        }) !== false
+      );
+    }
+
+    return false;
+  });
+}
+
+/**
+ * Registra ação USE WITH - usar um item em outro item.
+ * Exemplo: Usar corda (3003) em ROPE ROLE (368) para subir andar.
+ *
+ * @param {ActionSystem} actionSystem
+ * @param {Object} worldState
+ * @param {Object} config
+ * @param {number[]} config.useItemIds - IDs dos itens que podem ser usados
+ * @param {number[]} config.onTargetIds - IDs dos itens alvo
+ * @param {string} config.action - Nome da ação
+ */
+export function registerUseWithAction(actionSystem, worldState, config) {
+  const { useItemIds, onTargetIds, action } = config;
+
+  // Registra handler para cada combinação de item + alvo
+  for (const useItemId of useItemIds) {
+    for (const targetId of onTargetIds) {
+      const actionKey = `usewith_${useItemId}_${targetId}`;
+
+      actionSystem.registerItemAction(targetId, (ctx) => {
+        const { player, target, item, showLookMessage } = ctx;
+
+        if (!player || !target) return false;
+
+        // Verifica se o item sendo usado é o item correto
+        if (!item || (item.id !== useItemId && item.tileId !== useItemId)) {
+          // Não é o item correto, usa comportamento padrão
+          return false;
+        }
+
+        // Verifica se player está adjacente ao alvo
+        const dx = Math.abs(player.x - target.x);
+        const dy = Math.abs(player.y - target.y);
+        if (dx > 1 || dy > 1) {
+          if (showLookMessage) {
+            showLookMessage("Muito longe.");
+          }
+          return false;
+        }
+
+        // Executa ação específica baseada no tipo
+        if (action === "rope_use") {
+          return executeRopeUse(ctx, targetId);
+        }
+
+        return false;
+      });
+    }
+  }
+}
+
+/**
+ * Executa o uso de corda em ROPE ROLE.
+ * Sobe o player para o andar de cima na posição do ROPE ROLE + Y+1
+ *
+ * @param {Object} ctx - Contexto da ação
+ * @param {number} targetId - ID do alvo (368 = ROPE ROLE)
+ */
+function executeRopeUse(ctx, targetId) {
+  const { player, target, onChangeFloor, showLookMessage } = ctx;
+
+  if (!player || !target) return false;
+
+  // ROPE ROLE (368): sobe um andar e move para Y+1
+  const newX = player.x;
+  const newY = target.y + 1;
+  const newZ = (player.z ?? 7) - 1; // Sobe 1 floor (Z-1)
+
+  if (onChangeFloor) {
+    return (
+      onChangeFloor({
+        ...ctx,
+        newX,
+        newY,
+        newZ,
+        floorChange: -1,
+        actionType: "rope_use",
+      }) !== false
+    );
+  }
+
+  player.x = newX;
+  player.y = newY;
+  player.z = newZ;
+
+  if (showLookMessage) {
+    showLookMessage("Você usou a corda para subir!");
+  }
+
+  console.log(
+    `[RopeUse] Player usou corda em ROPE ROLE e foi para ${newX}, ${newY}, ${newZ}`,
+  );
+  return true;
 }

@@ -369,7 +369,29 @@ export class DragDropManager {
     const { source, slotIndex, equipSlot, worldItemId } = this._drag;
     const worldPos = this._screenToWorld(clientX, clientY);
 
+    // USE WITH: Item do inventário usado em item do mundo
     if (source === "inventory" && slotIndex != null && worldPos) {
+      // Verifica se há um item no mundo na posição de drop
+      const targetWorldItem = this._getWorldItemAt(
+        worldPos.x,
+        worldPos.y,
+        worldPos.z ?? 7,
+      );
+
+      if (targetWorldItem) {
+        // USE WITH: Usar item em outro item
+        this._sendAction({
+          itemAction: "useWith",
+          slotIndex, // Item sendo usado (ex: corda)
+          targetWorldItemId: targetWorldItem.id ?? targetWorldItem.instanceId, // Alvo (ex: ROPE ROLE)
+          targetX: worldPos.x,
+          targetY: worldPos.y,
+          targetZ: worldPos.z ?? 7,
+        });
+        return;
+      }
+
+      // Drop normal no chão
       this._sendAction({
         itemAction: "drop",
         slotIndex,

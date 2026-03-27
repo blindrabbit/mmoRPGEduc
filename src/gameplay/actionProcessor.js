@@ -11,6 +11,7 @@
 
 import {
   batchWrite,
+  dbSet,
   dbGet,
   applyHpToPlayer,
   applyMpToPlayer,
@@ -20,7 +21,11 @@ import {
   TILE_CHUNK_SIZE,
 } from "../core/db.js";
 
-import { getMonsters, getPlayers } from "../core/worldStore.js";
+import {
+  getMonsters,
+  getPlayers,
+  applyPlayersLocal,
+} from "../core/worldStore.js";
 import { worldEvents, EVENT_TYPES } from "../core/events.js";
 
 import {
@@ -706,6 +711,42 @@ function _buildMovePayload(src, playerId) {
   }
 }
 
+function _parseVirtualMapWorldItemId(worldItemId) {
+  if (typeof worldItemId !== "string" || !worldItemId.startsWith("map_")) {
+    return null;
+  }
+  const withoutPrefix = worldItemId.slice(4);
+  const parts = withoutPrefix.split("_");
+  if (parts.length < 4) return null;
+
+  const occIdxRaw = parts.pop();
+  const tileIdRaw = parts.pop();
+  const mapLayerRaw = parts.pop();
+  const coord = parts.join("_");
+  const [x, y, z] = coord.split(",").map(Number);
+
+  const tileId = Number(tileIdRaw);
+  const mapLayer = Number(mapLayerRaw);
+  const occIdx = Number(occIdxRaw);
+
+  if (
+    !Number.isFinite(x) ||
+    !Number.isFinite(y) ||
+    !Number.isFinite(z) ||
+    !Number.isFinite(tileId) ||
+    !Number.isFinite(mapLayer)
+  ) {
+    return null;
+  }
+
+  return {
+    coord,
+    tileId,
+    mapLayer,
+    occIdx: Number.isFinite(occIdx) ? occIdx : 0,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // AÇÕES DE ITEM
 // ---------------------------------------------------------------------------
@@ -727,6 +768,45 @@ async function _processItem(action, player, now) {
   // ID gerado pelo DragDropManager — permite emitir ACTION_CONFIRMED/REJECTED
   const clientActionId = src.actionId ?? null;
 
+  // Itens de mapa chegam como ID virtual (map_x,y,z_layer_tile_occIdx).
+  // Materializa no world_items aqui no servidor para evitar corrida de sync no cliente.
+  if (
+    (itemAction === "pickUp" || itemAction === "moveWorld") &&
+    typeof worldItemId === "string" &&
+    worldItemId.startsWith("map_")
+  ) {
+    const parsed = _parseVirtualMapWorldItemId(worldItemId);
+    if (!parsed) {
+      return { success: false, error: "ID de item do mapa inválido" };
+    }
+
+    const tsBase = now ?? Date.now();
+    const tempId =
+      src.clientTempId ??
+      `maptile_${parsed.coord.replace(/,/g, "_")}_${parsed.tileId}_${tsBase}`;
+
+    await _processMapTilePickup(
+      {
+        playerId,
+        coord: parsed.coord,
+        tileId: parsed.tileId,
+        mapLayer: parsed.mapLayer,
+        clientTempId: tempId,
+        tileCount: Number(src.tileCount ?? src.quantity ?? src.count ?? 1),
+        stackable: Boolean(src.stackable ?? false),
+        maxStack: Number(src.maxStack ?? 1),
+        content_type: src.content_type ?? src.contentType ?? null,
+      },
+      player,
+      tsBase,
+    );
+
+    worldItemId = tempId;
+  }
+
+  const effectiveSrc =
+    worldItemId === src.worldItemId ? src : { ...src, worldItemId };
+
   const {
     pickUpItem,
     dropItem,
@@ -741,7 +821,7 @@ async function _processItem(action, player, now) {
   // ── Validação via ItemMoveValidator (server-authoritative) ────────────────
   // Ações que têm payload mapeável passam pelo validator antes de executar.
   // Ações sem mapeamento (use, splitWorld) seguem pelo caminho legado.
-  const movePayload = _buildMovePayload(src, playerId);
+  const movePayload = _buildMovePayload(effectiveSrc, playerId);
   if (movePayload) {
     const { ItemMoveValidator } =
       await import("../server/worldEngine/validators/ItemMoveValidator.js");
@@ -754,20 +834,50 @@ async function _processItem(action, player, now) {
     });
 
     if (!validationResult.ok) {
-      pushLog(
-        "error",
-        `[${player.name ?? playerId}] ${itemAction} negado: ${validationResult.userMessage}`,
-      );
-      if (clientActionId) {
-        worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
-          actionId: clientActionId,
-          playerId,
-          itemAction,
-          reason: validationResult.code,
-          userMessage: validationResult.userMessage,
-        });
+      const legacyItemValidationActions = new Set([
+        "pickUp",
+        "drop",
+        "moveWorld",
+      ]);
+      const shouldUseLegacyValidationPath =
+        legacyItemValidationActions.has(itemAction);
+
+      if (shouldUseLegacyValidationPath) {
+        pushLog(
+          "warn",
+          `[${player.name ?? playerId}] ${itemAction} negado pelo ItemMoveValidator (${validationResult.code}); seguindo validação legada de itemActions`,
+        );
+      } else {
+        pushLog(
+          "error",
+          `[${player.name ?? playerId}] ${itemAction} negado: ${validationResult.userMessage}`,
+        );
+        if (clientActionId) {
+          try {
+            await dbSet(`${PATHS.actionResults}/${clientActionId}`, {
+              status: "rejected",
+              success: false,
+              itemAction,
+              reason: validationResult.code,
+              userMessage: validationResult.userMessage,
+              ts: Date.now(),
+            });
+          } catch (error) {
+            console.warn(
+              "[actionProcessor] falha ao persistir action result (validator):",
+              error,
+            );
+          }
+          worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
+            actionId: clientActionId,
+            playerId,
+            itemAction,
+            reason: validationResult.code,
+            userMessage: validationResult.userMessage,
+          });
+        }
+        return { success: false, error: validationResult.code };
       }
-      return { success: false, error: validationResult.code };
     }
   }
   // ─────────────────────────────────────────────────────────────────────────
@@ -818,6 +928,16 @@ async function _processItem(action, player, now) {
     case "use":
       result = await useItem(playerId, slotIndex);
       break;
+    case "useWith":
+      result = await useItemWith(
+        playerId,
+        slotIndex,
+        src.targetWorldItemId,
+        src.targetX,
+        src.targetY,
+        src.targetZ,
+      );
+      break;
     default:
       result = {
         success: false,
@@ -834,6 +954,23 @@ async function _processItem(action, player, now) {
 
   // Notifica o DragDropManager sobre confirmação ou rejeição da ação.
   if (clientActionId) {
+    // Também persiste o resultado para o cliente acompanhar via Firebase,
+    // inclusive quando o worldEngine roda em processo separado.
+    try {
+      await dbSet(`${PATHS.actionResults}/${clientActionId}`, {
+        status: result?.success ? "success" : "rejected",
+        success: Boolean(result?.success),
+        itemAction,
+        reason: result?.success ? null : (result?.error ?? "erro desconhecido"),
+        ts: Date.now(),
+      });
+    } catch (error) {
+      console.warn(
+        "[actionProcessor] falha ao persistir action result:",
+        error,
+      );
+    }
+
     if (result?.success) {
       worldEvents.emit(EVENT_TYPES.ACTION_CONFIRMED, {
         actionId: clientActionId,
@@ -859,8 +996,15 @@ async function _processItem(action, player, now) {
 async function _processMove(action, player, now) {
   const { playerId, x, y, z, direcao } = action;
 
+  console.debug(
+    `[actionProcessor] _processMove: ${player.name} (${player.x},${player.y}) → (${x},${y})`,
+  );
+
   const speedMs = Math.max(100, Math.floor(40000 / (player.speed ?? 120)));
-  if (_isOnCooldown(playerId, "move")) return;
+  if (_isOnCooldown(playerId, "move")) {
+    console.debug(`[actionProcessor] _processMove: cooldown ativo`);
+    return;
+  }
   _setCooldown(playerId, "move", speedMs);
 
   const dx = Math.abs(x - (player.x ?? 0));
@@ -869,6 +1013,9 @@ async function _processMove(action, player, now) {
     pushLog(
       "error",
       `[${player.name}] movimento inválido: delta (${dx},${dy})`,
+    );
+    console.warn(
+      `[actionProcessor] _processMove: delta inválido dx=${dx} dy=${dy}`,
     );
     return;
   }
@@ -890,6 +1037,19 @@ async function _processMove(action, player, now) {
     [`${PATHS.player(playerId)}/direcao`]: direcao ?? "frente",
     [`${PATHS.player(playerId)}/lastMoveTime`]: now,
   });
+
+  // Atualiza cache local para o WorldEngine ver a posição imediatamente
+  applyPlayersLocal(playerId, {
+    x,
+    y,
+    z: z ?? player.z ?? 7,
+    direcao: direcao ?? "frente",
+    lastMoveTime: now,
+  });
+
+  console.debug(
+    `[actionProcessor] _processMove: posição atualizada no cache (${x},${y})`,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -908,7 +1068,8 @@ async function _processMapTilePickup(action, player, now) {
     Math.abs(tx - Number(player?.x ?? tx)),
     Math.abs(ty - Number(player?.y ?? ty)),
   );
-  if (!bypassRangeCheck && (dist > 1 || tz !== Number(player?.z ?? tz))) {
+  // Tolerância aumentada para 2 SQMs para compensar latência de sincronização
+  if (!bypassRangeCheck && (dist > 2 || tz !== Number(player?.z ?? tz))) {
     pushLog("error", `[${player.name}] tentou pegar tile fora de alcance`);
     return;
   }
@@ -962,7 +1123,7 @@ async function _processMapTilePickup(action, player, now) {
 // TOGGLE DOOR — persiste troca de tile via evento
 // ---------------------------------------------------------------------------
 async function _processToggleDoor(action, player, now) {
-  const { playerId, target, fromId, toId } = action;
+  const { playerId, target, fromId, toId, isOpening } = action;
   if (!target || fromId == null || toId == null) return;
 
   const x = Number(target.x);
@@ -985,7 +1146,8 @@ async function _processToggleDoor(action, player, now) {
     Math.abs(x - Number(player.x ?? x)),
     Math.abs(y - Number(player.y ?? y)),
   );
-  if (dist > 1 || z !== Number(player.z ?? z)) {
+  // Tolerância aumentada para 2 SQMs para compensar latência de sincronização
+  if (dist > 2 || z !== Number(player.z ?? z)) {
     pushLog("error", `[${player.name}] porta fora de alcance`);
     return;
   }
@@ -1008,6 +1170,44 @@ async function _processToggleDoor(action, player, now) {
   if (!tileData || typeof tileData !== "object") {
     pushLog("error", `[${player.name}] tile da porta nao encontrado`);
     return;
+  }
+
+  // Porta com chave: extrai action_id diretamente do tile (server-authoritative)
+  // Se o tile contém um item com action_id, valida que o player possui a chave
+  if (isOpening) {
+    let tileActionId = null;
+    for (const layer of Object.values(tileData)) {
+      if (!Array.isArray(layer)) continue;
+      for (const entry of layer) {
+        if (
+          entry &&
+          typeof entry === "object" &&
+          entry.action_id != null
+        ) {
+          tileActionId = entry.action_id;
+          break;
+        }
+      }
+      if (tileActionId != null) break;
+    }
+    if (tileActionId != null) {
+      const inventory =
+        (await dbGet(`players_data/${playerId}/inventory`)) ?? {};
+      const hasKey = Object.values(inventory).some(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          (item.unique_id === tileActionId ||
+            item.uniqueId === tileActionId),
+      );
+      if (!hasKey) {
+        pushLog(
+          "warn",
+          `[${player.name}] tentou abrir porta trancada (actionId=${tileActionId}) sem chave`,
+        );
+        return;
+      }
+    }
   }
 
   const tileClone = { ...tileData };
@@ -1082,6 +1282,21 @@ async function _processChangeFloor(action, player, now) {
       `[${player.name}] mudança de andar inválida: ${fromZ} → ${toZ}`,
     );
     return;
+  }
+
+  // Rope Hole (386): valida que o player possui uma corda (3003) no inventário
+  if (Number(action.itemId) === 386) {
+    const inventory =
+      (await dbGet(`players_data/${playerId}/inventory`)) ?? {};
+    const hasRope = Object.values(inventory).some(
+      (item) =>
+        item &&
+        (Number(item.id) === 3003 || Number(item.tileId) === 3003),
+    );
+    if (!hasRope) {
+      pushLog("warn", `[${player.name}] rope hole sem corda no inventário`);
+      return;
+    }
   }
 
   if (_isOnCooldown(playerId, "change_floor")) return;

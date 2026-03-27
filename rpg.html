@@ -895,7 +895,7 @@
     <!-- Auth overlay -->
     <div id="auth-overlay" style="display: none">
       <div id="auth-box">
-        <h2>◈ mmoRPGGame</h2>
+        <h2>mmoRPGGame</h2>
         <form id="auth-form" onsubmit="return false;">
           <input
             type="email"
@@ -1254,12 +1254,11 @@
         </div>
       </div>
 
-      <!-- Painel inferior: Chat + Eventos + Logs -->
+      <!-- Painel inferior: Chat + Eventos do Mundo -->
       <div id="log-panel">
         <div class="tabs">
           <button class="tab-btn active" data-tab="chat">Chat</button>
           <button class="tab-btn" data-tab="world">Eventos do Mundo</button>
-          <button class="tab-btn" data-tab="logs">Logs</button>
         </div>
         <div class="tab-content" id="tab-chat">
           <div id="chat-messages"></div>
@@ -1275,7 +1274,6 @@
           </div>
         </div>
         <div class="tab-content" id="tab-world" style="display: none"></div>
-        <div class="tab-content" id="tab-logs" style="display: none"></div>
       </div>
     </div>
 
@@ -1384,10 +1382,12 @@
         applyHpToPlayer,
         setPlayerActionCooldown,
         submitPlayerAction,
+        watchPlayerActionResult,
         createNewCharacter,
         formatDisplayName,
         registerPlayerDisconnect,
         dbTouchPresence,
+        batchWrite,
         dbWatch,
         dbGet,
         dbSet,
@@ -1440,6 +1440,7 @@
       } from "./src/gameplay/gameCore.js";
       import { initSchemaRegistry } from "./src/gameplay/schemaRegistry.js";
       import { getActionSystem } from "./src/core/actionSystem.js";
+      import { resolveStepOnEffects } from "./src/core/TileEffects.js";
 
       // ── Boot logger ────────────────────────────────────────────────────────
       const bootLogEl = document.getElementById("boot-log");
@@ -1469,11 +1470,6 @@
       });
 
       // ── Event Log ─────────────────────────────────────────────────────────
-      initEventLog({
-        panelId: "tab-logs",
-        showSource: false,
-        filters: ["all"],
-      });
       initEventLog({
         panelId: "tab-world",
         showSource: true,
@@ -2139,6 +2135,33 @@
         return Number.isFinite(n) ? n : fallback;
       }
 
+      function _refreshChunkSubscriptionForPlayer(position, force = false) {
+        if (!_chunkSubscriber || !position) return;
+        if (!Number.isFinite(cols) || !Number.isFinite(rows)) return;
+
+        const tx = Math.round(Number(position.x));
+        const ty = Math.round(Number(position.y));
+        const tz = Math.round(Number(position.z));
+        if (
+          !Number.isFinite(tx) ||
+          !Number.isFinite(ty) ||
+          !Number.isFinite(tz)
+        ) {
+          return;
+        }
+
+        if (force || _chunkTracker.needsTileUpdate({ x: tx, y: ty, z: tz })) {
+          updateChunkSubscriberForObserver({
+            subscriber: _chunkSubscriber,
+            x: tx,
+            y: ty,
+            z: tz,
+            cols,
+            rows,
+          });
+        }
+      }
+
       function _xpToNextLevel(level) {
         // Mesma fórmula de progressionSystem.js: floor(100 * n^1.75)
         const lvl = Math.max(1, Number(level) || 1);
@@ -2277,6 +2300,27 @@
                 map[tileCoord][sourceLayer].push({ id: sourceTileId });
               }
             }
+          }),
+        );
+
+        // Servidor rejeitou a ação → mostra mensagem de erro na preview
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ACTION_REJECTED, (evt) => {
+            const reason = evt?.reason || evt?.userMessage || evt?.error;
+            const msg = reason
+              ? `Ação falhou: ${reason}`
+              : "Erro ao executar ação";
+            _setDragPreviewHint(msg, "invalid");
+            // Também loga na system console do jogo
+            pushLog("rpg", "error", msg);
+          }),
+        );
+
+        // Servidor confirmou a ação → mostra feedback de sucesso
+        _dragUiUnsubs.push(
+          worldEvents.subscribe(EVENT_TYPES.ACTION_CONFIRMED, (evt) => {
+            _setDragPreviewHint("Item movido com sucesso!", "valid");
+            pushLog("rpg", "system", "Item movido com sucesso!");
           }),
         );
       }
@@ -2689,6 +2733,9 @@
         myPos._serverMoveTime = Number(playerData.lastMoveTime ?? 0) || 0;
         myPos._lastClientMoveAt = 0;
 
+        // Garante chunks do entorno da posição real do personagem (pode diferir do spawn).
+        _refreshChunkSubscriptionForPlayer(myPos, true);
+
         _lastPlayerXp = Number(myPos.stats?.xp ?? 0);
         _lastPlayerTotalXp = Number(myPos.stats?.totalXp);
         if (!Number.isFinite(_lastPlayerTotalXp)) _lastPlayerTotalXp = null;
@@ -2759,100 +2806,6 @@
                   }
                 }
 
-                if (
-                  (payload.itemAction === "pickUp" ||
-                    payload.itemAction === "moveWorld") &&
-                  payload.worldItemId?.startsWith("map_")
-                ) {
-                  const MAP_SYNC_GRACE_MS = 120;
-                  const withoutPrefix = payload.worldItemId.slice(4);
-                  const parts = withoutPrefix.split("_");
-                  // ID format: "x,y,z_layer_tileId_occIdx" — pop occIdx first
-                  parts.pop(); // occIdx (occurrence index for stacked same-type items)
-                  const tileId = parseInt(parts.pop(), 10);
-                  const mapLayer = parts.pop();
-                  const coord = parts.join("_");
-                  const [tx, ty, tz] = coord.split(",").map(Number);
-
-                  // Busca o tile original para preservar quantity e campos extras
-                  // (ex: content_type em liquid containers, count em stackables)
-                  const _srcTileArr = map?.[coord]?.[mapLayer];
-                  const _srcTile = Array.isArray(_srcTileArr)
-                    ? _srcTileArr.find((t) => Number(t.id) === tileId)
-                    : null;
-                  const {
-                    id: _stId,
-                    count: _stCount,
-                    action_id: _stAid,
-                    unique_id: _stUid,
-                    ...srcTileExtraFields
-                  } = _srcTile ?? {};
-                  const tileQuantity = _srcTile?.count ?? 1;
-
-                  // Para liquid containers, o count do mapa indica o tipo de líquido
-                  // Mapeamento: 0→empty, 1→water, 2→blood, 3→beer, 4→slime, 5→lemonade, 6→milk, 7→mana, 8→lifefluid, 9→urine, 10→rum, 11→fruitjuice
-                  const LIQUID_TYPES = [
-                    "empty",
-                    "water",
-                    "blood",
-                    "beer",
-                    "slime",
-                    "lemonade",
-                    "milk",
-                    "mana",
-                    "lifefluid",
-                    "urine",
-                    "rum",
-                    "fruitjuice",
-                  ];
-                  const itemEntry = itemDataService?.getEntry?.(tileId);
-                  const mapStackable =
-                    itemDataService?.isStackable?.(tileId) ??
-                    itemEntry?.game?.is_stackable ??
-                    false;
-                  const mapMaxStack =
-                    itemDataService?.getMaxStack?.(tileId) ??
-                    (mapStackable
-                      ? Number(itemEntry?.stackable?.stack_size ?? 100)
-                      : 1);
-                  let extraFields = { ...srcTileExtraFields };
-                  if (
-                    itemEntry?.game?.is_liquid_container &&
-                    !extraFields.content_type
-                  ) {
-                    // Converte count → content_type
-                    const liquidIndex = _stCount ?? 0;
-                    extraFields.content_type =
-                      LIQUID_TYPES[liquidIndex] ?? "empty";
-                  }
-
-                  const _maptileTs = Date.now();
-                  const tempId = `maptile_${coord.replace(/,/g, "_")}_${tileId}_${_maptileTs}`;
-                  const actionId = `${uid}_map_tile_pickup_${_maptileTs}`;
-                  await dbSet(`${PATHS.actions}/${actionId}`, {
-                    id: actionId,
-                    playerId: uid,
-                    type: "map_tile_pickup",
-                    coord,
-                    tileId,
-                    mapLayer,
-                    clientTempId: tempId,
-                    tileCount: Number(tileQuantity ?? 1),
-                    stackable: mapStackable,
-                    maxStack: mapMaxStack,
-                    content_type: extraFields.content_type ?? null,
-                    ts: _maptileTs,
-                    expiresAt: _maptileTs + 5000,
-                  });
-
-                  // Aguarda o worldEngine processar e criar o world_item
-                  await new Promise((resolve) =>
-                    setTimeout(resolve, Math.max(150, MAP_SYNC_GRACE_MS)),
-                  );
-
-                  payload = { ...payload, worldItemId: tempId, tileId };
-                }
-
                 // Sem atualizações otimistas: Firebase/watchPlayerData é autoritativo.
                 // Evita sumiço de itens causado por watchPlayerData sobrescrevendo
                 // estado otimista quando o jogador move antes do worldEngine processar.
@@ -2862,16 +2815,71 @@
                   type: action.type,
                   ...payload,
                 });
-                // Confirma ação para o DragDropManager cancelar o timeout de rollback.
-                // (ACTION_CONFIRMED do servidor fica no processo do worldEngine;
-                //  aqui emitimos no worldEvents local após a escrita no Firebase.)
+
+                // Fonte autoritativa: aguarda o worldEngine processar a ação
+                // e gravar o resultado em player_actions_results/{actionId}.
                 if (payload.actionId) {
-                  worldEvents.emit(EVENT_TYPES.ACTION_CONFIRMED, {
+                  const actionResult = await new Promise((resolve) => {
+                    let settled = false;
+                    const timeout = setTimeout(() => {
+                      if (settled) return;
+                      settled = true;
+                      try {
+                        unsub?.();
+                      } catch (_) {}
+                      resolve({
+                        success: false,
+                        reason: "timeout aguardando processamento",
+                      });
+                    }, 6500);
+
+                    const unsub = watchPlayerActionResult(
+                      payload.actionId,
+                      async (snapshot) => {
+                        if (settled || !snapshot) return;
+                        settled = true;
+                        clearTimeout(timeout);
+                        try {
+                          unsub?.();
+                        } catch (_) {}
+                        try {
+                          await dbSet(
+                            `${PATHS.actionResults}/${payload.actionId}`,
+                            null,
+                          );
+                        } catch (_) {}
+                        resolve(snapshot);
+                      },
+                    );
+                  });
+
+                  const ok =
+                    actionResult?.success === true ||
+                    actionResult?.status === "success";
+
+                  if (ok) {
+                    worldEvents.emit(EVENT_TYPES.ACTION_CONFIRMED, {
+                      actionId: payload.actionId,
+                      playerId: uid,
+                      itemAction: payload.itemAction,
+                    });
+                    return { success: true };
+                  }
+
+                  const reason =
+                    actionResult?.reason ||
+                    actionResult?.error ||
+                    actionResult?.code ||
+                    "ação rejeitada";
+                  worldEvents.emit(EVENT_TYPES.ACTION_REJECTED, {
                     actionId: payload.actionId,
                     playerId: uid,
                     itemAction: payload.itemAction,
+                    reason,
                   });
+                  return { success: false, error: reason };
                 }
+
                 return { success: true };
               } catch (err) {
                 _optimisticRollback?.();
@@ -3233,22 +3241,8 @@
             myPos.y = serverY;
             myPos.z = serverZ;
           }
-          // Atualiza chunks se o player mudou de tile ou de andar
-          if (_chunkSubscriber) {
-            const tx = Math.round(myPos.x),
-              ty = Math.round(myPos.y),
-              tz = myPos.z;
-            if (_chunkTracker.needsTileUpdate({ x: tx, y: ty, z: tz })) {
-              updateChunkSubscriberForObserver({
-                subscriber: _chunkSubscriber,
-                x: tx,
-                y: ty,
-                z: tz,
-                cols,
-                rows,
-              });
-            }
-          }
+          // Atualiza chunks quando snapshot do servidor mover o player.
+          _refreshChunkSubscriptionForPlayer(myPos);
           // ?? {} sem fallback para myPos: Firebase retorna null quando o nó fica
           // vazio (ex: último item dropado), e manter o valor antigo causa ghost slots.
           myPos.inventory = serverData.inventory ?? {};
@@ -3394,6 +3388,76 @@
           if (!actionSystem) return;
           const posKey = `${nx},${ny},${nz}`;
           const posHandler = actionSystem.positionActions?.get(posKey);
+
+          // Verifica efeitos ao pisar no tile (floor_change, teleport)
+          const effect = resolveStepOnEffects(nx, ny, nz, {
+            map,
+            assets: { mapData },
+          });
+
+          if (effect) {
+            console.log(`[TileEffects] Efeito ao pisar:`, effect);
+            if (effect.type === "floor_change") {
+              // Aplica mudança de floor
+              myPos.x = effect.newX;
+              myPos.y = effect.newY;
+              myPos.z = effect.newZ;
+              myPos.direcao = myPos.direcao || "frente";
+              myPos.lastMoveTime = Date.now();
+              _refreshChunkSubscriptionForPlayer(myPos);
+
+              const now = Date.now();
+              myPos._lastClientMoveAt = now;
+              const actionId = `${uid}_floorchange_${now}_${++_moveActionSeq}`;
+              dbSet(`${PATHS.actions}/${actionId}`, {
+                id: actionId,
+                playerId: uid,
+                type: "change_floor",
+                fromZ: nz - (effect.newZ - nz),
+                toZ: effect.newZ,
+                target: { x: nx, y: ny, z: nz },
+                ts: now,
+                expiresAt: now + 5000,
+              }).catch(() => {});
+
+              pushLog(
+                "rpg",
+                "move",
+                `${myPos.name} floor_change → ${effect.newX},${effect.newY},${effect.newZ}`,
+              );
+              return;
+            }
+            if (effect.type === "teleport") {
+              // Aplica teleporte
+              myPos.x = effect.dest.x;
+              myPos.y = effect.dest.y;
+              myPos.z = effect.dest.z;
+              myPos.direcao = myPos.direcao || "frente";
+              myPos.lastMoveTime = Date.now();
+              _refreshChunkSubscriptionForPlayer(myPos);
+
+              const now = Date.now();
+              myPos._lastClientMoveAt = now;
+              const actionId = `${uid}_teleport_${now}_${++_moveActionSeq}`;
+              dbSet(`${PATHS.actions}/${actionId}`, {
+                id: actionId,
+                playerId: uid,
+                type: "teleport",
+                from: { x: nx, y: ny, z: nz },
+                to: effect.dest,
+                ts: now,
+                expiresAt: now + 5000,
+              }).catch(() => {});
+
+              pushLog(
+                "rpg",
+                "move",
+                `${myPos.name} teleport → ${effect.dest.x},${effect.dest.y},${effect.dest.z}`,
+              );
+              return;
+            }
+          }
+
           if (!posHandler) return;
 
           console.log(`[ActionConfig] Position action encontrada em ${posKey}`);
@@ -3434,10 +3498,29 @@
           myPos.z = nz;
           myPos.direcao = dir;
           myPos.lastMoveTime = Date.now();
+          _refreshChunkSubscriptionForPlayer(myPos);
 
-          // Envia para validação pelo worldEngine (zero-trust) em todos os fluxos.
           const now = Date.now();
           myPos._lastClientMoveAt = now;
+
+          // ✅ SYNC EM TEMPO REAL: Atualiza posição diretamente no Firebase
+          // para que o WorldEngine receba imediatamente via watchPlayers
+          const updates = {
+            [`online_players/${uid}/x`]: nx,
+            [`online_players/${uid}/y`]: ny,
+            [`online_players/${uid}/z`]: nz ?? myPos.z ?? 7,
+            [`online_players/${uid}/direcao`]: dir,
+            [`online_players/${uid}/lastMoveTime`]: now,
+            [`online_players/${uid}/lastSeen`]: now,
+            [`players_data/${uid}/x`]: nx,
+            [`players_data/${uid}/y`]: ny,
+            [`players_data/${uid}/z`]: nz ?? myPos.z ?? 7,
+            [`players_data/${uid}/direcao`]: dir,
+            [`players_data/${uid}/lastMoveTime`]: now,
+          };
+          batchWrite(updates).catch(() => {});
+
+          // Envia para validação pelo worldEngine (zero-trust) em todos os fluxos.
           const actionId = `${uid}_move_${now}_${++_moveActionSeq}`;
           dbSet(`${PATHS.actions}/${actionId}`, {
             id: actionId,

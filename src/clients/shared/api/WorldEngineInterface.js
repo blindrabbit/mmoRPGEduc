@@ -1,7 +1,7 @@
 // =============================================================================
 // WorldEngineInterface.js — mmoRPGEduc
 // API PÚBLICA que os clientes consomem para interagir com o núcleo
-// 
+//
 // Regras:
 // • Cliente NUNCA acessa db.js, worldStore.js ou gameplay/ diretamente
 // • Cliente usa APENAS esta interface para: enviar ações, receber updates
@@ -10,15 +10,22 @@
 // Dependências: events.js, network/NetworkInterface.js
 // =============================================================================
 
-import { worldEvents, EVENT_TYPES, createEventPayload } from '../../../core/events.js';
-import { createNetworkInstance, isFeatureEnabled } from '../../../core/network/networkFactory.js';
+import {
+  worldEvents,
+  EVENT_TYPES,
+  createEventPayload,
+} from "../../../core/events.js";
+import {
+  createNetworkInstance,
+  isFeatureEnabled,
+} from "../../../core/network/networkFactory.js";
 
 /**
  * Interface principal para clientes se comunicarem com o WorldEngine
  */
 export class WorldEngineInterface {
   /**
-   * @param {Object} config 
+   * @param {Object} config
    * @param {string} [config.playerId] - ID do jogador (para ações)
    * @param {Object} [config.network] - Configurações de rede
    * @param {Function} [config.onEvent] - Callback global para eventos
@@ -29,7 +36,7 @@ export class WorldEngineInterface {
       network: config.network || {},
       onEvent: config.onEvent || null,
     };
-    
+
     /** @private */
     this._network = null;
     /** @private */
@@ -41,23 +48,27 @@ export class WorldEngineInterface {
     };
     /** @private */
     this._eventHandlers = new Map();
-    
+
     // Registra handler global para eventos do núcleo
-    this._globalEventUnsub = worldEvents.subscribe('*', (event) => {
+    this._globalEventUnsub = worldEvents.subscribe("*", (event) => {
       if (this.config.onEvent) {
-        try { this.config.onEvent(event); } catch (e) { console.error(e); }
+        try {
+          this.config.onEvent(event);
+        } catch (e) {
+          console.error(e);
+        }
       }
     });
   }
 
   /**
    * Inicializa a conexão com o backend
-   * @param {Object} options 
+   * @param {Object} options
    * @returns {Promise<boolean>}
    */
   async connect(options = {}) {
     if (this._network) {
-      console.warn('[WorldEngineInterface] Already connected');
+      console.warn("[WorldEngineInterface] Already connected");
       return true;
     }
 
@@ -85,13 +96,13 @@ export class WorldEngineInterface {
   async disconnect() {
     // Cancela todas as subscriptions do cliente
     for (const unsub of this._subscriptions.values()) {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsub === "function") unsub();
     }
     this._subscriptions.clear();
 
     // Cancela handlers de evento
     for (const unsub of this._eventHandlers.values()) {
-      if (typeof unsub === 'function') unsub();
+      if (typeof unsub === "function") unsub();
     }
     this._eventHandlers.clear();
 
@@ -117,27 +128,27 @@ export class WorldEngineInterface {
 
   /**
    * Envia uma ação para o WorldEngine processar
-   * @param {Object} action 
+   * @param {Object} action
    * @param {'attack'|'spell'|'move'|'use'|'chat'} action.type
    * @param {Object} action.payload - Dados específicos da ação
    * @returns {Promise<{success: boolean, error?: string}>}
    */
   async sendAction(action) {
     if (!this._network?.connected) {
-      return { success: false, error: 'Not connected' };
+      return { success: false, error: "Not connected" };
     }
 
     // Validação básica do cliente (servidor re-valida)
     if (!this._validateAction(action)) {
-      return { success: false, error: 'Invalid action' };
+      return { success: false, error: "Invalid action" };
     }
 
     // Prediction client-side para responsividade (opcional)
-    if (isFeatureEnabled('movementPrediction') && action.type === 'move') {
+    if (isFeatureEnabled("movementPrediction") && action.type === "move") {
       this._predictMovement(action.payload);
     }
-    
-    if (isFeatureEnabled('spellPrediction') && action.type === 'spell') {
+
+    if (isFeatureEnabled("spellPrediction") && action.type === "spell") {
       this._predictSpell(action.payload);
     }
 
@@ -146,13 +157,13 @@ export class WorldEngineInterface {
 
   /**
    * Assina um canal para receber atualizações em tempo real
-   * @param {'players'|'monsters'|'effects'|'fields'|'chat'} channel 
+   * @param {'players'|'monsters'|'effects'|'fields'|'chat'} channel
    * @param {Function} callback - Recebe {data, timestamp, type}
    * @returns {Function} Função para cancelar assinatura
    */
   subscribe(channel, callback) {
     if (!this._network) {
-      console.warn('[WorldEngineInterface] subscribe called before connect');
+      console.warn("[WorldEngineInterface] subscribe called before connect");
       return () => {};
     }
 
@@ -161,14 +172,17 @@ export class WorldEngineInterface {
       try {
         // Corrige prediction se servidor enviou correção
         const corrected = this._correctPrediction(channel, update.data);
-        
+
         callback({
           ...update,
           data: corrected || update.data,
           corrected: !!corrected,
         });
       } catch (error) {
-        console.error(`[WorldEngineInterface] Error in ${channel} callback:`, error);
+        console.error(
+          `[WorldEngineInterface] Error in ${channel} callback:`,
+          error,
+        );
       }
     };
 
@@ -189,12 +203,12 @@ export class WorldEngineInterface {
 
   /**
    * Obtém snapshot atual de um canal
-   * @param {string} channel 
+   * @param {string} channel
    * @returns {Promise<Object>}
    */
   async getSnapshot(channel) {
     if (!this._network) {
-      throw new Error('Not connected');
+      throw new Error("Not connected");
     }
     return this._network.getSnapshot(channel);
   }
@@ -202,7 +216,7 @@ export class WorldEngineInterface {
   /**
    * Registra handler para evento específico do núcleo
    * @param {string} eventType - De EVENT_TYPES
-   * @param {Function} callback 
+   * @param {Function} callback
    * @returns {Function} Unsubscribe
    */
   onEvent(eventType, callback) {
@@ -213,7 +227,7 @@ export class WorldEngineInterface {
 
   /**
    * Obtém histórico de um tipo de evento (para late-join)
-   * @param {string} eventType 
+   * @param {string} eventType
    * @returns {Array}
    */
   getEventHistory(eventType) {
@@ -227,8 +241,8 @@ export class WorldEngineInterface {
   getConnectionState() {
     return {
       connected: this._network?.connected ?? false,
-      clientId: this._network?.clientId ?? 'unknown',
-      adapter: this.config.network?.adapter || 'firebase',
+      clientId: this._network?.clientId ?? "unknown",
+      adapter: this.config.network?.adapter || "firebase",
     };
   }
 
@@ -242,23 +256,43 @@ export class WorldEngineInterface {
    */
   _validateAction(action) {
     if (!action?.type) return false;
-    
-    const validTypes = ['attack', 'spell', 'move', 'use', 'chat', 'interact', 'item'];
+
+    const validTypes = [
+      "attack",
+      "spell",
+      "move",
+      "use",
+      "chat",
+      "interact",
+      "item",
+    ];
     if (!validTypes.includes(action.type)) return false;
 
     // Validações específicas por tipo
     switch (action.type) {
-      case 'attack':
-      case 'spell':
+      case "attack":
+      case "spell":
         return !!action.payload?.targetId;
-      case 'move':
-        return typeof action.payload?.x === 'number' &&
-               typeof action.payload?.y === 'number';
-      case 'chat':
-        return typeof action.payload?.message === 'string' &&
-               action.payload.message.length <= 120;
-      case 'item': {
-        const validItemActions = ['pickUp', 'drop', 'equip', 'unequip', 'move', 'use'];
+      case "move":
+        return (
+          typeof action.payload?.x === "number" &&
+          typeof action.payload?.y === "number"
+        );
+      case "chat":
+        return (
+          typeof action.payload?.message === "string" &&
+          action.payload.message.length <= 120
+        );
+      case "item": {
+        const validItemActions = [
+          "pickUp",
+          "drop",
+          "equip",
+          "unequip",
+          "move",
+          "use",
+          "useWith",
+        ];
         return validItemActions.includes(action.payload?.itemAction);
       }
       default:
@@ -273,20 +307,22 @@ export class WorldEngineInterface {
   _predictMovement(payload) {
     const { playerId, x, y, z } = payload;
     const key = playerId || this.config.playerId;
-    
+
     if (!key) return;
-    
+
     // Salva estado previsto para correção posterior
     this._predictionState.movements.set(key, {
       predicted: { x, y, z },
       timestamp: Date.now(),
       confirmed: false,
     });
-    
+
     // Emite evento local para UI atualizar imediatamente
     worldEvents.emit(EVENT_TYPES.PLAYER_MOVE, {
       playerId: key,
-      x, y, z,
+      x,
+      y,
+      z,
       predicted: true,
       timestamp: Date.now(),
     });
@@ -299,14 +335,14 @@ export class WorldEngineInterface {
   _predictSpell(payload) {
     const { spellId, targetId, casterId } = payload;
     const key = `${casterId || this.config.playerId}:${spellId}`;
-    
+
     this._predictionState.spells.set(key, {
       spellId,
       targetId,
       timestamp: Date.now(),
       confirmed: false,
     });
-    
+
     // Emite evento para UI mostrar efeito visual imediato
     worldEvents.emit(EVENT_TYPES.SPELL_CAST, {
       casterId: casterId || this.config.playerId,
@@ -322,26 +358,26 @@ export class WorldEngineInterface {
    * @private
    */
   _correctPrediction(channel, data) {
-    if (channel !== 'players' || !isFeatureEnabled('movementPrediction')) {
+    if (channel !== "players" || !isFeatureEnabled("movementPrediction")) {
       return null;
     }
 
     // Data pode ser objeto único ou coleção
     const entities = data?.id ? { [data.id]: data } : data;
-    
+
     for (const [id, entity] of Object.entries(entities || {})) {
       const pred = this._predictionState.movements.get(id);
       if (pred && !pred.confirmed) {
         const serverPos = { x: entity.x, y: entity.y, z: entity.z };
         const predPos = pred.predicted;
-        
+
         // Se diferença for pequena, aceita prediction (suavização)
         const dist = Math.hypot(
           serverPos.x - predPos.x,
           serverPos.y - predPos.y,
-          (serverPos.z || 7) - (predPos.z || 7)
+          (serverPos.z || 7) - (predPos.z || 7),
         );
-        
+
         if (dist < 0.5) {
           // Prediction estava correto, marca como confirmado
           pred.confirmed = true;
@@ -359,7 +395,7 @@ export class WorldEngineInterface {
         }
       }
     }
-    
+
     return null;
   }
 
@@ -369,15 +405,15 @@ export class WorldEngineInterface {
    */
   _setupInternalListeners() {
     // Listener para ações confirmadas pelo servidor
-    this._network.subscribe('actions', (update) => {
+    this._network.subscribe("actions", (update) => {
       const { id, data } = update;
       if (data?.processed) {
         // Ação foi processada, limpa prediction se existir
-        if (data.action?.type === 'move') {
+        if (data.action?.type === "move") {
           const key = data.playerId;
           this._predictionState.movements.delete(key);
         }
-        if (data.action?.type === 'spell') {
+        if (data.action?.type === "spell") {
           const key = `${data.playerId}:${data.action.spellId}`;
           this._predictionState.spells.delete(key);
         }
@@ -394,7 +430,7 @@ let _globalInterface = null;
 
 /**
  * Obtém ou cria instância global da interface
- * @param {Object} config 
+ * @param {Object} config
  * @returns {WorldEngineInterface}
  */
 export function getWorldEngineInstance(config = {}) {

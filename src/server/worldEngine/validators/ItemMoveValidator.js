@@ -18,7 +18,10 @@
 // @serverOnly — rodar apenas no contexto do worldEngine
 // ═══════════════════════════════════════════════════════════════
 
-import { MOVE_ERRORS, getUserMessage } from "../../../core/constants/moveErrors.js";
+import {
+  MOVE_ERRORS,
+  getUserMessage,
+} from "../../../core/constants/moveErrors.js";
 import {
   STACK_LIMITS,
   MAX_DROP_DISTANCE,
@@ -102,7 +105,10 @@ export class ItemMoveValidator {
 
     const item = await this._resolveFromItem(from, playerId);
     if (!item) {
-      return deny(MOVE_ERRORS.NOTPOSSIBLE, `item não encontrado em from=${JSON.stringify(from)}`);
+      return deny(
+        MOVE_ERRORS.NOTPOSSIBLE,
+        `item não encontrado em from=${JSON.stringify(from)}`,
+      );
     }
 
     // ──────────────────────────────────────────────────────────
@@ -110,7 +116,10 @@ export class ItemMoveValidator {
     // ──────────────────────────────────────────────────────────
 
     if (item.ownerId && item.ownerId !== playerId) {
-      return deny(MOVE_ERRORS.ITEMISNOTYOURS, `ownerId=${item.ownerId} !== playerId=${playerId}`);
+      return deny(
+        MOVE_ERRORS.ITEMISNOTYOURS,
+        `ownerId=${item.ownerId} !== playerId=${playerId}`,
+      );
     }
     if (item.locked) {
       return deny(MOVE_ERRORS.NOTPOSSIBLE, "item travado (trade/house)");
@@ -122,16 +131,24 @@ export class ItemMoveValidator {
 
     const resolvedItemTypeId = itemTypeId ?? item.id ?? item.tileId;
     const itemDef = wsGetItemDefinition(resolvedItemTypeId);
-    const isStackable = !!(itemDef?.game?.is_stackable || itemDef?.flags_raw?.cumulative);
+    const isStackable = !!(
+      itemDef?.game?.is_stackable || itemDef?.flags_raw?.cumulative
+    );
 
     if (isStackable && count != null) {
       // count === null significa "mover tudo" — permitido
       const actualCount = item.count ?? item.quantity ?? 1;
       if (count <= 0 || count > actualCount) {
-        return deny(MOVE_ERRORS.NOTPOSSIBLE, `count inválido: ${count} (tem ${actualCount})`);
+        return deny(
+          MOVE_ERRORS.NOTPOSSIBLE,
+          `count inválido: ${count} (tem ${actualCount})`,
+        );
       }
       if (count > STACK_LIMITS.MAX_STACK) {
-        return deny(MOVE_ERRORS.STACK_LIMIT_EXCEEDED, `count ${count} > ${STACK_LIMITS.MAX_STACK}`);
+        return deny(
+          MOVE_ERRORS.STACK_LIMIT_EXCEEDED,
+          `count ${count} > ${STACK_LIMITS.MAX_STACK}`,
+        );
       }
     }
 
@@ -144,8 +161,16 @@ export class ItemMoveValidator {
       const py = player.y ?? player.position?.y ?? 0;
       const ix = item.x ?? 0;
       const iy = item.y ?? 0;
-      if (Math.max(Math.abs(px - ix), Math.abs(py - iy)) > MAX_PICKUP_DISTANCE) {
-        return deny(MOVE_ERRORS.THEREISNOWAY, `item fora de alcance de pickup (> ${MAX_PICKUP_DISTANCE} SQM)`);
+      // Tolerância aumentada para 2 SQMs para compensar latência de sincronização
+      // entre cliente (RPG) e servidor (WorldEngine)
+      if (
+        Math.max(Math.abs(px - ix), Math.abs(py - iy)) >
+        MAX_PICKUP_DISTANCE + 1
+      ) {
+        return deny(
+          MOVE_ERRORS.THEREISNOWAY,
+          `item fora de alcance de pickup (> ${MAX_PICKUP_DISTANCE + 1} SQM)`,
+        );
       }
     }
 
@@ -161,9 +186,15 @@ export class ItemMoveValidator {
       case "container":
         return this._validateContainer(item, to, player, itemDef, isStackable);
       case "inventory":
-        return this._validateInventory(item, to, player, itemDef);
+        return this._validateInventory(item, to, player, itemDef, {
+          from,
+          isStackable,
+        });
       default:
-        return deny(MOVE_ERRORS.NOTPOSSIBLE, `destino desconhecido: ${to.type}`);
+        return deny(
+          MOVE_ERRORS.NOTPOSSIBLE,
+          `destino desconhecido: ${to.type}`,
+        );
     }
   }
 
@@ -199,12 +230,18 @@ export class ItemMoveValidator {
     const dx = Math.abs((player.x ?? player.position?.x ?? 0) - pos.x);
     const dy = Math.abs((player.y ?? player.position?.y ?? 0) - pos.y);
     if (Math.max(dx, dy) > MAX_DROP_DISTANCE) {
-      return deny(MOVE_ERRORS.THEREISNOWAY, `distância ${Math.max(dx, dy)} > ${MAX_DROP_DISTANCE}`);
+      return deny(
+        MOVE_ERRORS.THEREISNOWAY,
+        `distância ${Math.max(dx, dy)} > ${MAX_DROP_DISTANCE}`,
+      );
     }
 
     const tile = await wsGetTile(pos);
     if (!tile) {
-      return deny(MOVE_ERRORS.CANNOTTHROWITEMTHERE, `tile (${pos.x},${pos.y},${pos.z}) não existe`);
+      return deny(
+        MOVE_ERRORS.CANNOTTHROWITEMTHERE,
+        `tile (${pos.x},${pos.y},${pos.z}) não existe`,
+      );
     }
 
     // Tile bloqueia drops (parede, água profunda, etc.)
@@ -233,7 +270,10 @@ export class ItemMoveValidator {
     // Limite de world_items por tile (conta itens realmente dropados, não layers do mapa)
     const droppedCount = await wsCountWorldItemsAt(pos);
     if (droppedCount >= STACK_LIMITS.MAX_ITEMS_PER_TILE) {
-      return deny(MOVE_ERRORS.NOTENOUGHROOM, `tile cheio (${droppedCount} itens no chão)`);
+      return deny(
+        MOVE_ERRORS.NOTENOUGHROOM,
+        `tile cheio (${droppedCount} itens no chão)`,
+      );
     }
 
     return allow({ tilePos: pos });
@@ -253,43 +293,61 @@ export class ItemMoveValidator {
 
     // Slot de roupa: obtido via flags_raw.clothes.slot ou game.equip_slot
     const itemSlotNum = itemDef.flags_raw?.clothes?.slot;
-    const itemSlotType = itemDef.game?.equip_slot ?? itemDef.game?.category_type;
+    const itemSlotType =
+      itemDef.game?.equip_slot ?? itemDef.game?.category_type;
 
     // Verifica compatibilidade de slot pelo tipo de item
     if (itemSlotType && !isSlotCompatible(itemSlotType, Number(slotId))) {
-      return deny(MOVE_ERRORS.CANNOTBEDRESSED, `${itemSlotType} não encaixa em slotId=${slotId}`);
+      return deny(
+        MOVE_ERRORS.CANNOTBEDRESSED,
+        `${itemSlotType} não encaixa em slotId=${slotId}`,
+      );
     }
 
     // Level mínimo
     const minLevel = itemDef.game?.min_level ?? itemDef.flags_raw?.minLevel;
     if (minLevel && (player.stats?.level ?? player.level ?? 1) < minLevel) {
-      return deny(MOVE_ERRORS.LEVELTOLOW, `level ${player.stats?.level} < ${minLevel}`);
+      return deny(
+        MOVE_ERRORS.LEVELTOLOW,
+        `level ${player.stats?.level} < ${minLevel}`,
+      );
     }
 
     // Vocação (array de vocações permitidas)
     const vocations = itemDef.game?.vocations ?? itemDef.flags_raw?.vocations;
     if (vocations?.length && !vocations.includes(player.vocation)) {
-      return deny(MOVE_ERRORS.VOCATIONMISMATCH, `vocação ${player.vocation} não está em ${vocations}`);
+      return deny(
+        MOVE_ERRORS.VOCATIONMISMATCH,
+        `vocação ${player.vocation} não está em ${vocations}`,
+      );
     }
 
     // Premium
-    const needsPremium = itemDef.game?.premium_only ?? itemDef.flags_raw?.premium;
+    const needsPremium =
+      itemDef.game?.premium_only ?? itemDef.flags_raw?.premium;
     if (needsPremium && !player.premium) {
       return deny(MOVE_ERRORS.PREMIUMREQUIRED, "item requer premium");
     }
 
     // Arma two-hand: mão esquerda deve estar livre
     const isTwoHand = itemDef.game?.two_hand ?? itemDef.flags_raw?.twoHand;
-    if (isTwoHand && Number(slotId) === 5) { // RIGHT slot
+    if (isTwoHand && Number(slotId) === 5) {
+      // RIGHT slot
       const leftSlotItem = await wsGetEquippedItem(player.id, 6);
       if (leftSlotItem) {
-        return deny(MOVE_ERRORS.NOTENOUGHROOM, "arma de duas mãos requer slot esquerdo livre");
+        return deny(
+          MOVE_ERRORS.NOTENOUGHROOM,
+          "arma de duas mãos requer slot esquerdo livre",
+        );
       }
     }
 
     // Verifica se haverá swap (slot ocupado por outro item)
     const existingItem = await wsGetEquippedItem(player.id, slotId);
-    return allow({ willSwap: !!existingItem, swappedItem: existingItem ?? null });
+    return allow({
+      willSwap: !!existingItem,
+      swappedItem: existingItem ?? null,
+    });
   }
 
   // ── CONTAINER ──────────────────────────────────────────────
@@ -302,11 +360,17 @@ export class ItemMoveValidator {
 
     const container = await wsGetContainer(containerId);
     if (!container) {
-      return deny(MOVE_ERRORS.NOTPOSSIBLE, `container ${containerId} não encontrado`);
+      return deny(
+        MOVE_ERRORS.NOTPOSSIBLE,
+        `container ${containerId} não encontrado`,
+      );
     }
 
     if (container.ownerId && container.ownerId !== player.id) {
-      return deny(MOVE_ERRORS.ITEMISNOTYOURS, "container pertence a outro player");
+      return deny(
+        MOVE_ERRORS.ITEMISNOTYOURS,
+        "container pertence a outro player",
+      );
     }
 
     // Slot específico solicitado
@@ -317,9 +381,16 @@ export class ItemMoveValidator {
         if (isStackable && existing.tileId === item.tileId) {
           const newCount = (existing.count ?? 1) + (item.count ?? 1);
           if (newCount > STACK_LIMITS.MAX_STACK) {
-            return deny(MOVE_ERRORS.STACK_LIMIT_EXCEEDED, `merge resultaria em ${newCount}`);
+            return deny(
+              MOVE_ERRORS.STACK_LIMIT_EXCEEDED,
+              `merge resultaria em ${newCount}`,
+            );
           }
-          return allow({ willMerge: true, newCount, targetSlot: containerSlot });
+          return allow({
+            willMerge: true,
+            newCount,
+            targetSlot: containerSlot,
+          });
         }
         return deny(MOVE_ERRORS.NOTENOUGHROOM, `slot ${containerSlot} ocupado`);
       }
@@ -336,14 +407,45 @@ export class ItemMoveValidator {
 
   // ── INVENTÁRIO ─────────────────────────────────────────────
 
-  async _validateInventory(item, to, player, itemDef) {
+  async _validateInventory(item, to, player, itemDef, context = {}) {
     const { slotIndex } = to;
+    const fromType = context?.from?.type ?? null;
+    const sourceSlot = context?.from?.slotIndex ?? null;
+    const movingFromInventory = fromType === "inventory";
+    const movingStackable = context?.isStackable === true;
 
     // Slot específico solicitado
     if (slotIndex != null) {
+      if (
+        movingFromInventory &&
+        sourceSlot != null &&
+        Number(sourceSlot) === Number(slotIndex)
+      ) {
+        return allow({ targetSlot: slotIndex });
+      }
+
       const existing = await wsGetInventorySlot(player.id, slotIndex);
       if (existing) {
-        return deny(MOVE_ERRORS.NOTENOUGHROOM, `slot de inventário ${slotIndex} ocupado`);
+        // inventory -> inventory pode fazer swap ou merge em slot ocupado.
+        if (movingFromInventory) {
+          const movingTileId = item?.tileId ?? item?.id ?? null;
+          const existingTileId = existing?.tileId ?? existing?.id ?? null;
+          const sameType =
+            movingTileId != null &&
+            existingTileId != null &&
+            Number(movingTileId) === Number(existingTileId);
+
+          if (movingStackable && sameType) {
+            return allow({ targetSlot: slotIndex, willMerge: true });
+          }
+
+          return allow({ targetSlot: slotIndex, willSwap: true });
+        }
+
+        return deny(
+          MOVE_ERRORS.NOTENOUGHROOM,
+          `slot de inventário ${slotIndex} ocupado`,
+        );
       }
       return allow({ targetSlot: slotIndex });
     }

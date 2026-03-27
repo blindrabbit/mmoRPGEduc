@@ -99,7 +99,18 @@ export function initWorldStore() {
   // online_players — jogadores
   _watchers.push(
     watchPlayers((data) => {
-      mergePlayers(normalizeCollection(data, "player"));
+      const normalized = normalizeCollection(data, "player");
+      // Debug: log quando player se move
+      for (const id in normalized) {
+        const entry = normalized[id];
+        const existing = state.players[id];
+        if (existing && (entry.x !== existing.x || entry.y !== existing.y)) {
+          console.debug(
+            `[worldStore] Player ${id} move: ${existing.x},${existing.y} → ${entry.x},${entry.y}`,
+          );
+        }
+      }
+      mergePlayers(normalized);
       notify("players", state.players);
     }),
   );

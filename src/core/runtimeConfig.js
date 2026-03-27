@@ -38,7 +38,7 @@ export const RUNTIME_DEFAULTS = {
 
   // ── Itens — regras de interação no mundo ─────────────────────────────────
   items: {
-    pickupRange: 1, // distância máx. para pegar item (tiles) — OT original: 1 SQM
+    pickupRange: 2, // distância máx. para pegar item (tiles) — aumentado para compensar latência
     dropRange: 15, // distância máx. para largar item (tiles)
     maxInventoryWeight: 500, // peso total máximo do inventário
     worldItemExpiry: 15 * 60 * 1000, // ms até item no chão expirar

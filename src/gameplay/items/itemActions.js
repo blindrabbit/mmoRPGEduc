@@ -17,7 +17,13 @@
 // Dependências: db.js, schema.js, events.js, worldStore.js, progressionSystem.js
 // =============================================================================
 
-import { batchWrite, dbGet, dbRemove, PATHS, TILE_CHUNK_SIZE } from "../../core/db.js";
+import {
+  batchWrite,
+  dbGet,
+  dbRemove,
+  PATHS,
+  TILE_CHUNK_SIZE,
+} from "../../core/db.js";
 import { RuntimeConfig } from "../../core/runtimeConfig.js";
 import { makeItem, validateItem, ITEM_SCHEMA } from "../../core/schema.js";
 import { worldEvents, EVENT_TYPES } from "../../core/events.js";
@@ -31,8 +37,8 @@ import { isTileBlockedByWall } from "../../core/collision.js";
 
 export const ITEM_CONFIG = Object.freeze({
   // Distância máxima para pegar item do chão (em tiles)
-  // 1 = apenas os 8 SQMs ao redor + SQM do próprio player (Chebyshev ≤ 1)
-  pickupRange: 1,
+  // Aumentado para 2 para compensar latência de sincronização
+  pickupRange: 2,
 
   // Distância máxima para arremessar/largar item no chão
   dropRange: 15,
@@ -260,7 +266,13 @@ export async function pickUpItem(playerId, worldItemId) {
   }
 
   // Verificar expiração
-  if (worldItem.expiresAt && Date.now() > worldItem.expiresAt) {
+  const isMapOriginWorldItem =
+    worldItem.fromMap === true || _isMapOriginWorldItem(worldItem);
+  if (
+    !isMapOriginWorldItem &&
+    worldItem.expiresAt &&
+    Date.now() > worldItem.expiresAt
+  ) {
     await dbRemove(P.worldItem(worldItemId));
     return { success: false, error: "Item expirou" };
   }
@@ -340,8 +352,14 @@ export async function pickUpItem(playerId, worldItemId) {
     inventoryItem.stackable;
   const currentAtSlotRaw = await dbGet(P.inventorySlot(playerId, slotIndex));
   if (isStackMerge) {
-    if (!currentAtSlotRaw || !_sameItemForStack(currentAtSlotRaw, inventoryItem)) {
-      return { success: false, error: "Slot modificado durante a operação. Tente novamente." };
+    if (
+      !currentAtSlotRaw ||
+      !_sameItemForStack(currentAtSlotRaw, inventoryItem)
+    ) {
+      return {
+        success: false,
+        error: "Slot modificado durante a operação. Tente novamente.",
+      };
     }
   } else {
     if (currentAtSlotRaw && typeof currentAtSlotRaw === "object") {
@@ -1178,6 +1196,135 @@ export async function useItem(playerId, slotIndex) {
 }
 
 // =============================================================================
+// USE WITH — Usar um item do inventário em outro item do mundo
+// =============================================================================
+
+/**
+ * Usa um item do inventário em um item do mundo.
+ * Exemplo: Usar corda (3003) em ROPE ROLE (368) para subir andar.
+ *
+ * @param {string} playerId
+ * @param {number} slotIndex - Slot do item sendo usado (inventário)
+ * @param {string} targetWorldItemId - ID do item alvo no mundo
+ * @param {number} targetX - X do alvo
+ * @param {number} targetY - Y do alvo
+ * @param {number} targetZ - Z do alvo
+ */
+export async function useItemWith(
+  playerId,
+  slotIndex,
+  targetWorldItemId,
+  targetX,
+  targetY,
+  targetZ,
+) {
+  const player = getPlayer(playerId);
+  if (!player) {
+    return { success: false, error: "Player não encontrado" };
+  }
+
+  const inventory = player.inventory ?? {};
+  const item = inventory[slotIndex];
+
+  if (!item) {
+    return { success: false, error: "Item não encontrado no inventário" };
+  }
+
+  const itemId = item.id ?? item.tileId;
+  const targetId = targetWorldItemId;
+
+  // Configurações de USE WITH
+  const useWithConfigs = {
+    // Corda (3003) em ROPE ROLE (368)
+    "3003_368": {
+      action: "rope_use",
+      message: "Você usou a corda para subir!",
+    },
+  };
+
+  const configKey = `${itemId}_${targetId}`;
+  const config = useWithConfigs[configKey];
+
+  if (!config) {
+    return {
+      success: false,
+      error: "Esta combinação de itens não tem efeito",
+    };
+  }
+
+  // Verifica distância do player até o alvo
+  const dx = Math.abs(player.x - targetX);
+  const dy = Math.abs(player.y - targetY);
+  const dz = Math.abs((player.z ?? 7) - (targetZ ?? 7));
+
+  if (dx > 1 || dy > 1 || dz > 0) {
+    return { success: false, error: "Muito longe" };
+  }
+
+  // Executa ação específica
+  if (config.action === "rope_use") {
+    // ROPE ROLE: sobe um andar e move para Y+1
+    const newX = player.x;
+    const newY = targetY + 1;
+    const newZ = (player.z ?? 7) - 1; // Sobe 1 floor (Z-1)
+
+    // Aplica movimento
+    applyPlayersLocal(playerId, {
+      x: newX,
+      y: newY,
+      z: newZ,
+    });
+
+    // Remove 1 unidade da corda se for stackable
+    const newInventory = { ...inventory };
+    const itemQuantity = item.quantity ?? item.count ?? 1;
+    if (itemQuantity > 1) {
+      newInventory[slotIndex] = {
+        ...item,
+        quantity: itemQuantity - 1,
+        count: itemQuantity - 1,
+      };
+    } else {
+      delete newInventory[slotIndex];
+    }
+
+    applyPlayersLocal(playerId, {
+      inventory: newInventory,
+    });
+
+    // Emite evento
+    worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
+      playerId,
+      inventory: newInventory,
+    });
+
+    pushLog("info", `[${player.name}] ${config.message}`);
+
+    return {
+      success: true,
+      action: config.action,
+      newPosition: { x: newX, y: newY, z: newZ },
+    };
+  }
+
+  return { success: false, error: "Ação não implementada" };
+}
+
+// =============================================================================
+// EXPORT PARA actionProcessor.js
+// =============================================================================
+
+export const itemActionHandlers = {
+  pickUp: pickUpItem,
+  drop: dropItem,
+  equip: equipItem,
+  unequip: unequipItem,
+  move: moveItem,
+  use: useItem,
+  useWith: useItemWith,
+};
+
+// =============================================================================
 // LEITURA (helpers para UI)
 // =============================================================================
 
@@ -1304,16 +1451,3 @@ async function _recalcStats(player, newEquipment) {
     agi: Math.max(1, (base.agi ?? player.stats?.agi ?? 1) + agiBonus),
   };
 }
-
-// =============================================================================
-// EXPORT PARA actionProcessor.js
-// =============================================================================
-
-export const itemActionHandlers = {
-  pickUp: pickUpItem,
-  drop: dropItem,
-  equip: equipItem,
-  unequip: unequipItem,
-  move: moveItem,
-  use: useItem,
-};

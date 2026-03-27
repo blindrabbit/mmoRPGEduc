@@ -201,35 +201,61 @@ export class ActionSystem {
   executeFromTile(context) {
     const { player, target } = context;
 
+    console.log(
+      `[ActionSystem.executeFromTile] target.id=${target?.id} target=(${target?.x},${target?.y},${target?.z})`,
+    );
+    console.log(
+      `[ActionSystem.executeFromTile] itemActions size=${this.itemActions.size} handlers:`,
+      Array.from(this.itemActions.keys()),
+    );
+
     // 1. Verifica ação específica da posição
     const posKey = `${target.x},${target.y},${target.z}`;
     const posHandler = this.positionActions.get(posKey);
     if (posHandler) {
+      console.log(
+        `[ActionSystem.executeFromTile] positionAction encontrada em ${posKey}`,
+      );
       try {
         return posHandler(context) !== false;
       } catch (error) {
-        console.error("[ActionSystem] Erro ao executar ação da posição:", error);
+        console.error(
+          "[ActionSystem] Erro ao executar ação da posição:",
+          error,
+        );
       }
     }
 
     // 2. Verifica ação específica do item
     const itemHandler = this.itemActions.get(target.id);
     if (itemHandler) {
+      console.log(
+        `[ActionSystem.executeFromTile] itemAction encontrada para id=${target.id}`,
+      );
       try {
         return itemHandler(context) !== false;
       } catch (error) {
         console.error("[ActionSystem] Erro ao executar ação do item:", error);
       }
+    } else {
+      console.log(
+        `[ActionSystem.executeFromTile] itemAction NÃO encontrada para id=${target.id}`,
+      );
     }
 
     // 3. Usa defaultAction do metadata
     const metadata = context.metadata;
-    const defaultAction = metadata?.game?.default_action || metadata?.flags_raw?.defaultAction;
+    const defaultAction =
+      metadata?.game?.default_action || metadata?.flags_raw?.defaultAction;
     if (defaultAction) {
+      console.log(
+        `[ActionSystem.executeFromTile] defaultAction=${defaultAction}`,
+      );
       return this.execute(defaultAction, context);
     }
 
     // 4. Fallback: ação USE padrão
+    console.log(`[ActionSystem.executeFromTile] Fallback: USE padrao`);
     return this.execute(PlayerAction.USE, context);
   }
 
@@ -279,11 +305,10 @@ export class ActionSystem {
     if (!target) return false;
 
     const name = metadata?.name || metadata?.game?.name || "Unknown";
-    const description = metadata?.description || metadata?.game?.description || "";
+    const description =
+      metadata?.description || metadata?.game?.description || "";
 
-    const message = description
-      ? `${name}: ${description}`
-      : name;
+    const message = description ? `${name}: ${description}` : name;
 
     if (showLookMessage) {
       showLookMessage(message);
@@ -329,7 +354,9 @@ export class ActionSystem {
       return true;
     }
 
-    console.log(`[OpenContainer] ${target.id} em (${target.x}, ${target.y}, ${target.z})`);
+    console.log(
+      `[OpenContainer] ${target.id} em (${target.x}, ${target.y}, ${target.z})`,
+    );
     return true;
   }
 
@@ -342,9 +369,8 @@ export class ActionSystem {
 
     if (!target || !teleportTo) return false;
 
-    const dest = typeof teleportTo === "function"
-      ? teleportTo(ctx)
-      : teleportTo;
+    const dest =
+      typeof teleportTo === "function" ? teleportTo(ctx) : teleportTo;
 
     if (dest && dest.x != null && dest.y != null && dest.z != null) {
       player.x = dest.x;
@@ -430,7 +456,9 @@ export class ActionSystem {
       return onPickup(ctx) !== false;
     }
 
-    console.log(`[Pickup] Pegando item ${target.id} em (${target.x}, ${target.y})`);
+    console.log(
+      `[Pickup] Pegando item ${target.id} em (${target.x}, ${target.y})`,
+    );
     return true;
   }
 

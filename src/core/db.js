@@ -119,6 +119,8 @@ export const PATHS = {
   abilitySchemas: "game_schemas/abilities",
   actions: "player_actions",
   action: (id) => safePath("player_actions", id),
+  actionResults: "player_actions_results",
+  actionResult: (id) => safePath("player_actions_results", id),
   chat: "world_chat",
   chatMsg: (id) => safePath("world_chat", id),
   worldConfig: "world_config",
@@ -972,6 +974,11 @@ export function deletePlayerActions(ids = []) {
  */
 export function watchPlayerActions(cb) {
   return dbWatchChildren(PATHS.actions, { onAdd: (id, data) => cb(id, data) });
+}
+
+export function watchPlayerActionResult(actionId, cb) {
+  if (!actionId) return () => {};
+  return dbWatch(PATHS.actionResult(actionId), cb);
 }
 
 // ---------------------------------------------------------------------------

@@ -34,6 +34,22 @@ const _validator = new ItemMoveValidator();
  */
 export async function handleItemMove(actionId, action) {
   try {
+    // ✅ FORÇA SYNC DA POSIÇÃO: Antes de validar, garante que o player
+    // mais recente seja lido do Firebase (não apenas do cache)
+    const { wsGetPlayer } = await import("../services/WorldStore.js");
+    const freshPlayer = await wsGetPlayer(action.playerId);
+    if (freshPlayer) {
+      // Atualiza cache local com a posição mais recente
+      const { applyPlayersLocal } = await import("../../../core/worldStore.js");
+      applyPlayersLocal(action.playerId, {
+        x: freshPlayer.x,
+        y: freshPlayer.y,
+        z: freshPlayer.z,
+        direcao: freshPlayer.direcao,
+        lastMoveTime: freshPlayer.lastMoveTime,
+      });
+    }
+
     // 1. Validação
     const validation = await _validator.validate(action);
     if (!validation.ok) {
@@ -56,10 +72,12 @@ export async function handleItemMove(actionId, action) {
     // 4. Resultado de sucesso
     await _writeResult(actionId, { status: "success" });
     return { status: "success", code: MOVE_ERRORS.SUCCESS };
-
   } catch (error) {
     console.error("[ItemMoveHandler] Erro inesperado:", error);
-    await _writeResult(actionId, { status: "denied", code: MOVE_ERRORS.INTERNAL_ERROR });
+    await _writeResult(actionId, {
+      status: "denied",
+      code: MOVE_ERRORS.INTERNAL_ERROR,
+    });
     return { status: "denied", code: MOVE_ERRORS.INTERNAL_ERROR };
   }
 }
@@ -73,7 +91,8 @@ async function _executeMove(action, meta) {
 
   // Obtém o item de origem para copiar os dados
   const item = await _resolveFromItem(from, playerId);
-  if (!item) throw new Error(`item de origem não encontrado: ${JSON.stringify(from)}`);
+  if (!item)
+    throw new Error(`item de origem não encontrado: ${JSON.stringify(from)}`);
 
   // ── Remove da origem ──────────────────────────────────────
   switch (from.type) {
@@ -87,7 +106,8 @@ async function _executeMove(action, meta) {
       changes[`players_data/${playerId}/equipment/${from.slotId}`] = null;
       break;
     case "container":
-      changes[`world_items/${from.containerId}/slots/${from.containerSlot}`] = null;
+      changes[`world_items/${from.containerId}/slots/${from.containerSlot}`] =
+        null;
       break;
   }
 
@@ -113,7 +133,8 @@ async function _executeMove(action, meta) {
       if (meta?.willSwap && meta.swappedItem) {
         const emptySlot = await wsFindEmptyInventorySlot(playerId);
         if (emptySlot !== null) {
-          changes[`players_data/${playerId}/inventory/${emptySlot}`] = meta.swappedItem;
+          changes[`players_data/${playerId}/inventory/${emptySlot}`] =
+            meta.swappedItem;
         }
         // Se não houver slot livre, o item anterior é perdido (Canary comportamento)
       }
@@ -129,7 +150,8 @@ async function _executeMove(action, meta) {
       const targetSlot = meta?.targetSlot ?? 0;
       if (meta?.willMerge) {
         // Atualiza apenas o count
-        changes[`world_items/${to.containerId}/slots/${targetSlot}/count`] = meta.newCount;
+        changes[`world_items/${to.containerId}/slots/${targetSlot}/count`] =
+          meta.newCount;
       } else {
         changes[`world_items/${to.containerId}/slots/${targetSlot}`] = {
           tileId: itemTypeId ?? item.tileId ?? item.id,
@@ -158,21 +180,26 @@ async function _executeMove(action, meta) {
 
 async function _resolveFromItem(from, playerId) {
   switch (from.type) {
-    case "world":          return await wsGetWorldItem(from.itemId);
-    case "inventory":      return await wsGetInventorySlot(playerId, from.slotIndex);
-    case "equipment":      return await wsGetEquippedItem(playerId, from.slotId);
-    case "container":      return await wsGetContainerItem(from.containerId, from.containerSlot);
-    default:               return null;
+    case "world":
+      return await wsGetWorldItem(from.itemId);
+    case "inventory":
+      return await wsGetInventorySlot(playerId, from.slotIndex);
+    case "equipment":
+      return await wsGetEquippedItem(playerId, from.slotId);
+    case "container":
+      return await wsGetContainerItem(from.containerId, from.containerSlot);
+    default:
+      return null;
   }
 }
 
 /** Copia campos extras do item (encantamentos, durabilidade, etc.) */
 function _pickItemFields(item) {
   const extra = {};
-  if (item.enchant)      extra.enchant = item.enchant;
-  if (item.durability)   extra.durability = item.durability;
-  if (item.charges)      extra.charges = item.charges;
-  if (item.inscription)  extra.inscription = item.inscription;
+  if (item.enchant) extra.enchant = item.enchant;
+  if (item.durability) extra.durability = item.durability;
+  if (item.charges) extra.charges = item.charges;
+  if (item.inscription) extra.inscription = item.inscription;
   return extra;
 }
 

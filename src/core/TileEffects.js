@@ -69,11 +69,17 @@ function _findFloorChangeInItems(tile, nexoData) {
       ? tile.layers
       : tile;
 
+  // Procura floorChange em todos os itens
   for (const [key, layerItems] of Object.entries(layers)) {
     if (key.startsWith("_") || !Array.isArray(layerItems)) continue;
     for (const item of layerItems) {
       if (!item || typeof item !== "object") continue;
-      const meta = nexoData[String(item.id)];
+      const itemId = item.id;
+      const meta = nexoData[String(itemId)];
+
+      // Ignora ladder (1948) aqui - só funciona via ONUSE
+      if (itemId === 1948) continue;
+
       if (meta?.floorChange) return meta.floorChange;
     }
   }
@@ -217,6 +223,8 @@ function _resolveFloorChangeDirection(
         map,
         nexoData,
       );
+
+      // Se não tiver escada de subida no piso abaixo, usa posição atual
       return {
         newX: x + (reverseDelta?.dx ?? 0),
         newY: y + (reverseDelta?.dy ?? 0),
@@ -224,16 +232,13 @@ function _resolveFloorChangeDirection(
       };
     }
 
-    const targetZ = z - 1;
-    const opposite = _resolveOppositeFromTargetFloor(
-      x,
-      y,
-      targetZ,
-      map,
-      nexoData,
-    );
-    const { dx, dy } = _FLOOR_OFFSETS[opposite] ?? { dx: 0, dy: -1 }; // norte como fallback
-    return { newX: x + dx, newY: y + dy, newZ: targetZ };
+    // Hole e outros: desce direto (Z+1)
+    const targetZ = z + 1;
+    return {
+      newX: x,
+      newY: y,
+      newZ: targetZ,
+    };
   }
 
   // "up" explícito → força subida, sem offset
@@ -290,6 +295,17 @@ export function resolveStepOnEffects(x, y, z, worldState) {
   if (flags.isFloorChange) {
     // Tenta ler direction do map_data mesmo quando a flag vem do OTBM
     const fc = _findFloorChangeInItems(tile, nexoData);
+
+    // Se tiver destOffset (ex: ladder 1948), usa diretamente
+    if (fc?.destOffset) {
+      return {
+        type: "floor_change",
+        newX: x + (fc.destOffset.x ?? 0),
+        newY: y + (fc.destOffset.y ?? 0),
+        newZ: z + (fc.destOffset.z ?? 0),
+      };
+    }
+
     const { newX, newY, newZ } = _resolveFloorChangeDirection(
       x,
       y,

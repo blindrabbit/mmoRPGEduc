@@ -221,6 +221,27 @@
       "messages": {
         "success": "O chão é venenoso! -10 HP e você foi envenenado."
       }
+    },
+    {
+      "id": "rope_use_special",
+      "type": "useWith",
+      "useItemId": 3003,
+      "targetItemId": 368,
+      "action": "rope_use",
+      "effects": {
+        "floorChange": -1,
+        "positionOffset": {
+          "x": 0,
+          "y": 1,
+          "z": 0
+        }
+      },
+      "messages": {
+        "success": "Você usou a corda para subir!"
+      },
+      "conditions": {
+        "distance": 1
+      }
     }
   ]
 }

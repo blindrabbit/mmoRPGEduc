@@ -45,6 +45,11 @@ const ALLOW_PICKUPABLE = {
   NO: "no", // Não recebe itens (parede, ar, água profunda)
 };
 
+// Overrides de gameplay para itens que precisam ser interativos
+// mesmo quando o metadata exportado vier com flags de obstáculo.
+const PICKUPABLE_OVERRIDE_IDS = new Set([3003]);
+const MOVABLE_OVERRIDE_IDS = new Set([3003]);
+
 export class ItemDataService {
   /**
    * @param {Object} mapData - Referência ao worldState.mapData (map_data.json em memória)
@@ -64,6 +69,9 @@ export class ItemDataService {
    * @param {number|string} tileId
    */
   canPickUp(tileId) {
+    const id = Number(tileId);
+    if (PICKUPABLE_OVERRIDE_IDS.has(id)) return true;
+
     const entry = this._get(tileId);
     if (!entry) return false;
     return !!(
@@ -79,6 +87,9 @@ export class ItemDataService {
    * @param {number|string} tileId
    */
   canMove(tileId) {
+    const id = Number(tileId);
+    if (MOVABLE_OVERRIDE_IDS.has(id)) return true;
+
     const entry = this._get(tileId);
     if (!entry) return false;
     return !!entry.game?.is_movable;

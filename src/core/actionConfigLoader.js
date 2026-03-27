@@ -135,6 +135,13 @@ export class ActionConfigLoader {
       );
     } else if (config.type === "item" && config.spriteId) {
       this.actionSystem.registerItemAction(config.spriteId, handler);
+    } else if (
+      config.type === "useWith" &&
+      config.useItemId &&
+      config.targetItemId
+    ) {
+      // Tipo especial: USE WITH (usar item em outro item)
+      this.registerUseWithAction(config, handler);
     } else {
       console.warn(
         `[ActionConfigLoader] Tipo inválido ou faltando params:`,
@@ -145,6 +152,41 @@ export class ActionConfigLoader {
 
     this.registeredActions.set(config.id, { config, handler });
     return true;
+  }
+
+  /**
+   * Registra ação USE WITH configurada
+   * @param {ActionConfig} config
+   * @param {Function} handler
+   */
+  registerUseWithAction(config, handler) {
+    // Registra handler no item alvo que verifica se o item sendo usado é o correto
+    this.actionSystem.registerItemAction(config.targetItemId, (ctx) => {
+      const { item, player, target } = ctx;
+
+      // Verifica se o item sendo usado é o item correto
+      if (
+        !item ||
+        (item.id !== config.useItemId && item.tileId !== config.useItemId)
+      ) {
+        // Não é o item correto, usa comportamento padrão
+        return false;
+      }
+
+      // Verifica se player está adjacente
+      if (config.conditions?.distance != null) {
+        const dx = Math.abs(player.x - target.x);
+        const dy = Math.abs(player.y - target.y);
+        if (dx > config.conditions.distance) {
+          if (config.messages?.conditionFailed) {
+            this.showMessage(config.messages.conditionFailed, ctx);
+          }
+          return false;
+        }
+      }
+
+      return handler(ctx) !== false;
+    });
   }
 
   /**
@@ -248,20 +290,45 @@ export class ActionConfigLoader {
           [`${PATHS.player(player.id)}/x`]: x,
           [`${PATHS.player(player.id)}/y`]: y,
           [`${PATHS.player(player.id)}/z`]: z ?? player.z,
-        }).catch(err => console.error("[ActionEffect] Erro ao salvar teleporte:", err));
+        }).catch((err) =>
+          console.error("[ActionEffect] Erro ao salvar teleporte:", err),
+        );
       }
     }
 
     // Mudança de floor
     if (effects.floorChange) {
       const newZ = (player.z ?? 7) + effects.floorChange;
-      player.z = newZ;
+
+      // Suporte para positionOffset (usado em escadas e rope+rope role)
+      let newX = player.x;
+      let newY = player.y;
+
+      if (effects.positionOffset) {
+        newX = player.x + (effects.positionOffset.x ?? 0);
+        newY = player.y + (effects.positionOffset.y ?? 0);
+        // Z pode ser sobrescrito pelo offset se especificado
+        if (effects.positionOffset.z != null) {
+          player.z = newZ + effects.positionOffset.z;
+        } else {
+          player.z = newZ;
+        }
+      } else {
+        player.z = newZ;
+      }
 
       if (player.id) {
-        batchWrite({
-          [`${PATHS.playerData(player.id)}/z`]: newZ,
-          [`${PATHS.player(player.id)}/z`]: newZ,
-        }).catch(err => console.error("[ActionEffect] Erro ao salvar floorChange:", err));
+        const updates = {
+          [`${PATHS.playerData(player.id)}/x`]: newX,
+          [`${PATHS.playerData(player.id)}/y`]: newY,
+          [`${PATHS.playerData(player.id)}/z`]: player.z,
+          [`${PATHS.player(player.id)}/x`]: newX,
+          [`${PATHS.player(player.id)}/y`]: newY,
+          [`${PATHS.player(player.id)}/z`]: player.z,
+        };
+        batchWrite(updates).catch((err) =>
+          console.error("[ActionEffect] Erro ao salvar floorChange:", err),
+        );
       }
     }
 
@@ -332,11 +399,23 @@ export class ActionConfigLoader {
       batchWrite({
         [`${PATHS.playerData(player.id)}/stats/hp`]: newHp,
         [`${PATHS.player(player.id)}/stats/hp`]: newHp,
-      }).catch(err => console.error("[ActionEffect] Erro ao salvar dano:", err));
+      }).catch((err) =>
+        console.error("[ActionEffect] Erro ao salvar dano:", err),
+      );
     }
 
-    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, { playerId: player.id, amount, type, newHp });
-    this.emitEvent("actionDamage", { playerId: player.id, amount, type, newHp });
+    worldEvents.emit(EVENT_TYPES.COMBAT_DAMAGE, {
+      playerId: player.id,
+      amount,
+      type,
+      newHp,
+    });
+    this.emitEvent("actionDamage", {
+      playerId: player.id,
+      amount,
+      type,
+      newHp,
+    });
   }
 
   /**
@@ -355,10 +434,16 @@ export class ActionConfigLoader {
       batchWrite({
         [`${PATHS.playerData(player.id)}/stats/hp`]: newHp,
         [`${PATHS.player(player.id)}/stats/hp`]: newHp,
-      }).catch(err => console.error("[ActionEffect] Erro ao salvar cura:", err));
+      }).catch((err) =>
+        console.error("[ActionEffect] Erro ao salvar cura:", err),
+      );
     }
 
-    worldEvents.emit(EVENT_TYPES.HEAL_RECEIVED ?? "heal:received", { playerId: player.id, amount, newHp });
+    worldEvents.emit(EVENT_TYPES.HEAL_RECEIVED ?? "heal:received", {
+      playerId: player.id,
+      amount,
+      newHp,
+    });
     this.emitEvent("actionHeal", { playerId: player.id, amount, newHp });
   }
 

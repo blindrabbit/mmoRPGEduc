@@ -371,7 +371,39 @@ function setupRPGInputHandler({
       executeLook(targetTile, metadata);
     } else if (action === PlayerAction.USE || action === 2) {
       // Use (inclui toggle de portas)
-      executeUse(player, targetTile, metadata, onPlayerAction, worldState);
+      // Se não está adjacente, caminha até posição adjacente e executa após chegar
+      if (!isAdjacentToPlayer(player, targetTile)) {
+        const adjacentPos = findAdjacentPosition(
+          player,
+          targetTile,
+          worldState.map,
+          worldState.assets?.mapData,
+        );
+        if (adjacentPos) {
+          const walkGeneration = bumpWalkGeneration(player);
+          executeWalkTo(
+            player,
+            adjacentPos,
+            pathFinder,
+            onPlayerMove,
+            () => {
+              setTimeout(() => {
+                executeUse(
+                  player,
+                  targetTile,
+                  metadata,
+                  onPlayerAction,
+                  worldState,
+                );
+              }, 120);
+            },
+            worldState,
+            walkGeneration,
+          );
+        }
+      } else {
+        executeUse(player, targetTile, metadata, onPlayerAction, worldState);
+      }
     } else if (action === PlayerAction.OPEN || action === 3) {
       // Open
       executeOpen(player, targetTile, metadata, onPlayerAction);
@@ -712,7 +744,7 @@ function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
       resolvedMetadata,
       worldState?.assets?.mapData,
     );
-    executeDoor(targetTile, enrichedDoorMetadata, worldState, onPlayerAction);
+    executeDoor(targetTile, enrichedDoorMetadata, worldState, onPlayerAction, player);
     return;
   }
 
@@ -733,6 +765,36 @@ function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
 }
 
 /**
+ * Retorna o action_id encontrado em qualquer item dos layers do tile.
+ * Usado para validar chave em portas trancadas.
+ */
+function _getTileActionId(tile) {
+  if (!tile || typeof tile !== "object") return null;
+  for (const layer of Object.values(tile)) {
+    if (!Array.isArray(layer)) continue;
+    for (const item of layer) {
+      if (item && typeof item === "object" && item.action_id != null) {
+        return item.action_id;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Verifica se o player possui alguma chave com unique_id igual ao actionId.
+ */
+function _playerHasKeyForActionId(player, actionId) {
+  const inventory = player?.inventory ?? {};
+  return Object.values(inventory).some(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      (item.unique_id === actionId || item.uniqueId === actionId),
+  );
+}
+
+/**
  * Abre ou fecha uma porta trocando o item no tile pelo openId/closedId.
  * A porta precisa estar no worldState.map (tile) e ter metadata.door.
  *
@@ -740,8 +802,9 @@ function executeUse(player, targetTile, metadata, onPlayerAction, worldState) {
  * @param {Object}  metadata   — entrada do map_data com .door e .id
  * @param {Object}  worldState — estado do mundo (worldState.map)
  * @param {Function} onPlayerAction — callback para enviar ação ao servidor
+ * @param {Object}  player     — dados do player (para validação de chave)
  */
-function executeDoor(targetTile, metadata, worldState, onPlayerAction) {
+function executeDoor(targetTile, metadata, worldState, onPlayerAction, player) {
   const mapData = worldState?.assets?.mapData;
   let door = metadata?.door;
   const transformOnUse = Number(metadata?.transformOnUse);
@@ -808,6 +871,18 @@ function executeDoor(targetTile, metadata, worldState, onPlayerAction) {
     `[Door] ${isOpen ? "Fechando" : "Abrindo"} porta ${currentId} → ${nextId} em ${tileKey}`,
   );
 
+  // Verifica se porta requer chave ao abrir (requiresKey OU uidMatchField sinaliza chave)
+  if (!isOpen && (door?.requiresKey || door?.uidMatchField != null)) {
+    const tileActionId = _getTileActionId(tile);
+    if (tileActionId != null) {
+      const hasKey = _playerHasKeyForActionId(player, tileActionId);
+      if (!hasKey) {
+        showRPGMessage("A porta está fechada com chave.", "system");
+        return;
+      }
+    }
+  }
+
   // Troca o item no tile localmente (todos os layers)
   const layerKeys = Object.keys(tile).filter((k) => !isNaN(Number(k)));
   for (const layerKey of layerKeys) {
@@ -848,11 +923,14 @@ function executeDoor(targetTile, metadata, worldState, onPlayerAction) {
 
   // Notifica servidor/Firebase para persistir a mudança
   if (onPlayerAction) {
+    const tileActionId = _getTileActionId(tile);
     onPlayerAction({
       type: "toggle_door",
       target: { x, y, z },
       fromId: currentId,
       toId: nextId,
+      isOpening: !isOpen,
+      doorActionId: tileActionId ?? undefined,
     });
   }
 }
@@ -942,6 +1020,7 @@ function executeItemOnUse(
 
   const ctx = {
     player,
+    showMessage: (msg, type = "system") => showRPGMessage(msg, type),
     target: {
       id: targetItemId,
       x: targetTile.x,
@@ -950,6 +1029,23 @@ function executeItemOnUse(
     },
     metadata: targetMetadata,
     onUse: () => {
+      // Verifica se é trapdoor/hole com floorChange
+      if (
+        targetMetadata?.floorChange ||
+        targetMetadata?.game?.category_type === "floor_change"
+      ) {
+        executeFloorChange(
+          player,
+          targetTile,
+          targetMetadata,
+          null, // pathFinder
+          onPlayerMove,
+          onPlayerAction,
+          worldState,
+        );
+        return true;
+      }
+
       executeUse(
         player,
         targetTile,
