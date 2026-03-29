@@ -3582,6 +3582,13 @@
           }
         };
 
+        // =====================================================================
+        // requestPlayerMove — ARQUITETURA ZERO TRUST
+        // =====================================================================
+        // Cliente NUNCA escreve posição diretamente no Firebase.
+        // Apenas envia intenção via player_actions/{id} com type:"move".
+        // WorldEngine valida (colisão, distância, cooldown) e aplica a posição.
+        // =====================================================================
         const requestPlayerMove = (nx, ny, nz, dir, source = "input") => {
           if (
             nx === myPos.x &&
@@ -3592,6 +3599,7 @@
             return;
           }
 
+          // Atualiza estado LOCAL do cliente (apenas para render imediato)
           myPos.oldX = myPos.x;
           myPos.oldY = myPos.y;
           myPos.x = nx;
@@ -3604,24 +3612,8 @@
           const now = Date.now();
           myPos._lastClientMoveAt = now;
 
-          // ✅ SYNC EM TEMPO REAL: Atualiza posição diretamente no Firebase
-          // para que o WorldEngine receba imediatamente via watchPlayers
-          const updates = {
-            [`online_players/${uid}/x`]: nx,
-            [`online_players/${uid}/y`]: ny,
-            [`online_players/${uid}/z`]: nz ?? myPos.z ?? 7,
-            [`online_players/${uid}/direcao`]: dir,
-            [`online_players/${uid}/lastMoveTime`]: now,
-            [`online_players/${uid}/lastSeen`]: now,
-            [`players_data/${uid}/x`]: nx,
-            [`players_data/${uid}/y`]: ny,
-            [`players_data/${uid}/z`]: nz ?? myPos.z ?? 7,
-            [`players_data/${uid}/direcao`]: dir,
-            [`players_data/${uid}/lastMoveTime`]: now,
-          };
-          batchWrite(updates).catch(() => {});
-
-          // Envia para validação pelo worldEngine (zero-trust) em todos os fluxos.
+          // ✅ ZERO TRUST: Cliente apenas envia INTENÇÃO de movimento
+          // WorldEngine valida e aplica posição server-side
           const actionId = `${uid}_move_${now}_${++_moveActionSeq}`;
           dbSet(`${PATHS.actions}/${actionId}`, {
             id: actionId,
@@ -3629,7 +3621,7 @@
             type: "move",
             x: nx,
             y: ny,
-            z: nz,
+            z: nz ?? myPos.z ?? 7,
             direcao: dir,
             source,
             ts: now,

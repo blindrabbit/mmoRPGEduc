@@ -1,7 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // worldTick.js — Timer de tick do mundo + IA de monstros
 // ═══════════════════════════════════════════════════════════════
-import { initWorldStore, destroyWorldStore, setTickRunning, getPlayers } from "../../../core/worldStore.js";
+import {
+  initWorldStore,
+  destroyWorldStore,
+  setTickRunning,
+  getPlayers,
+} from "../../../core/worldStore.js";
 import {
   initMonsterManager,
   tickMonsters,
@@ -24,10 +29,11 @@ import {
   getCombatTickBucket,
   shouldRunCombatTick,
 } from "../../../gameplay/combatScheduler.js";
+import { cooldownManager } from "../../../core/CooldownManager.js";
 
 // Players sem heartbeat por mais de STALE_MS são considerados desconectados.
 // O onDisconnect do Firebase já cuida da maioria dos casos; este é o safety-net.
-const STALE_MS      = 2 * 60 * 1000; // 2 min  — com heartbeat (lastSeen)
+const STALE_MS = 2 * 60 * 1000; // 2 min  — com heartbeat (lastSeen)
 const STALE_MOVE_MS = 5 * 60 * 1000; // 5 min  — fallback via lastMoveTime
 // Verificar a cada ~30s (120 ticks × 250ms)
 const STALE_CHECK_INTERVAL = 120;
@@ -91,6 +97,9 @@ export class WorldTick {
 
     setTickRunning(true);
     this.worldState.tickCount = (this.worldState.tickCount ?? 0) + 1;
+
+    // ✅ Limpa cooldowns expirados (anti-memory-leak)
+    cooldownManager.tick(now);
 
     const allowCombat = shouldRunCombatTick(this._lastCombatTickBucket, now);
     if (allowCombat) {

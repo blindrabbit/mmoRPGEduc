@@ -6,16 +6,19 @@
     "online_players": {
       "$playerId": {
         ".read": true,
-        ".write": "auth != null && auth.uid === $playerId",
+        // ✅ APENAS o próprio player ou WorldEngine podem escrever
+        ".write": "auth != null && (auth.uid === $playerId || root.child('auth').child('admin').child(auth.uid).val() === true)",
 
+        // ✅ Campos de administração são SOMENTE leitura (cliente não pode modificar)
         "isAdmin": { ".validate": "false" },
-        "isGM":    { ".validate": "false" },
-        "role":    { ".validate": "false" },
+        "isGM": { ".validate": "false" },
+        "role": { ".validate": "false" },
         "appearance": {
           "isAdmin": { ".validate": "false" },
-          "$other":  { ".validate": true }
+          "$other": { ".validate": true }
         },
 
+        // ✅ Valida coordenadas com limites do mapa
         "x": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
         },
@@ -28,18 +31,27 @@
         "direcao": {
           ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(frente|costas|lado|lado-esquerdo)$/))"
         },
+
+        // ✅ Valida velocidade (anti-speed-hack)
         "speed": {
           ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 600)"
         },
+
+        // ✅ Valida timestamps
         "lastMoveTime": {
-          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= now)"
         },
         "lastAttack": {
-          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= now)"
         },
         "lastAiTick": {
-          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= now)"
         },
+        "lastSeen": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= now)"
+        },
+
+        // ✅ Valida stats com limites razoáveis
         "stats": {
           "hp": {
             ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 200000)"
@@ -239,19 +251,51 @@
 
     "player_actions": {
       "$actionId": {
-        ".read":  true,
+        ".read": true,
+        // ✅ Cliente só pode criar ações onde playerId === auth.uid
+        // ✅ WorldEngine pode criar ações para qualquer player (admin privileges)
         ".write": "auth != null && (!newData.child('playerId').exists() || newData.child('playerId').val() === auth.uid)",
 
-        "id":       { ".validate": "newData.isString()" },
+        // ✅ Valida campos obrigatórios
+        "id": { ".validate": "newData.isString()" },
         "playerId": { ".validate": "newData.isString()" },
-        "type":     { ".validate": "newData.isString() && newData.val().matches(/^(attack|spell|move|item|map_tile_pickup|toggle_door|change_floor|allocateStat)$/)" },
-        "ts":       { ".validate": "newData.isNumber() && newData.val() >= 0" },
-        "expiresAt":{ ".validate": "newData.isNumber() && newData.val() >= 0" },
 
-        "targetId": { ".validate": "!newData.exists() || newData.val() === null || newData.isString()" },
-        "spellId":  { ".validate": "!newData.exists() || newData.val() === null || newData.isString()" },
+        // ✅ Lista branca de tipos de ação permitidos
+        "type": {
+          ".validate": "newData.isString() && newData.val().matches(/^(attack|spell|move|item|map_tile_pickup|toggle_door|change_floor|allocateStat)$/)"
+        },
 
-        "$other":   { ".validate": false }
+        // ✅ Valida timestamp e expiração
+        "ts": { ".validate": "newData.isNumber() && newData.val() >= 0" },
+        "expiresAt": {
+          ".validate": "newData.isNumber() && newData.val() >= now && newData.val() < now + 60000"
+        },
+
+        // ✅ Valida campos opcionais específicos
+        "targetId": {
+          ".validate": "!newData.exists() || newData.val() === null || newData.isString()"
+        },
+        "spellId": {
+          ".validate": "!newData.exists() || newData.val() === null || newData.isString()"
+        },
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "direcao": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(frente|costas|lado|lado-esquerdo)$/))"
+        },
+        "source": {
+          ".validate": "!newData.exists() || (newData.isString() && newData.val().matches(/^(input|keyboard|admin_|worldengine|player-actions|autowalk)$/))"
+        },
+
+        // ✅ REJEITA campos não autorizados
+        "$other": { ".validate": false }
       }
     },
 
@@ -278,8 +322,38 @@
     "world_items": {
       "$itemId": {
         ".read": true,
-        ".write": "auth != null",
+        // ✅ APENAS server (worldEngine) pode criar itens via skipRangeCheck=false
+        // Cliente NUNCA pode definir skipRangeCheck=true
+        ".write": "auth != null && (!newData.child('skipRangeCheck').exists() || newData.child('skipRangeCheck').val() === false)",
         "skipRangeCheck": { ".validate": "false" },
+        // ✅ Valida campos críticos de itens do mapa
+        "fromMap": {
+          ".validate": "!newData.exists() || newData.isBoolean()"
+        },
+        "sourceCoord": {
+          ".validate": "!newData.exists() || newData.isString()"
+        },
+        "unique_id": {
+          ".validate": "!newData.exists() || newData.isNumber()"
+        },
+        "tileId": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() > 0)"
+        },
+        "x": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "y": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= -8192 && newData.val() <= 8192)"
+        },
+        "z": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 15)"
+        },
+        "quantity": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000)"
+        },
+        "expiresAt": {
+          ".validate": "!newData.exists() || (newData.isNumber() && newData.val() >= 0)"
+        },
         "$other": { ".validate": true }
       }
     },
@@ -289,9 +363,9 @@
         ".read": true,
         ".write": "auth != null && auth.uid === $accountId",
         "isAdmin": { ".validate": "false" },
-        "isGM":    { ".validate": "false" },
-        "role":    { ".validate": "newData.val() === 'player'" },
-        "$other":  { ".validate": true }
+        "isGM": { ".validate": "false" },
+        "role": { ".validate": "newData.val() === 'player'" },
+        "$other": { ".validate": true }
       }
     }
   }

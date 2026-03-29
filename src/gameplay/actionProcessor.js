@@ -64,9 +64,15 @@ import {
   getHealPower,
 } from "./progression/progressionSystem.js";
 
+import { isTileWalkable } from "../core/collision.js";
+import { validateAction } from "../core/actionSchema.js";
+import { cooldownManager } from "../core/CooldownManager.js";
+
 // ---------------------------------------------------------------------------
-// COOLDOWNS — gerenciados aqui, não no cliente
+// COOLDOWNS — gerenciados pelo CooldownManager (centralizado)
 // ---------------------------------------------------------------------------
+// Legado: _cooldowns Map ainda existe para compatibilidade, mas não é usado
+// TODO: Remover _cooldowns após migração completa
 const _cooldowns = new Map();
 const _queuedActions = new Map();
 
@@ -74,11 +80,18 @@ const _queuedActions = new Map();
 const _activeBuffs = new Map();
 // key: `${playerId}:${spellId}:${targetId}`, value: { expiresAt, stat, originalValue, targetType, targetId }
 
+/**
+ * @deprecated Use cooldownManager.isOnCooldown()
+ */
 function _isOnCooldown(playerId, key) {
-  return Date.now() < (_cooldowns.get(`${playerId}:${key}`) ?? 0);
+  return cooldownManager.isOnCooldown(playerId, key);
 }
+
+/**
+ * @deprecated Use cooldownManager.setCooldown()
+ */
 function _setCooldown(playerId, key, ms) {
-  _cooldowns.set(`${playerId}:${key}`, Date.now() + ms);
+  cooldownManager.setCooldown(playerId, key, ms);
 }
 
 // ---------------------------------------------------------------------------
@@ -151,6 +164,26 @@ async function _dispatch(actionId, action, now) {
   const { type, playerId } = action;
   if (!playerId) return;
 
+  // ✅ VALIDAÇÃO ZERO TRUST #0: Schema Validation (Camada de Protocolo)
+  // Inspirado em ProtocolGame::parse*() do Canary/OTClient
+  // Todas as ações passam por validação de schema antes de executar
+  const players = getPlayers();
+  const playerKey = resolvePlayerKey(players, playerId);
+  const player = playerKey ? players[playerKey] : null;
+
+  const validation = validateAction(action, player);
+  if (!validation.ok) {
+    pushLog(
+      "error",
+      `[Schema] ${type} inválida: ${validation.error} (field: ${validation.field})`,
+    );
+    console.warn(
+      `[actionProcessor] Schema validation failed: ${validation.error}`,
+      validation,
+    );
+    return;
+  }
+
   // Atores privilegiados (WorldEngine, GM) não existem em online_players.
   // Para ações de item, passam direto com objeto player sintético;
   // itemActions.js trata o bypass de restrições internamente.
@@ -165,8 +198,6 @@ async function _dispatch(actionId, action, now) {
     );
   }
 
-  const players = getPlayers();
-  const playerKey = resolvePlayerKey(players, playerId);
   if (!playerKey) {
     console.warn(
       `[actionProcessor] ação descartada sem player online: type=${type} playerId=${playerId}`,
@@ -174,7 +205,6 @@ async function _dispatch(actionId, action, now) {
     return;
   }
 
-  const player = players[playerKey];
   if (!player) return;
 
   const normalizedAction =
@@ -1012,6 +1042,7 @@ async function _processMove(action, player, now) {
   }
   _setCooldown(playerId, "move", speedMs);
 
+  // ✅ VALIDAÇÃO ZERO TRUST #1: Distância máxima (anti-teleporte)
   const dx = Math.abs(x - (player.x ?? 0));
   const dy = Math.abs(y - (player.y ?? 0));
   if (dx > 1 || dy > 1) {
@@ -1025,11 +1056,34 @@ async function _processMove(action, player, now) {
     return;
   }
 
+  // ✅ VALIDAÇÃO ZERO TRUST #2: Mudança de andar máxima
   if (z !== undefined && Math.abs(z - (player.z ?? 7)) > 1) {
     pushLog("error", `[${player.name}] mudança de andar inválida`);
     return;
   }
 
+  // ✅ VALIDAÇÃO ZERO TRUST #3: Colisão (tile é walkable?)
+  // worldState.map é acessado via getMap() ou global
+  const targetZ = z ?? player.z ?? 7;
+  const map = window.worldState?.map ?? null;
+  const mapData = window.worldState?.mapData ?? null;
+
+  if (map && !isTileWalkable(x, y, targetZ, map, mapData)) {
+    pushLog(
+      "error",
+      `[${player.name}] colisão: tile (${x},${y},${targetZ}) não é caminhável`,
+    );
+    console.warn(
+      `[actionProcessor] _processMove: tile bloqueado (${x},${y},${targetZ})`,
+    );
+    return;
+  }
+
+  // ✅ VALIDAÇÃO ZERO TRUST #4: Entidades bloqueiam movimento?
+  // Opcional: verificar se há monstros/players no tile de destino
+  // (pode ser implementado futuramente para bloquear passagem)
+
+  // ✅ MOVIMENTO VÁLIDO: Aplica posição
   await batchWrite({
     [`${PATHS.playerData(playerId)}/x`]: x,
     [`${PATHS.playerData(playerId)}/y`]: y,
@@ -1097,6 +1151,7 @@ async function _processMapTilePickup(action, player, now) {
         : 1;
   const contentType = action.content_type ?? action.contentType ?? null;
 
+  // ✅ VALIDAÇÃO ZERO TRUST #1: Tile existe no Firebase?
   // Lê o tile do Firebase: extrai unique_id e prepara remoção do item do mapa
   let tileUniqueId = action.unique_id ?? action.uniqueId ?? null;
   const chunkX = Math.floor(tx / TILE_CHUNK_SIZE);
@@ -1105,6 +1160,7 @@ async function _processMapTilePickup(action, player, now) {
   const tileXY = `${tx},${ty}`;
   const layerStr = String(mapLayer);
   let updatedLayerItems = null; // null = sem mudança; [] ou array = novo valor
+  let tileFound = false; // ✅ Flag para validar que o item existe no tile
 
   try {
     const chunkData = await dbGet(chunkPath);
@@ -1124,12 +1180,25 @@ async function _processMapTilePickup(action, player, now) {
           (it) => it && Number(it.id) === Number(tileId),
         );
         if (idx >= 0) {
+          tileFound = true; // ✅ Item existe no tile!
           updatedLayerItems = layerItems.filter((_, i) => i !== idx);
         }
       }
     }
   } catch (_) {
     /* silently ignore */
+  }
+
+  // ✅ VALIDAÇÃO ZERO TRUST #2: Item não existe = REJEITA (anti-duplicação)
+  if (!tileFound && !bypassRangeCheck) {
+    pushLog(
+      "error",
+      `[${player.name}] tentou pegar item inexistente no tile (${tx},${ty},${tz})`,
+    );
+    console.warn(
+      `[actionProcessor] _processMapTilePickup: item não encontrado (${coord}, ${tileId})`,
+    );
+    return;
   }
 
   const tempId =

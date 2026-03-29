@@ -432,6 +432,7 @@
         getMonsterTemplates,
         syncChat,
         watchChat,
+        PATHS,
       } from "../core/db.js";
       import { initWorldStore, subscribe } from "./src/core/worldStore.js";
 
@@ -449,7 +450,8 @@
         monitorEffects,
         calculateStepDuration,
       } from "./src/gameplay/gameCore.js";
-      import { handlePlayerSync } from "./src/gameplay/playerManager.js";
+      // handlePlayerSync é @deprecated — usar apenas via worldEngine
+      // import { handlePlayerSync } from "./src/gameplay/playerManager.js";
       import {
         applyDamage,
         handleStatsChanges,
@@ -1142,7 +1144,20 @@
                   : dx > 0
                     ? "lado"
                     : "lado-esquerdo";
-            handlePlayerSync(ADMIN_ID, adminPos);
+            // ✅ ADMIN: Atualiza posição via player_actions para consistência
+            const actionId = `admin_move_${Date.now()}`;
+            dbSet(`${PATHS.actions}/${actionId}`, {
+              id: actionId,
+              playerId: ADMIN_ID,
+              type: "move",
+              x: adminPos.x,
+              y: adminPos.y,
+              z: adminPos.z ?? WORLD_SETTINGS.spawn.z,
+              direcao: adminPos.direcao,
+              source: "admin_camera",
+              ts: Date.now(),
+              expiresAt: Date.now() + 5000,
+            }).catch(() => {});
           }
           if (e.key === "PageUp")
             state.activeZ = Math.max(0, state.activeZ - 1);
@@ -1353,7 +1368,11 @@
               lookup[`${posKey}_${entry.item_id}`] = Number(uid);
             }
             await dbSet("world_unique_ids", lookup);
-            pushLog("admin", "system", `Unique IDs gravados: ${Object.keys(lookup).length} entradas`);
+            pushLog(
+              "admin",
+              "system",
+              `Unique IDs gravados: ${Object.keys(lookup).length} entradas`,
+            );
           } catch (e) {
             pushLog("admin", "error", `Erro upload unique_ids: ${e.message}`);
           }
@@ -1397,7 +1416,20 @@
               state.camera = centerCamera({ x, y }, cols2, rows2);
               adminPos.x = Math.floor(state.camera.x + cols2 / 2);
               adminPos.y = Math.floor(state.camera.y + rows2 / 2);
-              handlePlayerSync(ADMIN_ID, adminPos);
+              // ✅ ADMIN: Atualiza posição via player_actions
+              const actionId = `admin_teleport_${Date.now()}`;
+              dbSet(`${PATHS.actions}/${actionId}`, {
+                id: actionId,
+                playerId: ADMIN_ID,
+                type: "move",
+                x: adminPos.x,
+                y: adminPos.y,
+                z: adminPos.z ?? WORLD_SETTINGS.spawn.z,
+                direcao: adminPos.direcao ?? "frente",
+                source: "admin_teleport",
+                ts: Date.now(),
+                expiresAt: Date.now() + 5000,
+              }).catch(() => {});
               pushLog("admin", "system", `Câmera teleportada: ${x},${y}`);
             },
           },
@@ -1478,7 +1510,20 @@
           adminPos.y = Math.floor(state.camera.y + rows / 2);
           adminPos.z = p.z ?? WORLD_SETTINGS.spawn.z;
           state.activeZ = adminPos.z;
-          handlePlayerSync(ADMIN_ID, adminPos);
+          // ✅ ADMIN: Atualiza posição via player_actions
+          const actionId = `admin_goto_${Date.now()}`;
+          dbSet(`${PATHS.actions}/${actionId}`, {
+            id: actionId,
+            playerId: ADMIN_ID,
+            type: "move",
+            x: adminPos.x,
+            y: adminPos.y,
+            z: adminPos.z,
+            direcao: adminPos.direcao ?? "frente",
+            source: "admin_goto",
+            ts: Date.now(),
+            expiresAt: Date.now() + 5000,
+          }).catch(() => {});
           pushLog("admin", "system", `Indo até ${p.name}: ${p.x},${p.y}`);
         };
 
