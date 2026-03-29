@@ -846,11 +846,14 @@ function _isKeyItem(item, mapData) {
 }
 
 /**
- * Retorna o action_id encontrado em qualquer item dos layers do tile.
+ * Retorna o action_id encontrado no tile ou em qualquer item dos layers.
  * Usado para validar chave em portas trancadas.
  */
 function _getTileActionId(tile) {
   if (!tile || typeof tile !== "object") return null;
+  // Verifica diretamente no tile (caso o map editor grave no nível do tile)
+  if (tile.action_id != null) return tile.action_id;
+  // Verifica dentro de cada layer (arrays de itens)
   for (const layer of Object.values(tile)) {
     if (!Array.isArray(layer)) continue;
     for (const item of layer) {
@@ -875,8 +878,9 @@ function _playerHasKeyForActionId(player, actionId, mapData) {
       // ✅ VALIDAÇÃO CRUZADA:
       // 1. Item deve ser uma chave
       _isKeyItem(item, mapData) &&
-      // 2. unique_id do item deve bater com action_id da porta
-      (item.unique_id === actionId || item.uniqueId === actionId),
+      // 2. unique_id do item deve bater com action_id da porta (normaliza tipos)
+      ((item.unique_id != null && Number(item.unique_id) === Number(actionId)) ||
+        (item.uniqueId != null && Number(item.uniqueId) === Number(actionId))),
   );
 }
 
@@ -957,17 +961,37 @@ function executeDoor(targetTile, metadata, worldState, onPlayerAction, player) {
     `[Door] ${isOpen ? "Fechando" : "Abrindo"} porta ${currentId} → ${nextId} em ${tileKey}`,
   );
 
-  // Verifica se porta requer chave ao abrir (requiresKey OU uidMatchField sinaliza chave)
-  if (!isOpen && (door?.requiresKey || door?.uidMatchField != null)) {
+  // Porta com action_id requer a chave para ABRIR e para FECHAR
+  if (door?.requiresKey || door?.uidMatchField != null) {
     const tileActionId = _getTileActionId(tile);
-    if (tileActionId != null) {
-      // ✅ VALIDAÇÃO CRUZADA: passa mapData para verificar se item é chave
-      const hasKey = _playerHasKeyForActionId(player, tileActionId, mapData);
-      if (!hasKey) {
-        showRPGMessage("A porta está fechada com chave.", "system");
-        return;
-      }
+
+    console.warn("[Door] Verificação de chave", {
+      tileKey,
+      uidMatchField: door?.uidMatchField,
+      tileActionId,
+      tileRaw: tile,
+      inventory: player?.inventory ?? {},
+    });
+
+    if (tileActionId == null) {
+      // action_id não encontrado no tile — logar e bloquear por segurança
+      console.warn(
+        "[Door] action_id ausente no tile — Esta porta está trancada com chave",
+      );
+      showRPGMessage("Esta porta está trancada com chave.", "system");
+      return;
     }
+
+    const hasKey = _playerHasKeyForActionId(player, tileActionId, mapData);
+    console.warn("[Door] hasKey:", hasKey, "tileActionId:", tileActionId);
+
+    if (!hasKey) {
+      console.warn("[Door] Chave não encontrada no inventário — Esta porta está trancada com chave");
+      showRPGMessage("Esta porta está trancada com chave.", "system");
+      return;
+    }
+
+    console.warn("[Door] Chave válida — permitindo interação com a porta");
   }
 
   // Troca o item no tile localmente (todos os layers)

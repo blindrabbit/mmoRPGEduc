@@ -30,6 +30,8 @@ import { worldEvents, EVENT_TYPES } from "../../core/events.js";
 import { getPlayer, applyPlayersLocal } from "../../core/worldStore.js";
 import { getItemDataService } from "./ItemDataService.js";
 import { isTileBlockedByWall } from "../../core/collision.js";
+import { normalizeSlotName } from "../../core/constants/itemConstants.js";
+import { EQUIPMENT_DATA } from "../../core/equipmentData.js";
 
 // =============================================================================
 // CONFIGURAÇÃO
@@ -164,12 +166,59 @@ function _normalizeInventory(raw) {
   return out;
 }
 
+function _normalizeEquipment(raw) {
+  const src = raw && typeof raw === "object" ? raw : {};
+  const out = {};
+
+  for (const [key, value] of Object.entries(src)) {
+    if (value == null) continue;
+
+    const keySlot = normalizeSlotName(String(key ?? ""));
+    const mergedValue =
+      value && typeof value === "object"
+        ? { ...(value.item ?? value.data ?? {}), ...value }
+        : value;
+    const valueSlot =
+      mergedValue && typeof mergedValue === "object"
+        ? normalizeSlotName(String(mergedValue.slot ?? ""))
+        : null;
+    const slot = valueSlot || keySlot;
+
+    if (!ITEM_SCHEMA.equipmentSlots.includes(slot)) continue;
+
+    if (mergedValue && typeof mergedValue === "object") {
+      out[slot] = { ...mergedValue, slot };
+      continue;
+    }
+
+    const tileId = Number(mergedValue);
+    if (Number.isFinite(tileId) && tileId > 0) {
+      out[slot] = {
+        id: String(tileId),
+        tileId,
+        type: "equipment",
+        slot,
+      };
+    }
+  }
+
+  return out;
+}
+
 async function _getAuthoritativeInventory(playerId, player) {
   const remoteRaw = await dbGet(P.inventory(playerId));
   if (remoteRaw && typeof remoteRaw === "object") {
     return _normalizeInventory(remoteRaw);
   }
   return _normalizeInventory(player?.inventory ?? {});
+}
+
+async function _getAuthoritativeEquipment(playerId, player) {
+  const remoteRaw = await dbGet(P.equipment(playerId));
+  if (remoteRaw && typeof remoteRaw === "object") {
+    return _normalizeEquipment(remoteRaw);
+  }
+  return _normalizeEquipment(player?.equipment ?? {});
 }
 
 function _toSlotIndex(slotLike) {
@@ -326,13 +375,53 @@ export async function pickUpItem(playerId, worldItemId) {
   } = worldItem;
 
   // ✅ PRESERVAR unique_id/uniqueId - CRÍTICO PARA CHAVES E PORTAS
-  const uniqueIdValue = worldItem.unique_id ?? worldItem.uniqueId ?? null;
+  let uniqueIdValue = worldItem.unique_id ?? worldItem.uniqueId ?? null;
+
+  // Fallback: se o world_item foi materializado sem unique_id mas tem sourceCoord,
+  // lê diretamente do tile no Firebase para recuperar o unique_id original
+  if (
+    uniqueIdValue == null &&
+    sourceCoord &&
+    sourceTileId != null &&
+    sourceLayer != null
+  ) {
+    try {
+      const [stx, sty, stz] = String(sourceCoord).split(",").map(Number);
+      const chunkX = Math.floor(stx / TILE_CHUNK_SIZE);
+      const chunkY = Math.floor(sty / TILE_CHUNK_SIZE);
+      const chunkPath = `${PATHS.tiles}/${stz}/${chunkX},${chunkY}`;
+      const chunkData = await dbGet(chunkPath);
+      const tileData = chunkData?.[`${stx},${sty}`];
+      if (tileData) {
+        const layerItems = tileData[String(sourceLayer)];
+        if (Array.isArray(layerItems)) {
+          const match = layerItems.find(
+            (it) => it && Number(it.id) === Number(sourceTileId),
+          );
+          if (match?.unique_id != null) uniqueIdValue = match.unique_id;
+        }
+      }
+    } catch (_) {
+      /* silently ignore */
+    }
+  }
+
+  // Enriquece com EQUIPMENT_DATA se o item for um equipamento
+  const equipMeta = EQUIPMENT_DATA[Number(tileId)] ?? null;
+  const equipEnrich = equipMeta
+    ? { type: "equipment", slot: equipMeta.slot }
+    : {};
 
   const inventoryItem = makeItem({
     ...rest,
+    ...equipEnrich,
     id: String(tileId),
     tileId,
-    name: rest.name ?? ids?.getItemName?.(tileId) ?? `Item #${tileId}`,
+    name:
+      rest.name ??
+      equipMeta?.name ??
+      ids?.getItemName?.(tileId) ??
+      `Item #${tileId}`,
     stackable: itemForSlot.stackable,
     maxStack: Number(rest.maxStack ?? (itemForSlot.stackable ? 99 : 1)),
     quantity: Number(worldItem.quantity ?? worldItem.count ?? 1),
@@ -496,9 +585,9 @@ export async function dropItem(
   const targetY = Number.isFinite(Number(toY))
     ? Math.round(Number(toY))
     : Math.round(player.y);
-  const targetZ = Number.isFinite(Number(toZ))
-    ? Math.round(Number(toZ))
-    : (player.z ?? 7);
+  // Zero-trust: ignora o toZ do cliente e usa sempre o Z authoritative do player.
+  // Regra Tibia original: itens só podem ser dropados no mesmo andar do player.
+  const targetZ = player.z ?? 7;
 
   if (
     !bypassRestrictions &&
@@ -606,12 +695,9 @@ export async function moveWorldItem(playerId, worldItemId, toX, toY, toZ = 7) {
 
   const nextX = Number(toX);
   const nextY = Number(toY);
-  const nextZ = Number(toZ ?? worldItem.z ?? 7);
-  if (
-    !Number.isFinite(nextX) ||
-    !Number.isFinite(nextY) ||
-    !Number.isFinite(nextZ)
-  ) {
+  // Zero-trust: destino Z é sempre o andar atual do player (regra Tibia original).
+  const nextZ = player.z ?? 7;
+  if (!Number.isFinite(nextX) || !Number.isFinite(nextY)) {
     return { success: false, error: "Coordenadas de destino inválidas" };
   }
 
@@ -750,7 +836,8 @@ export async function splitWorldItem(
 
   const nextX = Math.round(Number(toX));
   const nextY = Math.round(Number(toY));
-  const nextZ = Math.round(Number(toZ ?? worldItem.z ?? 7));
+  // Zero-trust: destino Z é sempre o andar atual do player (regra Tibia original).
+  const nextZ = player.z ?? 7;
 
   const currX = Number(worldItem.x ?? 0);
   const currY = Number(worldItem.y ?? 0);
@@ -814,9 +901,14 @@ export async function splitWorldItem(
 /**
  * @param {string} playerId
  * @param {number} inventorySlot
+ * @param {string|null} targetEquipSlotRaw
  * @returns {Promise<{success:boolean, error?:string, slot?:string}>}
  */
-export async function equipItem(playerId, inventorySlot) {
+export async function equipItem(
+  playerId,
+  inventorySlot,
+  targetEquipSlotRaw = null,
+) {
   const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
@@ -835,8 +927,12 @@ export async function equipItem(playerId, inventorySlot) {
     };
   }
 
-  const { valid, errors } = validateItem(item, "equipment");
-  if (!valid) return { success: false, error: errors.join("; ") };
+  // Enriquece item legado (sem type/slot) usando EQUIPMENT_DATA como fonte de verdade
+  const equipMeta =
+    EQUIPMENT_DATA[Number(item?.tileId ?? item?.id ?? 0)] ?? null;
+  const baseEnrichedItem = equipMeta
+    ? { ...item, type: "equipment", slot: equipMeta.slot }
+    : { ...item };
 
   // Verificar requisitos de nível/classe
   if (item.requiredClass && item.requiredClass !== player.class) {
@@ -849,9 +945,47 @@ export async function equipItem(playerId, inventorySlot) {
     return { success: false, error: `Requer nível ${item.requiredLevel}` };
   }
 
-  const equipSlot = item.slot;
-  const equipment =
-    player.equipment ?? (await dbGet(P.equipment(playerId))) ?? {};
+  // Resolve slot: prioriza slot enviado pelo cliente (drag target) quando compatível.
+  // Se ausente, cai no metadado do item.
+  const tileId = Number(item?.tileId ?? item?.id ?? 0);
+  const inferredSlot = normalizeSlotName(
+    EQUIPMENT_DATA[tileId]?.slot ?? item.slot ?? "",
+  );
+  const requestedSlot = normalizeSlotName(String(targetEquipSlotRaw ?? ""));
+
+  if (requestedSlot && !ITEM_SCHEMA.equipmentSlots.includes(requestedSlot)) {
+    return { success: false, error: `Slot inválido: ${requestedSlot}` };
+  }
+
+  if (requestedSlot && inferredSlot && requestedSlot !== inferredSlot) {
+    return {
+      success: false,
+      error: `Item não pode ser equipado no slot ${requestedSlot}`,
+    };
+  }
+
+  const equipSlot = requestedSlot || inferredSlot;
+  if (!ITEM_SCHEMA.equipmentSlots.includes(equipSlot)) {
+    return { success: false, error: "Slot de equipamento não identificado" };
+  }
+
+  const canonicalTileId = Number(item?.tileId ?? item?.id ?? 0);
+  const resolvedName =
+    item?.name ?? equipMeta?.name ?? `Item #${canonicalTileId || "?"}`;
+
+  const enrichedItem = {
+    ...baseEnrichedItem,
+    id: String(baseEnrichedItem.id ?? canonicalTileId),
+    tileId: canonicalTileId,
+    name: resolvedName,
+    type: "equipment",
+    slot: equipSlot,
+  };
+
+  const { valid, errors } = validateItem(enrichedItem, "equipment");
+  if (!valid) return { success: false, error: errors.join("; ") };
+
+  const equipment = await _getAuthoritativeEquipment(playerId, player);
 
   // Verificar conflitos (ex: weapon 2H bloqueia shield)
   if (!_canEquipInSlot(player, item, equipSlot, equipment)) {
@@ -860,8 +994,8 @@ export async function equipItem(playerId, inventorySlot) {
 
   const previouslyEquipped = equipment[equipSlot] ?? null;
 
-  // Montar novos estados
-  const newEquipment = { ...equipment, [equipSlot]: item };
+  // Montar novos estados (grava o item enriquecido no slot de equipamento)
+  const newEquipment = { ...equipment, [equipSlot]: enrichedItem };
   const newInventory = { ...inventory };
   if (previouslyEquipped) {
     newInventory[fromSlot] = previouslyEquipped; // troca
@@ -870,19 +1004,21 @@ export async function equipItem(playerId, inventorySlot) {
   }
 
   // Recalcular stats com novo equipamento
-  const { maxHp, maxMp, atk, def, agi } = await _recalcStats(
-    player,
-    newEquipment,
-  );
+  const { maxHp, maxMp, atk, def, agi, poder, resist, magia, cura } =
+    await _recalcStats(player, newEquipment);
 
   const updates = {
-    [P.equipmentSlot(playerId, equipSlot)]: item,
+    [P.equipmentSlot(playerId, equipSlot)]: enrichedItem,
     [P.inventorySlot(playerId, fromSlot)]: previouslyEquipped ?? null,
     [P.statsMaxHp(playerId)]: maxHp,
     [P.statsMaxMp(playerId)]: maxMp,
     [`players_data/${playerId}/stats/atk`]: atk,
     [`players_data/${playerId}/stats/def`]: def,
     [`players_data/${playerId}/stats/agi`]: agi,
+    [`players_data/${playerId}/stats/poder`]: poder,
+    [`players_data/${playerId}/stats/resist`]: resist,
+    [`players_data/${playerId}/stats/magia`]: magia,
+    [`players_data/${playerId}/stats/cura`]: cura,
   };
 
   // Preservar HP/MP atual proporcionalmente se maxHp mudou
@@ -907,6 +1043,10 @@ export async function equipItem(playerId, inventorySlot) {
       atk,
       def,
       agi,
+      poder,
+      resist,
+      magia,
+      cura,
       hp: updates[P.statsHp(playerId)] ?? player.stats?.hp,
       mp: updates[P.statsMp(playerId)] ?? player.stats?.mp,
     },
@@ -916,9 +1056,12 @@ export async function equipItem(playerId, inventorySlot) {
     playerId,
     itemId: item.id,
     itemName: item.name,
+    item: enrichedItem,
+    enrichedItem,
     slot: equipSlot,
     replaced: previouslyEquipped ?? null,
-    newStats: { maxHp, maxMp, atk, def, agi },
+    equipment: newEquipment,
+    newStats: { maxHp, maxMp, atk, def, agi, poder, resist, magia, cura },
   });
   worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
     playerId,
@@ -941,9 +1084,10 @@ export async function equipItem(playerId, inventorySlot) {
  */
 export async function unequipItem(
   playerId,
-  equipSlot,
+  equipSlotRaw,
   targetInventorySlot = null,
 ) {
+  const equipSlot = normalizeSlotName(String(equipSlotRaw ?? ""));
   if (!ITEM_SCHEMA.equipmentSlots.includes(equipSlot)) {
     return { success: false, error: `Slot inválido: ${equipSlot}` };
   }
@@ -951,8 +1095,7 @@ export async function unequipItem(
   const player = await _resolvePlayerForItemAction(playerId);
   if (!player) return { success: false, error: "Jogador não encontrado" };
 
-  const equipment =
-    player.equipment ?? (await dbGet(P.equipment(playerId))) ?? {};
+  const equipment = await _getAuthoritativeEquipment(playerId, player);
   const item = equipment[equipSlot];
   if (!item)
     return { success: false, error: `Nenhum item no slot ${equipSlot}` };
@@ -973,10 +1116,8 @@ export async function unequipItem(
   delete newEquipment[equipSlot];
   const newInventory = { ...inventory, [slotIndex]: item };
 
-  const { maxHp, maxMp, atk, def, agi } = await _recalcStats(
-    player,
-    newEquipment,
-  );
+  const { maxHp, maxMp, atk, def, agi, poder, resist, magia, cura } =
+    await _recalcStats(player, newEquipment);
 
   const updates = {
     [P.equipmentSlot(playerId, equipSlot)]: null,
@@ -986,13 +1127,28 @@ export async function unequipItem(
     [`players_data/${playerId}/stats/atk`]: atk,
     [`players_data/${playerId}/stats/def`]: def,
     [`players_data/${playerId}/stats/agi`]: agi,
+    [`players_data/${playerId}/stats/poder`]: poder,
+    [`players_data/${playerId}/stats/resist`]: resist,
+    [`players_data/${playerId}/stats/magia`]: magia,
+    [`players_data/${playerId}/stats/cura`]: cura,
   };
   await batchWrite(updates);
 
   applyPlayersLocal(playerId, {
     inventory: newInventory,
     equipment: newEquipment,
-    stats: { ...player.stats, maxHp, maxMp, atk, def, agi },
+    stats: {
+      ...player.stats,
+      maxHp,
+      maxMp,
+      atk,
+      def,
+      agi,
+      poder,
+      resist,
+      magia,
+      cura,
+    },
   });
 
   worldEvents.emit(EVENT_TYPES.ITEM_UNEQUIPPED, {
@@ -1000,7 +1156,7 @@ export async function unequipItem(
     itemName: item.name,
     slot: equipSlot,
     slotIndex,
-    newStats: { maxHp, maxMp, atk, def, agi },
+    newStats: { maxHp, maxMp, atk, def, agi, poder, resist, magia, cura },
   });
   worldEvents.emit(EVENT_TYPES.INVENTORY_UPDATED, {
     playerId,
@@ -1347,7 +1503,7 @@ export async function getInventory(playerId) {
 
 export async function getEquipment(playerId) {
   const player = getPlayer(playerId);
-  return player?.equipment ?? (await dbGet(P.equipment(playerId))) ?? {};
+  return await _getAuthoritativeEquipment(playerId, player);
 }
 
 // =============================================================================
@@ -1419,16 +1575,10 @@ function _mergeStackableItem(existingItem, incomingItem) {
 }
 
 function _canEquipInSlot(player, item, slot, equipment) {
-  const rules = ITEM_CONFIG.equipmentRules[slot];
-  if (!rules?.conflicts) return true;
-
-  for (const conflictSlot of rules.conflicts) {
-    const conflicting = equipment[conflictSlot];
-    if (!conflicting) continue;
-    // Só conflita se a arma for twoHanded ou se for escudo
-    if (slot === "shield" && conflicting.twoHanded) return false;
-    if (slot === "weapon" && item.twoHanded && equipment.shield) return false;
-  }
+  // Bloqueia two-handed: se slot "right" e item é twoHanded, não pode ter "left"
+  if (slot === "right" && item.twoHanded && equipment.left) return false;
+  // Bloqueia "left" se arma atual em "right" for twoHanded
+  if (slot === "left" && equipment.right?.twoHanded) return false;
   return true;
 }
 
@@ -1440,26 +1590,65 @@ async function _recalcStats(player, newEquipment) {
   const fakePlayer = { ...player, equipment: newEquipment };
   const base = calculateTotalStats(fakePlayer);
 
-  // Somar bônus de stats de equipamentos
-  let hpBonus = 0,
-    mpBonus = 0,
-    atkBonus = 0,
-    defBonus = 0,
-    agiBonus = 0;
+  // Atributos base do jogador (já incluem bônus de progressão)
+  const baseFOR = base.totalStats?.FOR ?? player.stats?.FOR ?? 1;
+  const baseINT = base.totalStats?.INT ?? player.stats?.INT ?? 1;
+  const baseAGI = base.totalStats?.AGI ?? player.stats?.AGI ?? 1;
+  const baseVIT = base.totalStats?.VIT ?? player.stats?.VIT ?? 1;
+
+  // Acumula bônus de equipamentos via EQUIPMENT_DATA
+  let bonusFOR = 0,
+    bonusINT = 0,
+    bonusAGI = 0,
+    bonusVIT = 0;
+  let weaponAttack = 0,
+    totalArmor = 0,
+    shieldDef = 0;
+
   for (const item of Object.values(newEquipment)) {
-    if (!item?.stats) continue;
-    hpBonus += item.stats.hpBonus ?? 0;
-    mpBonus += item.stats.mpBonus ?? 0;
-    atkBonus += item.stats.atk ?? 0;
-    defBonus += item.stats.def ?? 0;
-    agiBonus += item.stats.agi ?? 0;
+    if (!item) continue;
+    const tileId = Number(item.tileId ?? item.id ?? 0);
+    const meta = EQUIPMENT_DATA[tileId];
+    if (!meta) continue;
+
+    bonusFOR += meta.statBonus?.FOR ?? 0;
+    bonusINT += meta.statBonus?.INT ?? 0;
+    bonusAGI += meta.statBonus?.AGI ?? 0;
+    bonusVIT += meta.statBonus?.VIT ?? 0;
+
+    if (meta.slot === "right")
+      weaponAttack = meta.attack ?? meta.minDamage ?? 0;
+    if (meta.slot === "left" && meta.weaponType === "shield")
+      shieldDef = meta.defense ?? 0;
+    if (meta.armor) totalArmor += meta.armor;
+    // Defesa de arma (ex: sabre) conta como bônus menor de armor
+    if (meta.slot === "right" && meta.defense)
+      totalArmor += Math.floor((meta.defense ?? 0) * 0.3);
   }
 
+  const totalFOR = baseFOR + bonusFOR;
+  const totalINT = baseINT + bonusINT;
+  const totalAGI = baseAGI + bonusAGI;
+  const totalVIT = baseVIT + bonusVIT;
+
+  // Fórmulas de combate
+  const poder = Math.max(1, Math.round(totalFOR * 1.5 + weaponAttack));
+  const resist = Math.max(
+    0,
+    Math.round(totalVIT * 0.4 + totalAGI * 0.3 + totalArmor + shieldDef * 0.5),
+  );
+  const magia = Math.max(0, Math.round(totalINT * 2.5));
+  const cura = Math.max(0, Math.round(totalINT * 2.8));
+
   return {
-    maxHp: Math.max(1, (base.maxHp ?? player.stats?.maxHp ?? 100) + hpBonus),
-    maxMp: Math.max(0, (base.maxMp ?? player.stats?.maxMp ?? 50) + mpBonus),
-    atk: Math.max(1, (base.atk ?? player.stats?.atk ?? 1) + atkBonus),
-    def: Math.max(0, (base.def ?? player.stats?.def ?? 0) + defBonus),
-    agi: Math.max(1, (base.agi ?? player.stats?.agi ?? 1) + agiBonus),
+    maxHp: base.maxHp ?? player.stats?.maxHp ?? 100,
+    maxMp: base.maxMp ?? player.stats?.maxMp ?? 50,
+    atk: poder,
+    def: resist,
+    agi: Math.max(1, totalAGI),
+    poder,
+    resist,
+    magia,
+    cura,
   };
 }

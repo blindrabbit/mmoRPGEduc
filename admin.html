@@ -337,6 +337,14 @@
       </div>
 
       <div class="tool-group">
+        <label>Upload Unique IDs (unique_ids.json)</label>
+        <input type="file" id="uniqueIdsFileInput" accept=".json" />
+        <button class="btn" id="btnUploadUniqueIds" style="background: #16a085">
+          Enviar Unique IDs ao Firebase
+        </button>
+      </div>
+
+      <div class="tool-group">
         <label>Visualização</label>
         <label class="inline-check">
           <input type="checkbox" id="gm-labels-floor-only" />
@@ -412,6 +420,7 @@
       import {
         getMap,
         setMap,
+        dbSet,
         getAccount,
         setAccount,
         syncMonster,
@@ -1083,6 +1092,7 @@
           document.querySelector(".tool-group").appendChild(btnReload);
           populateSpawnSelect();
           setupUploadMap();
+          setupUploadUniqueIds();
           setupSidebar(canvas, cols, rows);
           setupKeyboard(cols, rows);
           setupMouse(canvas);
@@ -1317,6 +1327,35 @@
             );
           } catch (e) {
             pushLog("admin", "error", `Erro no upload: ${e.message}`);
+          }
+        };
+      }
+
+      // ---------------------------------------------------------------------------
+      // UPLOAD UNIQUE IDs → Firebase (world_unique_ids/)
+      // Formato do unique_ids.json: { "1000": { "position": "127,119,7", "item_id": 2969 }, ... }
+      // Grava em world_unique_ids/{pos_key} = unique_id  (ex: "127_119_7" = 1000)
+      // ---------------------------------------------------------------------------
+      function setupUploadUniqueIds() {
+        document.getElementById("btnUploadUniqueIds").onclick = async () => {
+          const file = document.getElementById("uniqueIdsFileInput").files[0];
+          if (!file) {
+            pushLog("admin", "warn", "Selecione o unique_ids.json.");
+            return;
+          }
+          try {
+            const raw = JSON.parse(await file.text());
+            // Constrói lookup: "x_y_z_itemId" → unique_id (número)
+            const lookup = {};
+            for (const [uid, entry] of Object.entries(raw)) {
+              if (!entry?.position || !entry?.item_id) continue;
+              const posKey = entry.position.replace(/,/g, "_");
+              lookup[`${posKey}_${entry.item_id}`] = Number(uid);
+            }
+            await dbSet("world_unique_ids", lookup);
+            pushLog("admin", "system", `Unique IDs gravados: ${Object.keys(lookup).length} entradas`);
+          } catch (e) {
+            pushLog("admin", "error", `Erro upload unique_ids: ${e.message}`);
           }
         };
       }

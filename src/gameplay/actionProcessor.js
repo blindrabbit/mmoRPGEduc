@@ -109,7 +109,7 @@ export async function flushQueuedActions(now = Date.now()) {
 export async function processAction(actionId, action, now) {
   if (!action || !actionId) return;
   if (action.expiresAt && now > action.expiresAt) return;
-  await _dispatch(actionId, action, now);
+  return _dispatch(actionId, action, now);
 }
 
 // ---------------------------------------------------------------------------
@@ -781,9 +781,14 @@ async function _processItem(action, player, now) {
     }
 
     const tsBase = now ?? Date.now();
+    // Usa action.id como base do tempId para que re-processamentos do mesmo
+    // action usem o mesmo world_item (evita duplicação via enqueue).
+    const actionIdBase = action.id ?? src.actionId ?? src.id;
     const tempId =
       src.clientTempId ??
-      `maptile_${parsed.coord.replace(/,/g, "_")}_${parsed.tileId}_${tsBase}`;
+      (actionIdBase
+        ? `maptile_${parsed.coord.replace(/,/g, "_")}_${parsed.tileId}_${actionIdBase}`
+        : `maptile_${parsed.coord.replace(/,/g, "_")}_${parsed.tileId}_${tsBase}`);
 
     await _processMapTilePickup(
       {
@@ -917,7 +922,7 @@ async function _processItem(action, player, now) {
       );
       break;
     case "equip":
-      result = await equipItem(playerId, slotIndex);
+      result = await equipItem(playerId, slotIndex, equipSlot ?? null);
       break;
     case "unequip":
       result = await unequipItem(playerId, equipSlot, slotIndex ?? null);
@@ -987,7 +992,7 @@ async function _processItem(action, player, now) {
     }
   }
 
-  return result;
+  return { ...result, consumed: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -1092,10 +1097,46 @@ async function _processMapTilePickup(action, player, now) {
         : 1;
   const contentType = action.content_type ?? action.contentType ?? null;
 
+  // Lê o tile do Firebase: extrai unique_id e prepara remoção do item do mapa
+  let tileUniqueId = action.unique_id ?? action.uniqueId ?? null;
+  const chunkX = Math.floor(tx / TILE_CHUNK_SIZE);
+  const chunkY = Math.floor(ty / TILE_CHUNK_SIZE);
+  const chunkPath = `${PATHS.tiles}/${tz}/${chunkX},${chunkY}`;
+  const tileXY = `${tx},${ty}`;
+  const layerStr = String(mapLayer);
+  let updatedLayerItems = null; // null = sem mudança; [] ou array = novo valor
+
+  try {
+    const chunkData = await dbGet(chunkPath);
+    const tileData = chunkData?.[tileXY];
+    if (tileData) {
+      const layerItems = tileData[layerStr];
+      if (Array.isArray(layerItems)) {
+        // Extrai unique_id se ainda não temos
+        if (tileUniqueId == null) {
+          const match = layerItems.find(
+            (it) => it && Number(it.id) === Number(tileId),
+          );
+          if (match?.unique_id != null) tileUniqueId = match.unique_id;
+        }
+        // Remove a primeira ocorrência do item do tile (fonte da verdade)
+        const idx = layerItems.findIndex(
+          (it) => it && Number(it.id) === Number(tileId),
+        );
+        if (idx >= 0) {
+          updatedLayerItems = layerItems.filter((_, i) => i !== idx);
+        }
+      }
+    }
+  } catch (_) {
+    /* silently ignore */
+  }
+
   const tempId =
     action.clientTempId ??
     `maptile_${String(coord).replace(/,/g, "_")}_${tileId}_${now}`;
-  await batchWrite({
+
+  const writes = {
     [`world_items/${tempId}`]: {
       id: tempId,
       tileId: Number(tileId),
@@ -1108,6 +1149,7 @@ async function _processMapTilePickup(action, player, now) {
       stackable,
       maxStack: normalizedMaxStack,
       ...(contentType != null ? { content_type: contentType } : {}),
+      ...(tileUniqueId != null ? { unique_id: tileUniqueId } : {}),
       fromMap: true,
       sourceCoord: coord,
       sourceLayer: Number(mapLayer),
@@ -1116,7 +1158,16 @@ async function _processMapTilePickup(action, player, now) {
       skipRangeCheck: false,
       expiresAt: now + 60_000,
     },
-  });
+  };
+
+  // Remove o item do tile no Firebase — estado canônico do mapa
+  if (updatedLayerItems !== null) {
+    const layerPath = `${chunkPath}/${tileXY}/${layerStr}`;
+    writes[layerPath] = updatedLayerItems.length > 0 ? updatedLayerItems : null;
+  }
+
+  await batchWrite(writes);
+  return { consumed: true };
 }
 
 // ---------------------------------------------------------------------------
@@ -1173,8 +1224,8 @@ async function _processToggleDoor(action, player, now) {
   }
 
   // Porta com chave: extrai action_id diretamente do tile (server-authoritative)
-  // Se o tile contém um item com action_id, valida que o player possui a CHAVE
-  if (isOpening) {
+  // Porta com action_id requer a chave tanto para ABRIR quanto para FECHAR
+  {
     let tileActionId = null;
     for (const layer of Object.values(tileData)) {
       if (!Array.isArray(layer)) continue;
@@ -1190,27 +1241,27 @@ async function _processToggleDoor(action, player, now) {
       const inventory =
         (await dbGet(`players_data/${playerId}/inventory`)) ?? {};
 
-      // ✅ VALIDAÇÃO CRUZADA:
-      // 1. Carregar map_data para verificar se item é chave
       const mapData =
         worldState?.assets?.mapData ?? (await dbGet("map_data")) ?? {};
 
       const hasKey = Object.values(inventory).some((item) => {
         if (!item || typeof item !== "object") return false;
 
-        // Verificar unique_id/uniqueId
+        // Verificar unique_id/uniqueId (normaliza para Number para evitar mismatch string/number)
         const itemUniqueId = item.unique_id ?? item.uniqueId;
-        if (itemUniqueId !== tileActionId) return false;
+        if (
+          itemUniqueId == null ||
+          Number(itemUniqueId) !== Number(tileActionId)
+        )
+          return false;
 
-        // ✅ Verificar se o item é uma CHAVE (category: "keys" ou primaryType: "keys")
+        // Verificar se o item é uma CHAVE (category: "keys" ou primaryType: "keys")
         const itemId = Number(item.id ?? item.tileId);
         const itemMeta = mapData[String(itemId)];
 
         if (itemMeta) {
           const category = String(itemMeta.category ?? "").toLowerCase();
           const primaryType = String(itemMeta.primaryType ?? "").toLowerCase();
-
-          // Deve ser category "keys" ou primaryType "keys"
           if (category === "keys" || primaryType === "keys") {
             return true;
           }
@@ -1226,15 +1277,17 @@ async function _processToggleDoor(action, player, now) {
       });
 
       if (!hasKey) {
+        const doorAction = isOpening ? "abrir" : "fechar";
         pushLog(
           "warn",
-          `[${player.name}] tentou abrir porta trancada (actionId=${tileActionId}) sem chave`,
+          `[${player.name}] tentou ${doorAction} porta trancada (actionId=${tileActionId}) sem chave`,
         );
-        showRPGMessage(
-          "Esta porta está trancada com chave.",
-          "system",
-          playerId,
-        );
+        // Escreve mensagem de sistema para o cliente via Firebase
+        await dbSet(`players_data/${playerId}/server_message`, {
+          text: "Esta porta está trancada com chave.",
+          type: "system",
+          ts: Date.now(),
+        });
         return;
       }
     }
@@ -1316,12 +1369,10 @@ async function _processChangeFloor(action, player, now) {
 
   // Rope Hole (386): valida que o player possui uma corda (3003) no inventário
   if (Number(action.itemId) === 386) {
-    const inventory =
-      (await dbGet(`players_data/${playerId}/inventory`)) ?? {};
+    const inventory = (await dbGet(`players_data/${playerId}/inventory`)) ?? {};
     const hasRope = Object.values(inventory).some(
       (item) =>
-        item &&
-        (Number(item.id) === 3003 || Number(item.tileId) === 3003),
+        item && (Number(item.id) === 3003 || Number(item.tileId) === 3003),
     );
     if (!hasRope) {
       pushLog("warn", `[${player.name}] rope hole sem corda no inventário`);

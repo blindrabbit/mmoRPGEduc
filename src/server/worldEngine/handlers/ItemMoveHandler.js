@@ -20,6 +20,8 @@ import {
   wsGetContainerItem,
   wsFindEmptyInventorySlot,
 } from "../services/WorldStore.js";
+import { normalizeSlotName } from "../../../core/constants/itemConstants.js";
+import { EQUIPMENT_DATA } from "../../../core/equipmentData.js";
 
 const _validator = new ItemMoveValidator();
 
@@ -103,7 +105,7 @@ async function _executeMove(action, meta) {
       changes[`players_data/${playerId}/inventory/${from.slotIndex}`] = null;
       break;
     case "equipment":
-      changes[`players_data/${playerId}/equipment/${from.slotId}`] = null;
+      changes[`players_data/${playerId}/equipment/${normalizeSlotName(String(from.slotId ?? ""))}`] = null;
       break;
     case "container":
       changes[`world_items/${from.containerId}/slots/${from.containerSlot}`] =
@@ -129,6 +131,9 @@ async function _executeMove(action, meta) {
     }
 
     case "equipment": {
+      // Normaliza o slot de destino (aceita "weapon"→"right", "hand"→"right", etc.)
+      const canonicalSlot = normalizeSlotName(String(to.slotId ?? ""));
+
       // Se há swap, move o item antigo para o inventário
       if (meta?.willSwap && meta.swappedItem) {
         const emptySlot = await wsFindEmptyInventorySlot(playerId);
@@ -138,10 +143,19 @@ async function _executeMove(action, meta) {
         }
         // Se não houver slot livre, o item anterior é perdido (Canary comportamento)
       }
-      changes[`players_data/${playerId}/equipment/${to.slotId}`] = {
-        tileId: itemTypeId ?? item.tileId ?? item.id,
+
+      // Enriquece com EQUIPMENT_DATA para garantir type/slot corretos no Firebase
+      const tileIdNum = Number(itemTypeId ?? item.tileId ?? item.id ?? 0);
+      const equipMeta = EQUIPMENT_DATA[tileIdNum] ?? null;
+      const equipEnrich = equipMeta
+        ? { type: "equipment", slot: equipMeta.slot, name: equipMeta.name ?? item.name }
+        : {};
+
+      changes[`players_data/${playerId}/equipment/${canonicalSlot}`] = {
+        tileId: tileIdNum || (itemTypeId ?? item.tileId ?? item.id),
         count: count ?? item.count ?? 1,
         ..._pickItemFields(item),
+        ...equipEnrich,
       };
       break;
     }

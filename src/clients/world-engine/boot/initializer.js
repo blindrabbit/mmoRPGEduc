@@ -836,6 +836,7 @@ export class Initializer {
                 stackable: mapStackable,
                 maxStack: mapMaxStack,
                 content_type: contentType ?? null,
+                unique_id: srcTile?.unique_id ?? srcTile?.uniqueId ?? null,
                 ts: _maptileTs,
                 expiresAt: _maptileTs + 5000,
               });
@@ -914,12 +915,38 @@ export class Initializer {
       };
 
       const createItemIconElement = (itemData) => {
-        const tileId = itemData?.tileId ?? itemData?.id;
-        if (tileId == null) return null;
+        const tileId = Number(
+          itemData?.tileId ??
+            itemData?.itemid ??
+            itemData?.item_id ??
+            itemData?.itemId ??
+            itemData?.spriteid ??
+            itemData?.sprite_id ??
+            itemData?.spriteId ??
+            itemData?.id,
+        );
+        if (!Number.isFinite(tileId) || tileId <= 0) return null;
 
         const variantKey = itemData?._variantKey ?? "0";
-        const sprite = ws.assetsMgr.getMapSprite(tileId, variantKey);
-        if (!sprite?.sheet) return null;
+        const sprite =
+          ws.assetsMgr.getMapSprite(tileId, variantKey) ??
+          ws.assetsMgr.getSpriteById(tileId);
+        const spriteInfo = sprite?.info ?? sprite;
+        if (!sprite?.sheet || !spriteInfo) return null;
+        const sx = Number(spriteInfo.x);
+        const sy = Number(spriteInfo.y);
+        const sw = Number(spriteInfo.w);
+        const sh = Number(spriteInfo.h);
+        if (
+          !Number.isFinite(sx) ||
+          !Number.isFinite(sy) ||
+          !Number.isFinite(sw) ||
+          !Number.isFinite(sh) ||
+          sw <= 0 ||
+          sh <= 0
+        ) {
+          return null;
+        }
 
         const cvs = document.createElement("canvas");
         cvs.className = "item-icon";
@@ -929,22 +956,12 @@ export class Initializer {
         ctx.imageSmoothingEnabled = false;
         const iconSize = TILE_SIZE - 6;
         // Escala proporcional para não distorcer sprites não-quadrados
-        const scaleI = Math.min(iconSize / sprite.w, iconSize / sprite.h);
-        const diw = Math.round(sprite.w * scaleI);
-        const dih = Math.round(sprite.h * scaleI);
+        const scaleI = Math.min(iconSize / sw, iconSize / sh);
+        const diw = Math.round(sw * scaleI);
+        const dih = Math.round(sh * scaleI);
         const dix = Math.round((iconSize - diw) / 2);
         const diy = Math.round((iconSize - dih) / 2);
-        ctx.drawImage(
-          sprite.sheet,
-          sprite.x,
-          sprite.y,
-          sprite.w,
-          sprite.h,
-          dix,
-          diy,
-          diw,
-          dih,
-        );
+        ctx.drawImage(sprite.sheet, sx, sy, sw, sh, dix, diy, diw, dih);
         return cvs;
       };
 

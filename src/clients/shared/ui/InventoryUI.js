@@ -18,6 +18,11 @@ import { worldEvents, EVENT_TYPES } from "../../../core/events.js";
 import { DragDropManager } from "../input/DragDropManager.js";
 import { ITEM_SCHEMA } from "../../../core/schema.js";
 import { TILE_SIZE } from "../../../core/config.js";
+import { EQUIPMENT_DATA } from "../../../core/equipmentData.js";
+import {
+  normalizeSlotName,
+  SLOT_NAMES,
+} from "../../../core/constants/itemConstants.js";
 
 // =============================================================================
 // CONFIGURAÇÃO
@@ -28,15 +33,24 @@ export const INVENTORY_CONFIG = Object.freeze({
   cols: 5, // grid 5×4
 
   // Layout visual dos slots de equipamento (linha/coluna no grid CSS)
+  // Nomes de slot canônicos: alinhados com INVENTORY_SLOTS e EQUIPMENT_DATA
+  //
+  //   col:   1        2        3
+  // row 1: [ — ]  [head]   [ — ]
+  // row 2: [neck]  [body]  [back]
+  // row 3: [right] [legs]  [left]
+  // row 4: [finger][feet]  [ammo]
   equipmentLayout: [
-    { slot: "helmet", label: "Cab", row: 1, col: 2 },
-    { slot: "ring", label: "Anel", row: 2, col: 1 },
-    { slot: "armor", label: "Corp", row: 2, col: 2 },
-    { slot: "amulet", label: "Amu", row: 2, col: 3 },
-    { slot: "weapon", label: "Arma", row: 3, col: 1 },
-    { slot: "backpack", label: "Moch", row: 3, col: 2 },
-    { slot: "shield", label: "Esc", row: 3, col: 3 },
-    { slot: "boots", label: "Bot", row: 4, col: 2 },
+    { slot: "head", label: "Cabeça", row: 1, col: 2 },
+    { slot: "neck", label: "Colar", row: 2, col: 1 },
+    { slot: "body", label: "Corpo", row: 2, col: 2 },
+    { slot: "back", label: "Costas", row: 2, col: 3 },
+    { slot: "right", label: "Dir", row: 3, col: 1 },
+    { slot: "legs", label: "Pernas", row: 3, col: 2 },
+    { slot: "left", label: "Esq", row: 3, col: 3 },
+    { slot: "finger", label: "Anel", row: 4, col: 1 },
+    { slot: "feet", label: "Botas", row: 4, col: 2 },
+    { slot: "ammo", label: "Munição", row: 4, col: 3 },
   ],
 
   // Cores de raridade (usadas no border-color do slot)
@@ -146,8 +160,129 @@ export class InventoryUI {
   }
 
   setEquipment(equipment) {
-    this._equipment = equipment ?? {};
+    this._equipment = this._normalizeEquipment(equipment);
     this._renderEquipmentGrid();
+  }
+
+  /**
+   * Normaliza as chaves do objeto de equipamento para nomes canônicos.
+   * Garante compatibilidade entre chaves antigas ("weapon","shield"),
+   * nomes do items.xml ("hand") e nomes canônicos ("right","left").
+   * @param {Object} equipment
+   * @returns {Object}
+   */
+  _normalizeEquipment(equipment) {
+    if (!equipment || typeof equipment !== "object") return {};
+
+    const unwrapEquipmentPayload = (value) => {
+      if (!value || typeof value !== "object") return value;
+      const nested = value.item ?? value.data ?? null;
+      if (nested && typeof nested === "object") {
+        return { ...nested, ...value };
+      }
+      return value;
+    };
+
+    const resolveTileId = (value, canonicalSlot) => {
+      const resolved = unwrapEquipmentPayload(value);
+      const direct = Number(
+        resolved?.tileId ??
+          resolved?.itemid ??
+          resolved?.item_id ??
+          resolved?.itemId ??
+          resolved?.spriteid ??
+          resolved?.sprite_id ??
+          resolved?.spriteId ??
+          resolved?.id ??
+          0,
+      );
+      if (Number.isFinite(direct) && direct > 0) return direct;
+
+      const itemName = String(resolved?.name ?? "")
+        .trim()
+        .toLowerCase();
+      if (!itemName) return null;
+
+      for (const [id, meta] of Object.entries(EQUIPMENT_DATA ?? {})) {
+        if (!meta || typeof meta !== "object") continue;
+        const metaName = String(meta.name ?? "")
+          .trim()
+          .toLowerCase();
+        if (!metaName || metaName !== itemName) continue;
+        if (
+          canonicalSlot &&
+          normalizeSlotName(meta.slot ?? "") !== canonicalSlot
+        ) {
+          continue;
+        }
+        const parsed = Number(id);
+        if (Number.isFinite(parsed) && parsed > 0) return parsed;
+      }
+
+      return null;
+    };
+
+    const result = {};
+
+    const scoreEquipmentValue = (v) => {
+      if (!v || typeof v !== "object") return 0;
+      let score = 0;
+      const tileId = Number(v.tileId ?? v.itemId ?? v.spriteId ?? v.id ?? 0);
+      if (Number.isFinite(tileId) && tileId > 0) score += 4;
+      if (v.name) score += 2;
+      if (v.type === "equipment") score += 1;
+      if (v.slot) score += 1;
+      return score;
+    };
+
+    for (const [key, value] of Object.entries(equipment)) {
+      if (value == null) continue;
+
+      const canonicalSlot = normalizeSlotName(SLOT_NAMES[Number(key)] ?? key);
+      if (!canonicalSlot) continue;
+
+      // Aceita payload legada: valor pode vir como tileId direto (number/string).
+      if (typeof value === "number" || typeof value === "string") {
+        const tileId = Number(value);
+        if (Number.isFinite(tileId) && tileId > 0) {
+          const candidate = {
+            id: String(tileId),
+            tileId,
+            type: "equipment",
+            slot: canonicalSlot,
+          };
+          const prev = result[canonicalSlot];
+          if (
+            !prev ||
+            scoreEquipmentValue(candidate) >= scoreEquipmentValue(prev)
+          ) {
+            result[canonicalSlot] = candidate;
+          }
+        }
+        continue;
+      }
+
+      if (typeof value === "object") {
+        const rawValue = unwrapEquipmentPayload(value);
+        const tileId = resolveTileId(rawValue, canonicalSlot);
+        const nextValue = {
+          ...rawValue,
+          ...(tileId != null
+            ? { tileId, id: String(rawValue.id ?? tileId) }
+            : {}),
+          slot: normalizeSlotName(rawValue.slot ?? canonicalSlot),
+          type: rawValue.type ?? "equipment",
+        };
+        const prev = result[canonicalSlot];
+        if (
+          !prev ||
+          scoreEquipmentValue(nextValue) >= scoreEquipmentValue(prev)
+        ) {
+          result[canonicalSlot] = nextValue;
+        }
+      }
+    }
+    return result;
   }
 
   // ---------------------------------------------------------------------------
@@ -163,7 +298,7 @@ export class InventoryUI {
           this._renderInventoryGrid();
         }
         if (e.equipment) {
-          this._equipment = e.equipment;
+          this._equipment = this._normalizeEquipment(e.equipment);
           this._renderEquipmentGrid();
         }
       }),
@@ -172,7 +307,19 @@ export class InventoryUI {
     this._unsubs.push(
       worldEvents.subscribe(EVENT_TYPES.ITEM_EQUIPPED, (e) => {
         if (e.playerId !== this._playerId) return;
-        this._equipment[e.slot] = e.item ?? null;
+        const canonicalSlot = normalizeSlotName(e.slot ?? "");
+        if (!canonicalSlot) return;
+
+        const equippedItem = e.item ?? e.enrichedItem ?? null;
+        if (equippedItem) {
+          this._equipment[canonicalSlot] = equippedItem;
+        } else if (e.equipment && typeof e.equipment === "object") {
+          this._equipment = this._normalizeEquipment(e.equipment);
+        } else {
+          // Evita flicker para null quando o evento não traz item explícito.
+          return;
+        }
+
         this._renderEquipmentGrid();
         if (e.newStats) this._renderStatsPreview(e.newStats);
       }),
@@ -181,7 +328,7 @@ export class InventoryUI {
     this._unsubs.push(
       worldEvents.subscribe(EVENT_TYPES.ITEM_UNEQUIPPED, (e) => {
         if (e.playerId !== this._playerId) return;
-        delete this._equipment[e.slot];
+        delete this._equipment[normalizeSlotName(e.slot ?? "")];
         this._renderEquipmentGrid();
         if (e.newStats) this._renderStatsPreview(e.newStats);
       }),
@@ -374,25 +521,31 @@ export class InventoryUI {
     el.setAttribute("aria-label", label);
 
     if (item) {
+      const displayItem =
+        item && typeof item === "object"
+          ? { ...(item.item ?? item.data ?? {}), ...item }
+          : item;
+
       el.classList.add("has-item");
       el.dataset.itemSource = "equipment";
       el.dataset.itemEquipSlot = slot;
-      if (item.rarity)
-        el.style.borderColor = INVENTORY_CONFIG.rarity[item.rarity] ?? "";
+      if (displayItem?.rarity)
+        el.style.borderColor =
+          INVENTORY_CONFIG.rarity[displayItem.rarity] ?? "";
 
-      const icon = this._buildItemIcon(item);
+      const icon = this._buildItemIcon(displayItem);
       if (icon) {
-        icon.setAttribute("aria-label", item.name ?? "item");
+        icon.setAttribute("aria-label", displayItem?.name ?? "item");
         el.appendChild(icon);
       } else {
         const fallbackIcon = document.createElement("div");
         fallbackIcon.className = "item-icon";
-        if (item.spriteId != null)
-          fallbackIcon.dataset.spriteId = item.spriteId;
-        fallbackIcon.setAttribute("aria-label", item.name);
+        if (displayItem?.spriteId != null)
+          fallbackIcon.dataset.spriteId = displayItem.spriteId;
+        fallbackIcon.setAttribute("aria-label", displayItem?.name ?? "item");
         el.appendChild(fallbackIcon);
       }
-      el.title = this._buildTooltipText(item);
+      el.title = this._buildTooltipText(displayItem);
       el.addEventListener("dblclick", () =>
         this._sendAction({ itemAction: "unequip", equipSlot: slot }),
       );
@@ -471,13 +624,31 @@ export class InventoryUI {
         : null;
     if (item.description) lines.push(item.description);
     else if (externalDesc) lines.push(String(externalDesc));
-    if (item.stats) {
+
+    // Stats do EQUIPMENT_DATA (ATK, DEF, Armor, statBonus)
+    const equipData = EQUIPMENT_DATA[Number(item.tileId ?? item.id)];
+    if (equipData) {
+      const statParts = [];
+      if (equipData.attack != null) statParts.push(`ATK ${equipData.attack}`);
+      if (equipData.defense != null) statParts.push(`DEF ${equipData.defense}`);
+      if (equipData.armor != null) statParts.push(`ARM ${equipData.armor}`);
+      if (equipData.minDamage != null)
+        statParts.push(`Dano ${equipData.minDamage}-${equipData.maxDamage}`);
+      if (equipData.range != null) statParts.push(`Alcance ${equipData.range}`);
+      const bonus = equipData.statBonus ?? {};
+      const bonusParts = Object.entries(bonus)
+        .filter(([, v]) => v !== 0)
+        .map(([k, v]) => `${k} ${v > 0 ? "+" : ""}${v}`);
+      if (bonusParts.length) statParts.push(...bonusParts);
+      if (statParts.length) lines.push(statParts.join("  "));
+    } else if (item.stats) {
       lines.push(
         Object.entries(item.stats)
           .map(([k, v]) => `${k}: ${v > 0 ? "+" : ""}${v}`)
           .join("  "),
       );
     }
+
     if (item.effect)
       lines.push(`Efeito: ${item.effect.type} +${item.effect.value ?? ""}`);
     if (item.value) lines.push(`Valor: ${item.value} gold`);
@@ -527,7 +698,7 @@ export class InventoryUI {
       .inventory-body { display: flex; gap: 12px; }
       .section-label { font-size: 10px; color: #7f8c8d; margin: 0 0 4px; }
 
-      /* Equipment grid: 3 cols × 3 rows */
+      /* Equipment grid: 3 cols × 4 rows */
       .equipment-grid {
         display: grid;
         grid-template-columns: repeat(3, ${TILE_SIZE}px);

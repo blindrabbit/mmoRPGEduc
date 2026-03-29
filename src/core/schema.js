@@ -435,15 +435,17 @@ export function normalizeEntity(raw, type = "unknown") {
 // ---------------------------------------------------------------------------
 export const ITEM_SCHEMA = Object.freeze({
   types: ["consumable", "equipment", "quest", "material", "currency"],
+  // Nomes canônicos (alinhados com EQUIPMENT_DATA e SLOT_ALIASES)
+  // Inclui aliases legacy (weapon, shield, helmet...) para compatibilidade
+  // com itens já persistidos no Firebase.
   equipmentSlots: [
-    "weapon",
-    "shield",
-    "helmet",
-    "armor",
-    "boots",
-    "ring",
-    "amulet",
-    "backpack",
+    // Canônicos
+    "right", "left", "head", "body", "legs", "feet",
+    "neck", "back", "finger", "ammo",
+    // Aliases do items.xml / Tibia
+    "hand", "armor", "helmet", "boots",
+    // Aliases legados da UI anterior
+    "weapon", "shield", "ring", "amulet", "backpack", "chest",
   ],
   validStats: [
     "atk",

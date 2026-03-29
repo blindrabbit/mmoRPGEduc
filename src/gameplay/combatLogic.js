@@ -1,4 +1,5 @@
 import { COMBAT_TICK_MS } from "./combatScheduler.js";
+import { EQUIPMENT_DATA } from "../core/equipmentData.js";
 
 /**
  * Converte delta (dx, dy) em string de direção canônica.
@@ -55,7 +56,28 @@ export const COMBAT = {
 };
 
 /**
- * Calcula resultado de um ataque físico
+ * Determina o combatProfile do atacante com base no weaponType equipado.
+ * Usado internamente para selecionar o atributo primário de ataque.
+ * @param {string|null} weaponType
+ * @returns {'melee'|'distance'|'caster'}
+ */
+function _profileFromWeaponType(weaponType) {
+  if (weaponType === "wand" || weaponType === "rod" || weaponType === "spellbook") return "caster";
+  if (weaponType === "distance") return "distance";
+  return "melee";
+}
+
+/**
+ * Calcula resultado de um ataque físico.
+ * Usa atributos FOR/AGI/INT/VIT — sem skills.
+ *
+ * @param {Object} attacker  - Entidade atacante (com stats.FOR, AGI, INT, VIT)
+ * @param {Object} defender  - Entidade defensora (com stats.VIT, equipment)
+ * @param {Object} weapon    - { id, attack, defense, element } ou entrada de EQUIPMENT_DATA
+ * @param {Object} [options]
+ * @param {number} [options.distance=1]
+ * @returns {{ hit: boolean, damage?: number, critical?: boolean, reason?: string,
+ *             weaponType?: string, shootType?: string }}
  */
 export function calculatePhysicalAttack(
   attacker,
@@ -63,62 +85,80 @@ export function calculatePhysicalAttack(
   weapon,
   options = {},
 ) {
-  const { isMelee = true, distance = 1 } = options;
+  const { distance = 1 } = options;
+
+  // Resolve dados do equipamento
+  const equipData = EQUIPMENT_DATA[Number(weapon?.id)] ?? weapon ?? {};
+  const weaponType = equipData.weaponType ?? null;
+  const shootType  = equipData.shootType  ?? null;
+  const profile    = equipData.combatProfile ?? _profileFromWeaponType(weaponType);
 
   // 1. Valida alcance
-  const maxRange = isMelee ? COMBAT.MELEE_RANGE : COMBAT.MAX_DISTANCE_RANGE;
+  const maxRange = profile === "melee" ? COMBAT.MELEE_RANGE : (equipData.range ?? COMBAT.MAX_DISTANCE_RANGE);
   if (distance > maxRange) {
-    return { hit: false, reason: "fora_de_alcance" };
+    return { hit: false, reason: "fora_de_alcance", weaponType, shootType };
   }
 
-  // 2. Chance de acerto
-  const atkSkill = attacker.stats?.[isMelee ? "sword" : "distance"] ?? 0;
-  const defSkill = defender.stats?.shielding ?? 0;
+  // 2. Atributo primário de ataque (sem skills)
+  const atkStats = attacker.stats ?? {};
+  let atkAttr;
+  if (profile === "caster")   atkAttr = atkStats.INT ?? atkStats.int ?? 0;
+  else if (profile === "distance") atkAttr = atkStats.AGI ?? atkStats.agi ?? 0;
+  else                        atkAttr = atkStats.FOR ?? atkStats.for ?? 0;
+
+  // 3. Atributo de defesa do defensor (VIT)
+  const defVIT = defender.stats?.VIT ?? defender.stats?.vit ?? 0;
+
+  // 4. Chance de acerto
   const hitChance = COMBAT.HIT_CHANCE_FORMULA(
-    weapon.hitChance + atkSkill * 0.5,
-    defSkill * 0.8,
+    (weapon.hitChance ?? 50) + atkAttr * 0.6,
+    defVIT * 0.5,
     distance,
   );
-
   if (Math.random() * 100 > hitChance) {
-    return { hit: false, reason: "miss", hitChance };
+    return { hit: false, reason: "miss", hitChance, weaponType, shootType };
   }
 
-  // 3. Chance de bloqueio pelo escudo
-  const shield = defender.equipment?.shield;
-  if (shield && WEAPON_DEFINITIONS[shield]) {
-    const blockChance = WEAPON_DEFINITIONS[shield].blockChance + defSkill * 0.3;
+  // 5. Chance de bloqueio pelo escudo (defense do escudo + VIT do defensor)
+  const shieldId = defender.equipment?.LEFT ?? defender.equipment?.shield;
+  const shieldData = shieldId ? EQUIPMENT_DATA[Number(shieldId)] : null;
+  if (shieldData?.weaponType === "shield") {
+    const blockChance = (shieldData.defense ?? 0) * 0.5 + defVIT * 0.3;
     if (Math.random() * 100 < blockChance) {
-      return { hit: false, reason: "blocked", blockChance };
+      return { hit: false, reason: "blocked", blockChance, weaponType, shootType };
     }
   }
 
-  // 4. Calcula dano
-  const atkValue = weapon.attack + atkSkill * 0.8;
-  const defValue = defender.stats?.def ?? 0;
-  const damageFormula = isMelee
+  // 6. Calcula dano base
+  const atkValue = (equipData.attack ?? weapon.attack ?? 0) + atkAttr * 0.8;
+  const defValue = defender.stats?.def ?? defender.stats?.VIT * 0.4 ?? 0;
+  const damageFormula = profile === "melee"
     ? COMBAT.DAMAGE_FORMULA.melee
     : COMBAT.DAMAGE_FORMULA.distance;
   const baseDamage = damageFormula(atkValue, defValue, distance);
 
-  // 5. Aplica resistência elemental se houver
-  const element = weapon.element;
-  const resistance = defender.stats?.resistances?.[element] ?? 1.0;
+  // 7. Resistência elemental (wands têm wandType/element)
+  const element = equipData.wandType ?? equipData.element ?? weapon.element ?? null;
+  const resistance = element
+    ? (defender.stats?.resistances?.[element] ?? 1.0)
+    : 1.0;
   const finalDamage = Math.round(baseDamage * resistance);
 
-  // 6. Chance de critical (baseado em skill alta)
-  let isCritical = false;
-  if (atkSkill > 50 && Math.random() < 0.05) {
-    isCritical = true;
+  // 8. Critical — baseado em AGI (atributo universal de chance crítica)
+  const agi = atkStats.AGI ?? atkStats.agi ?? 0;
+  const critChance = Math.min(0.25, agi * 0.006); // 0.6% por ponto de AGI, cap 25%
+  if (Math.random() < critChance) {
     return {
       hit: true,
       damage: Math.round(finalDamage * 1.5),
       critical: true,
       hitChance,
+      weaponType,
+      shootType,
     };
   }
 
-  return { hit: true, damage: Math.max(1, finalDamage), hitChance };
+  return { hit: true, damage: Math.max(1, finalDamage), critical: false, hitChance, weaponType, shootType };
 }
 
 // =============================================================================

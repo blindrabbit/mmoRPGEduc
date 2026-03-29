@@ -339,7 +339,7 @@ export class DragDropManager {
         action = { itemAction: "move", slotIndex, toSlot: dropSlot };
       }
     } else if (source === "inventory" && dropZone === "equipment") {
-      action = { itemAction: "equip", slotIndex };
+      action = { itemAction: "equip", slotIndex, equipSlot: dropEquipSlot };
     } else if (source === "equipment" && dropZone === "inventory") {
       action = { itemAction: "unequip", equipSlot, slotIndex: dropSlot };
     } else if (source === "equipment" && dropZone === "equipment") {

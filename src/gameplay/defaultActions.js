@@ -581,6 +581,10 @@ function registerRopeHoleOnUseAction(actionSystem) {
     const { player, target, onChangeFloor, showMessage } = ctx;
     if (!player || !target) return false;
 
+    const dx = Math.abs(target.x - player.x);
+    const dy = Math.abs(target.y - player.y);
+    if (dx > 1 || dy > 1) return false;
+
     const inventory = player?.inventory ?? {};
     const hasRope = Object.values(inventory).some(
       (item) =>
@@ -593,14 +597,14 @@ function registerRopeHoleOnUseAction(actionSystem) {
       return true; // Consome a ação sem executar
     }
 
-    // Player tem corda: sobe um andar (Z-1)
+    // Mesma lógica da ladder: destino baseado na posição do tile (target.x, target.y+1, target.z-1)
     if (onChangeFloor) {
       return (
         onChangeFloor({
           ...ctx,
-          newX: player.x,
-          newY: player.y,
-          newZ: (player.z ?? 7) - 1,
+          newX: target.x,
+          newY: target.y + 1,
+          newZ: (target.z ?? player.z ?? 7) - 1,
           floorChange: -1,
           actionType: "rope_hole_use",
         }) !== false

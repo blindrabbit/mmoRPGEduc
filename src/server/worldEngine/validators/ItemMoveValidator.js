@@ -27,7 +27,10 @@ import {
   MAX_DROP_DISTANCE,
   MAX_PICKUP_DISTANCE,
   isSlotCompatible,
+  SLOT_NAMES,
+  normalizeSlotName,
 } from "../../../core/constants/itemConstants.js";
+import { EQUIPMENT_DATA } from "../../../core/equipmentData.js";
 import {
   wsGetPlayer,
   wsGetWorldItem,
@@ -322,21 +325,40 @@ export class ItemMoveValidator {
       return deny(MOVE_ERRORS.NOTPOSSIBLE, "slotId não especificado");
     }
 
-    if (!itemDef) {
+    // Normaliza slotId para nome canônico (aceita "weapon"→"right", "hand"→"right", etc.)
+    const canonicalSlotId = normalizeSlotName(String(slotId));
+
+    // Resolve tileId para consultar EQUIPMENT_DATA (fonte primária de slots)
+    const tileId = Number(item?.tileId ?? item?.id ?? 0);
+    const equipData = EQUIPMENT_DATA[tileId] ?? null;
+
+    if (!equipData && !itemDef) {
       return deny(MOVE_ERRORS.CANNOTBEDRESSED, "sem metadata de equipamento");
     }
 
-    // Slot de roupa: obtido via flags_raw.clothes.slot ou game.equip_slot
-    const itemSlotNum = itemDef.flags_raw?.clothes?.slot;
-    const itemSlotType =
-      itemDef.game?.equip_slot ?? itemDef.game?.category_type;
-
-    // Verifica compatibilidade de slot pelo tipo de item
-    if (itemSlotType && !isSlotCompatible(itemSlotType, Number(slotId))) {
-      return deny(
-        MOVE_ERRORS.CANNOTBEDRESSED,
-        `${itemSlotType} não encaixa em slotId=${slotId}`,
-      );
+    // Valida compatibilidade de slot
+    if (equipData) {
+      // EQUIPMENT_DATA é a fonte de verdade: compara nomes canônicos
+      if (equipData.slot !== canonicalSlotId) {
+        return deny(
+          MOVE_ERRORS.CANNOTBEDRESSED,
+          `${equipData.name} pertence ao slot '${equipData.slot}', não '${canonicalSlotId}'`,
+        );
+      }
+    } else {
+      // Fallback para itemDef do map_data (itens sem entrada em EQUIPMENT_DATA)
+      const itemSlotType = itemDef.game?.equip_slot ?? itemDef.game?.category_type;
+      if (itemSlotType) {
+        const slotNum = Number(
+          Object.entries(SLOT_NAMES).find(([, v]) => v === canonicalSlotId)?.[0],
+        );
+        if (!isNaN(slotNum) && !isSlotCompatible(itemSlotType, slotNum)) {
+          return deny(
+            MOVE_ERRORS.CANNOTBEDRESSED,
+            `${itemSlotType} não encaixa em slot=${canonicalSlotId}`,
+          );
+        }
+      }
     }
 
     // Level mínimo

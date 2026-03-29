@@ -1476,6 +1476,12 @@
         filters: ["all", "engine", "move", "field", "spawn"],
       });
 
+      // Mensagens do sistema (portas trancadas, erros de ação, etc.) → worldLOG
+      window.addEventListener("rpgChatMessage", (evt) => {
+        const { message, type = "system" } = evt.detail ?? {};
+        if (message) pushLog("rpg", type, message);
+      });
+
       // ── Zoom ───────────────────────────────────────────────────────────────
       let zoomFactor = parseFloat(localStorage.getItem("canvasZoom") ?? "1.0");
       function applyZoom() {
@@ -1666,12 +1672,74 @@
         }
       }
 
+      const EQUIP_SLOT_ALIASES = {
+        head: ["head", "helmet"],
+        body: ["body", "chest", "armor", "torso"],
+        weapon: ["weapon", "right", "mainhand", "hand", "slot_5"],
+        shield: ["shield", "left", "offhand", "slot_6"],
+        legs: ["legs", "pants"],
+        feet: ["feet", "boots"],
+        ring: ["ring", "finger"],
+        amulet: ["amulet", "neck", "necklace"],
+      };
+
+      function _canonicalEquipSlot(slotName) {
+        const normalized = String(slotName ?? "")
+          .trim()
+          .toLowerCase();
+        if (!normalized) return null;
+        for (const [canonical, aliases] of Object.entries(EQUIP_SLOT_ALIASES)) {
+          if (aliases.includes(normalized)) return canonical;
+        }
+        return null;
+      }
+
+      const UI_TO_SERVER_EQUIP_SLOT = Object.freeze({
+        weapon: "right",
+        shield: "left",
+        ring: "finger",
+        amulet: "neck",
+      });
+
+      function _toServerEquipSlot(slotName) {
+        const uiSlot = _canonicalEquipSlot(slotName);
+        if (!uiSlot)
+          return String(slotName ?? "")
+            .trim()
+            .toLowerCase();
+        return UI_TO_SERVER_EQUIP_SLOT[uiSlot] ?? uiSlot;
+      }
+
+      function _normalizeEquipmentForUI(rawEquipment) {
+        if (!rawEquipment || typeof rawEquipment !== "object") return {};
+        const normalized = {};
+        for (const [rawKey, rawValue] of Object.entries(rawEquipment)) {
+          if (rawValue == null) continue;
+
+          const mergedValue =
+            rawValue && typeof rawValue === "object"
+              ? { ...(rawValue.item ?? rawValue.data ?? {}), ...rawValue }
+              : rawValue;
+
+          const valueSlot =
+            mergedValue && typeof mergedValue === "object"
+              ? _canonicalEquipSlot(mergedValue.slot)
+              : null;
+          const canonicalSlot = valueSlot ?? _canonicalEquipSlot(rawKey);
+          if (!canonicalSlot) continue;
+
+          normalized[canonicalSlot] = mergedValue;
+        }
+        return normalized;
+      }
+
       function _renderEquipmentGrid(equipment = {}) {
+        const normalizedEquipment = _normalizeEquipmentForUI(equipment);
         const slots = document.querySelectorAll("#equip-grid .equip-slot");
         slots.forEach((slot) => {
           const equipSlot = slot.dataset.dropEquipSlot;
           if (!equipSlot) return;
-          const item = equipment[equipSlot] ?? null;
+          const item = normalizedEquipment[equipSlot] ?? null;
 
           // Remove item anterior (mantém apenas o label de texto)
           slot
@@ -1688,15 +1756,26 @@
           slot.dataset.itemSource = "equipment";
           slot.dataset.itemEquipSlot = equipSlot;
 
-          const tileId = Number(item?.tileId ?? item?.spriteId ?? item?.id);
+          const tileId = Number(
+            item?.tileId ??
+              item?.itemid ??
+              item?.item_id ??
+              item?.itemId ??
+              item?.spriteid ??
+              item?.sprite_id ??
+              item?.spriteId ??
+              item?.id,
+          );
           const equipVariantKey =
             item?.content_type != null
               ? getLiquidVariantKey(item.content_type)
               : "0";
           const sprite = Number.isFinite(tileId)
-            ? assets.getMapSprite(tileId, equipVariantKey)
+            ? (assets.getMapSprite(tileId, equipVariantKey) ??
+              assets.getSpriteById(tileId))
             : null;
-          if (sprite?.sheet) {
+          const spriteInfo = sprite?.info ?? sprite;
+          if (sprite?.sheet && spriteInfo) {
             const cvs = document.createElement("canvas");
             cvs.width = TILE_SIZE;
             cvs.height = TILE_SIZE;
@@ -1705,16 +1784,16 @@
             cvs.style.imageRendering = "pixelated";
             const ctx = cvs.getContext("2d");
             ctx.imageSmoothingEnabled = false;
-            const srcW = Math.max(1, sprite.w);
-            const srcH = Math.max(1, sprite.h);
+            const srcW = Math.max(1, Number(spriteInfo.w ?? 0));
+            const srcH = Math.max(1, Number(spriteInfo.h ?? 0));
             const scale = Math.min(TILE_SIZE / srcW, TILE_SIZE / srcH);
             const dw = Math.max(1, Math.floor(srcW * scale));
             const dh = Math.max(1, Math.floor(srcH * scale));
             ctx.clearRect(0, 0, TILE_SIZE, TILE_SIZE);
             ctx.drawImage(
               sprite.sheet,
-              sprite.x,
-              sprite.y,
+              Number(spriteInfo.x ?? 0),
+              Number(spriteInfo.y ?? 0),
               srcW,
               srcH,
               Math.floor((TILE_SIZE - dw) / 2),
@@ -2740,7 +2819,7 @@
         _lastPlayerTotalXp = Number(myPos.stats?.totalXp);
         if (!Number.isFinite(_lastPlayerTotalXp)) _lastPlayerTotalXp = null;
         myPos.inventory = playerData.inventory ?? {};
-        myPos.equipment = playerData.equipment ?? {};
+        myPos.equipment = _normalizeEquipmentForUI(playerData.equipment ?? {});
         _renderInventoryGrid(myPos.inventory);
         _renderEquipmentGrid(myPos.equipment);
 
@@ -2753,6 +2832,17 @@
               }
               try {
                 let payload = action.payload;
+
+                if (
+                  payload?.equipSlot != null &&
+                  (payload.itemAction === "equip" ||
+                    payload.itemAction === "unequip")
+                ) {
+                  payload = {
+                    ...payload,
+                    equipSlot: _toServerEquipSlot(payload.equipSlot),
+                  };
+                }
 
                 // ── Checagem de alcance antes de qualquer escrita no Firebase ──
                 // pickUp e moveWorld de itens do mundo exigem estar em tile adjacente (Chebyshev ≤ 1)
@@ -2903,7 +2993,7 @@
               return {
                 x: Math.floor((px + cam.x) / TILE_SIZE),
                 y: Math.floor((py + cam.y) / TILE_SIZE),
-                z: activeZ ?? myPos?.z ?? 7,
+                z: myPos?.z ?? activeZ ?? 7,
               };
             },
             worldToScreen: (tileX, tileY) => {
@@ -3246,7 +3336,9 @@
           // ?? {} sem fallback para myPos: Firebase retorna null quando o nó fica
           // vazio (ex: último item dropado), e manter o valor antigo causa ghost slots.
           myPos.inventory = serverData.inventory ?? {};
-          myPos.equipment = serverData.equipment ?? {};
+          myPos.equipment = _normalizeEquipmentForUI(
+            serverData.equipment ?? {},
+          );
           myPos.storage = serverData.storage ?? {}; // Atualiza storage para quests/eventos
           myPos.status = serverData.status ?? null;
           myPos.lastAttack = serverData.lastAttack ?? myPos.lastAttack;
@@ -3258,7 +3350,16 @@
           updateRegenPlayer(myPos);
           updateSpellHUDPlayer(myPos);
           updateUI(myPos);
+
+          // Mensagem de sistema enviada pelo servidor (ex: porta trancada)
+          const srvMsg = serverData.server_message;
+          if (srvMsg?.text && srvMsg.ts !== _lastServerMessageTs) {
+            _lastServerMessageTs = srvMsg.ts;
+            pushLog("rpg", srvMsg.type ?? "system", srvMsg.text);
+          }
         });
+
+        let _lastServerMessageTs = null;
 
         dbWatch("world_items", (items) => {
           _applyWorldItemsSnapshot(items);
@@ -3873,10 +3974,22 @@
         const total = calculated.totalStats ?? {};
         const auto = calculated.autoStats ?? {};
         const manual = calculated.effectiveManual ?? {};
-        const attackPower = Math.round(getAttackPower(player));
-        const defensePower = Math.round(getDefense(player, 0));
-        const spellPower = Math.round(calculated.spellPower ?? 0);
-        const healPower = Math.round(calculated.healPower ?? 0);
+        const attackPower =
+          s.poder != null
+            ? Math.round(s.poder)
+            : Math.round(getAttackPower(player));
+        const defensePower =
+          s.resist != null
+            ? Math.round(s.resist)
+            : Math.round(getDefense(player, 0));
+        const spellPower =
+          s.magia != null
+            ? Math.round(s.magia)
+            : Math.round(calculated.spellPower ?? 0);
+        const healPower =
+          s.cura != null
+            ? Math.round(s.cura)
+            : Math.round(calculated.healPower ?? 0);
 
         // Linha de atributo com tooltip mostrando origem dos pontos
         function _sRow(icon, label, stat) {

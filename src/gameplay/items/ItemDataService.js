@@ -11,6 +11,7 @@ import {
   canReceiveItemsById,
   ITEM_CLASSIFICATION,
 } from "./itemClassification.js";
+import { EQUIPMENT_DATA } from "../../core/equipmentData.js";
 
 // Mapeamento de slot numérico (flags_raw.clothes.slot) para nome canônico
 const SLOT_NUMBER_TO_NAME = Object.freeze({
@@ -397,6 +398,40 @@ export class ItemDataService {
     return Object.keys(this._data)
       .filter((k) => this.isItem(k))
       .map(Number);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Consultas de equipamento (EQUIPMENT_DATA)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Retorna a entrada completa de EQUIPMENT_DATA para o itemId, ou null.
+   * Inclui slot, ataque, defesa, statBonus, weaponType, shootType, etc.
+   * @param {number|string} itemId
+   * @returns {Object|null}
+   */
+  getEquipmentData(itemId) {
+    return EQUIPMENT_DATA[Number(itemId)] ?? null;
+  }
+
+  /**
+   * Retorna o weaponType do item para o sistema de animação (ex: 'axe', 'sword', 'wand').
+   * Retorna null se o item não for um equipamento de combate.
+   * @param {number|string} itemId
+   * @returns {string|null}
+   */
+  getWeaponType(itemId) {
+    return EQUIPMENT_DATA[Number(itemId)]?.weaponType ?? null;
+  }
+
+  /**
+   * Retorna o shootType do item para animação de projétil (ex: 'spear', 'smallearth', 'energy').
+   * Retorna null se o item não dispara projétil.
+   * @param {number|string} itemId
+   * @returns {string|null}
+   */
+  getShootType(itemId) {
+    return EQUIPMENT_DATA[Number(itemId)]?.shootType ?? null;
   }
 
   // ---------------------------------------------------------------------------
