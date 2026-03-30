@@ -185,5 +185,4 @@ if (typeof window !== "undefined") {
 // EXPORTS
 // =============================================================================
 
-export { LEVELS };
 export default logger;

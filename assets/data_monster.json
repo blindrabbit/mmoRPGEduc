@@ -1,0 +1,90 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-29T16:42:43.364Z",
+  "totalMonsters": 1,
+  "monsters": {
+    "wolf": {
+      "name": "Wolf",
+      "description": "a wolf",
+      "health": 25,
+      "maxHealth": 25,
+      "experience": 18,
+      "speed": 82,
+      "corpse": 5968,
+      "lookType": 27,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 27,
+      "flags": {
+        "summonable": "true",
+        "attackable": "true",
+        "hostile": "true",
+        "convinceable": "true",
+        "pushable": "true",
+        "rewardBoss": "false",
+        "illusionable": "true",
+        "canPushItems": "false",
+        "canPushCreatures": "false",
+        "staticAttackChance": "90",
+        "targetDistance": "1",
+        "runHealth": "8",
+        "healthHidden": "false",
+        "isBlockable": "false",
+        "canWalkOnEnergy": "false",
+        "canWalkOnFire": "false",
+        "canWalkOnPoison": "false"
+      },
+      "voices": [
+        {
+          "sentence": "Yoooohhuuuu!",
+          "yell": false
+        },
+        {
+          "sentence": "Grrrrrrr",
+          "yell": false
+        }
+      ],
+      "attacks": [
+        {
+          "name": "melee",
+          "interval": 2000,
+          "minDamage": 0,
+          "maxDamage": -20
+        }
+      ],
+      "loot": [
+        {
+          "id": 3577,
+          "chance": 55000,
+          "countmax": 1
+        },
+        {
+          "id": 5897,
+          "chance": 980,
+          "countmax": 1
+        }
+      ],
+      "elements": {
+        "physical": 0,
+        "energy": 0,
+        "earth": 5,
+        "fire": 0,
+        "lifedrain": 0,
+        "manadrain": 0,
+        "drown": 0,
+        "ice": -5,
+        "holy": 5,
+        "death": -5
+      },
+      "immunities": [
+        "paralyze",
+        "outfit",
+        "invisible",
+        "bleed"
+      ]
+    }
+  }
+}

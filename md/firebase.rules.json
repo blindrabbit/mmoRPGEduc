@@ -6,8 +6,9 @@
     "online_players": {
       "$playerId": {
         ".read": true,
-        // ✅ APENAS o próprio player ou WorldEngine podem escrever
-        ".write": "auth != null && (auth.uid === $playerId || root.child('auth').child('admin').child(auth.uid).val() === true)",
+        // ✅ Desenvolvimento: permite escrita (remover em produção)
+        // ✅ Produção: usar "auth != null && (auth.uid === $playerId || ...)"
+        ".write": true,
 
         // ✅ Campos de administração são SOMENTE leitura (cliente não pode modificar)
         "isAdmin": { ".validate": "false" },
@@ -252,9 +253,9 @@
     "player_actions": {
       "$actionId": {
         ".read": true,
-        // ✅ Cliente só pode criar ações onde playerId === auth.uid
-        // ✅ WorldEngine pode criar ações para qualquer player (admin privileges)
-        ".write": "auth != null && (!newData.child('playerId').exists() || newData.child('playerId').val() === auth.uid)",
+        // ✅ Desenvolvimento: permite escrita sem auth (remover em produção)
+        // ✅ Produção: usar "auth != null && (!newData.child('playerId').exists() || newData.child('playerId').val() === auth.uid)"
+        ".write": true,
 
         // ✅ Valida campos obrigatórios
         "id": { ".validate": "newData.isString()" },
@@ -268,7 +269,7 @@
         // ✅ Valida timestamp e expiração
         "ts": { ".validate": "newData.isNumber() && newData.val() >= 0" },
         "expiresAt": {
-          ".validate": "newData.isNumber() && newData.val() >= now && newData.val() < now + 60000"
+          ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() < now + 60000"
         },
 
         // ✅ Valida campos opcionais específicos

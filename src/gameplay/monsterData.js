@@ -1,6 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
 // monsterData.js — Catálogo de monstros do Nexo
 //
+// Os monstros definidos aqui manualmente têm prioridade.
+// Monstros extraídos do mapa (wolf, rotworm, rotworm_queen, etc.)
+// são adicionados automaticamente via monsterData.generated.js.
+//
 // Como adicionar um novo monstro:
 //   1. Copie um bloco existente (ex: "rat")
 //   2. Troque a chave (ex: "wolf")
@@ -40,6 +44,8 @@
 //   tickRate      → intervalo de dano do field (ms)
 //   statusType    → efeito de status: "burning", "poison", "frozen"
 // ═══════════════════════════════════════════════════════════════
+
+import { MONSTER_SPAWN_DATA } from "./monsterData.generated.js";
 
 export const MONSTER_TEMPLATES = {
   // ─────────────────────────────────────────────────────────────
@@ -316,3 +322,14 @@ export const MONSTER_TEMPLATES = {
     ],
   },
 };
+
+// ---------------------------------------------------------------------------
+// Injeta monstros do mapa (gerados) que ainda não têm template manual.
+// Os templates manuais acima sempre têm prioridade.
+// (o import de MONSTER_SPAWN_DATA está no topo do arquivo)
+// ---------------------------------------------------------------------------
+for (const [key, tmpl] of Object.entries(MONSTER_SPAWN_DATA?.monsters ?? {})) {
+  if (!MONSTER_TEMPLATES[key]) {
+    MONSTER_TEMPLATES[key] = tmpl;
+  }
+}

@@ -1,0 +1,863 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-29T16:42:43.334Z",
+  "totalSpawns": 107,
+  "spawns": [
+    {
+      "name": "wolf",
+      "x": 94,
+      "y": 107,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 97,
+      "y": 99,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 113,
+      "y": 96,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 125,
+      "y": 103,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 132,
+      "y": 100,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 132,
+      "y": 173,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 137,
+      "y": 176,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 149,
+      "y": 104,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 150,
+      "y": 151,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 152,
+      "y": 96,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 152,
+      "y": 177,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 156,
+      "y": 166,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 156,
+      "y": 177,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 157,
+      "y": 134,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 164,
+      "y": 161,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 164,
+      "y": 176,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 165,
+      "y": 137,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 166,
+      "y": 128,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 170,
+      "y": 109,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 170,
+      "y": 145,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "wolf",
+      "x": 171,
+      "y": 114,
+      "z": 14,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 118,
+      "y": 152,
+      "z": 18,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 127,
+      "y": 150,
+      "z": 18,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 131,
+      "y": 143,
+      "z": 18,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 132,
+      "y": 147,
+      "z": 18,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 52,
+      "y": 122,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 52,
+      "y": 130,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 55,
+      "y": 131,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 56,
+      "y": 119,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 57,
+      "y": 130,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 58,
+      "y": 111,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 60,
+      "y": 106,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 62,
+      "y": 122,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 67,
+      "y": 117,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 69,
+      "y": 107,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 70,
+      "y": 125,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 72,
+      "y": 114,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 73,
+      "y": 129,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 75,
+      "y": 113,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 81,
+      "y": 118,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 83,
+      "y": 121,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 84,
+      "y": 128,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 89,
+      "y": 131,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 91,
+      "y": 131,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 92,
+      "y": 140,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 101,
+      "y": 128,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 102,
+      "y": 140,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 103,
+      "y": 186,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 103,
+      "y": 195,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 104,
+      "y": 123,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 106,
+      "y": 182,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 107,
+      "y": 133,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 108,
+      "y": 176,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 108,
+      "y": 191,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 109,
+      "y": 118,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 113,
+      "y": 191,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 115,
+      "y": 184,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 117,
+      "y": 123,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 117,
+      "y": 136,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 117,
+      "y": 140,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 117,
+      "y": 193,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 121,
+      "y": 179,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 122,
+      "y": 148,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 125,
+      "y": 133,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 125,
+      "y": 160,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 125,
+      "y": 189,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 126,
+      "y": 171,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 127,
+      "y": 181,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 128,
+      "y": 172,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 130,
+      "y": 126,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 133,
+      "y": 177,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 134,
+      "y": 154,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 135,
+      "y": 158,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 135,
+      "y": 176,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 137,
+      "y": 147,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 141,
+      "y": 143,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 143,
+      "y": 157,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 143,
+      "y": 161,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 144,
+      "y": 155,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 146,
+      "y": 164,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 148,
+      "y": 139,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 151,
+      "y": 164,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 157,
+      "y": 141,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 157,
+      "y": 151,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 157,
+      "y": 158,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 163,
+      "y": 149,
+      "z": 20,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 103,
+      "y": 200,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm_queen",
+      "x": 103,
+      "y": 211,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 103,
+      "y": "227-1",
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 104,
+      "y": 208,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 106,
+      "y": 203,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 107,
+      "y": 227,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 110,
+      "y": 225,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 111,
+      "y": 211,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 114,
+      "y": 212,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm_queen",
+      "x": 114,
+      "y": 214,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 116,
+      "y": 214,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 121,
+      "y": 211,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 123,
+      "y": 211,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 123,
+      "y": 225,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 124,
+      "y": 208,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm_queen",
+      "x": 125,
+      "y": 212,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm_queen",
+      "x": null,
+      "y": null,
+      "z": null,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": null,
+      "y": null,
+      "z": null,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 125,
+      "y": "227-1",
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm_queen",
+      "x": 128,
+      "y": 227,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    },
+    {
+      "name": "rotworm",
+      "x": 129,
+      "y": 229,
+      "z": 22,
+      "radius": 1,
+      "spawntime": 60
+    }
+  ]
+}

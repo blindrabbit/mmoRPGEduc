@@ -13,6 +13,10 @@ import {
   tickFields,
 } from "../../../gameplay/monsterManager.js";
 import {
+  initSpawnManager,
+  tickSpawnManager,
+} from "../../../gameplay/spawnManager.js";
+import {
   watchPlayerActions,
   deletePlayerAction,
   deletePlayerActions,
@@ -55,6 +59,18 @@ export class WorldTick {
     // Inicia watchers Firebase (monsters, players, effects, fields, chat)
     initWorldStore();
 
+    // Carrega dados de spawn do mapa (assíncrono, não bloqueia o boot)
+    this._spawnsData = null;
+    this._spawnManagerReady = false;
+    fetch("assets/monster_spawns.json")
+      .then((r) => r.json())
+      .then((data) => {
+        this._spawnsData = data;
+      })
+      .catch((err) =>
+        console.warn("[WorldTick] Nao foi possivel carregar monster_spawns.json:", err),
+      );
+
     // Processa ações de player (attack, spell) em tempo real via Firebase.
     // Elas ficam enfileiradas e só são resolvidas na janela central de combate.
     watchPlayerActions(async (actionId, action) => {
@@ -95,6 +111,13 @@ export class WorldTick {
       this.logger?.ok("[WorldTick] MonsterManager iniciado.");
     }
 
+    // Inicializa SpawnManager assim que o MonsterManager estiver pronto e o JSON carregado
+    if (this._managerReady && this._spawnsData && !this._spawnManagerReady) {
+      initSpawnManager(this._spawnsData);
+      this._spawnManagerReady = true;
+      this.logger?.ok("[WorldTick] SpawnManager iniciado.");
+    }
+
     setTickRunning(true);
     this.worldState.tickCount = (this.worldState.tickCount ?? 0) + 1;
 
@@ -117,6 +140,9 @@ export class WorldTick {
       try {
         await tickMonsters({ now, allowCombat });
         await tickFields();
+        if (this._spawnManagerReady) {
+          await tickSpawnManager({ now });
+        }
       } catch (e) {
         console.error("[WorldTick] Erro no tick de IA:", e);
       }

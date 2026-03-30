@@ -1,0 +1,797 @@
+{
+  "version": "1.0",
+  "generatedAt": "2026-03-29T14:31:27.129910",
+  "monsters": {
+    "azure_frog": {
+      "lookType": 226,
+      "lookHead": 69,
+      "lookBody": 66,
+      "lookLegs": 69,
+      "lookFeet": 66,
+      "lookAddons": 0,
+      "raceId": 268
+    },
+    "bog_frog": {
+      "lookType": 412,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 738
+    },
+    "coral_frog": {
+      "lookType": 226,
+      "lookHead": 114,
+      "lookBody": 98,
+      "lookLegs": 97,
+      "lookFeet": 114,
+      "lookAddons": 0,
+      "raceId": 269
+    },
+    "crimson_frog": {
+      "lookType": 226,
+      "lookHead": 94,
+      "lookBody": 78,
+      "lookLegs": 94,
+      "lookFeet": 78,
+      "lookAddons": 0,
+      "raceId": 270
+    },
+    "deathspawn": {
+      "lookType": 226,
+      "lookHead": 114,
+      "lookBody": 98,
+      "lookLegs": 97,
+      "lookFeet": 114,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "filth_toad": {
+      "lookType": 222,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 735
+    },
+    "green_frog": {
+      "lookType": 224,
+      "lookHead": 69,
+      "lookBody": 66,
+      "lookLegs": 69,
+      "lookFeet": 66,
+      "lookAddons": 0,
+      "raceId": 267
+    },
+    "infernal_frog": {
+      "lookType": 224,
+      "lookHead": 69,
+      "lookBody": 66,
+      "lookLegs": 69,
+      "lookFeet": 66,
+      "lookAddons": 0,
+      "raceId": 563
+    },
+    "orchid_frog": {
+      "lookType": 226,
+      "lookHead": 109,
+      "lookBody": 14,
+      "lookLegs": 109,
+      "lookFeet": 114,
+      "lookAddons": 0,
+      "raceId": 271
+    },
+    "salamander": {
+      "lookType": 529,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 913
+    },
+    "toad": {
+      "lookType": 222,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 262
+    },
+    "apocalypse": {
+      "lookType": 12,
+      "lookHead": 38,
+      "lookBody": 114,
+      "lookLegs": 0,
+      "lookFeet": 94,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "apprentice_sheng": {
+      "lookType": 23,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "bazir": {
+      "lookType": 35,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "black_knight": {
+      "lookType": 131,
+      "lookHead": 95,
+      "lookBody": 95,
+      "lookLegs": 95,
+      "lookFeet": 95,
+      "lookAddons": 3,
+      "raceId": null
+    },
+    "bullwark": {
+      "lookType": 607,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "custodian": {
+      "lookType": 1217,
+      "lookHead": 1,
+      "lookBody": 1,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 1,
+      "raceId": null
+    },
+    "dharalion": {
+      "lookType": 203,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "shadowpelt": {
+      "lookType": 1040,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "demon": {
+      "lookType": 35,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 35
+    },
+    "destroyer": {
+      "lookType": 236,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 287
+    },
+    "fury": {
+      "lookType": 149,
+      "lookHead": 94,
+      "lookBody": 77,
+      "lookLegs": 78,
+      "lookFeet": 79,
+      "lookAddons": 1,
+      "raceId": 291
+    },
+    "hellhound": {
+      "lookType": 240,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 294
+    },
+    "hellspawn": {
+      "lookType": 322,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 519
+    },
+    "juggernaut": {
+      "lookType": 244,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 296
+    },
+    "dragon": {
+      "lookType": 34,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 34
+    },
+    "dragon_lord": {
+      "lookType": 39,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 39
+    },
+    "hydra": {
+      "lookType": 121,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 121
+    },
+    "ice_dragon": {
+      "lookType": 947,
+      "lookHead": 9,
+      "lookBody": 9,
+      "lookLegs": 9,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 1380
+    },
+    "wyrm": {
+      "lookType": 291,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 461
+    },
+    "druid_familiar": {
+      "lookType": 993,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "knight_familiar": {
+      "lookType": 991,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "paladin_familiar": {
+      "lookType": 992,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "sorcerer_familiar": {
+      "lookType": 994,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "behemoth": {
+      "lookType": 55,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 55
+    },
+    "cyclops": {
+      "lookType": 22,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 22
+    },
+    "cyclops_drone": {
+      "lookType": 280,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 391
+    },
+    "cyclops_smith": {
+      "lookType": 277,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 389
+    },
+    "frost_troll": {
+      "lookType": 53,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 53
+    },
+    "goblin": {
+      "lookType": 61,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 61
+    },
+    "island_troll": {
+      "lookType": 282,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 277
+    },
+    "troll": {
+      "lookType": 15,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 15
+    },
+    "amazon": {
+      "lookType": 137,
+      "lookHead": 113,
+      "lookBody": 120,
+      "lookLegs": 95,
+      "lookFeet": 115,
+      "lookAddons": 0,
+      "raceId": 77
+    },
+    "assassin": {
+      "lookType": 152,
+      "lookHead": 114,
+      "lookBody": 95,
+      "lookLegs": 95,
+      "lookFeet": 95,
+      "lookAddons": 3,
+      "raceId": 224
+    },
+    "bandit": {
+      "lookType": 129,
+      "lookHead": 58,
+      "lookBody": 59,
+      "lookLegs": 45,
+      "lookFeet": 114,
+      "lookAddons": 0,
+      "raceId": 223
+    },
+    "hunter": {
+      "lookType": 129,
+      "lookHead": 95,
+      "lookBody": 116,
+      "lookLegs": 121,
+      "lookFeet": 115,
+      "lookAddons": 0,
+      "raceId": 11
+    },
+    "monk": {
+      "lookType": 57,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 57
+    },
+    "valkyrie": {
+      "lookType": 139,
+      "lookHead": 113,
+      "lookBody": 38,
+      "lookLegs": 95,
+      "lookFeet": 96,
+      "lookAddons": 0,
+      "raceId": 12
+    },
+    "frazzlemaw": {
+      "lookType": 594,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 1022
+    },
+    "guzzlemaw": {
+      "lookType": 584,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 1013
+    },
+    "bat": {
+      "lookType": 122,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 122
+    },
+    "cave_rat": {
+      "lookType": 56,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 56
+    },
+    "winter_wolf": {
+      "lookType": 52,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 52
+    },
+    "wolf": {
+      "lookType": 27,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 27
+    },
+    "crocodile": {
+      "lookType": 119,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 119
+    },
+    "snake": {
+      "lookType": 28,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 28
+    },
+    "tortoise": {
+      "lookType": 197,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 258
+    },
+    "defiler": {
+      "lookType": 238,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 289
+    },
+    "slime": {
+      "lookType": 19,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 19
+    },
+    "training_machine": {
+      "lookType": 1142,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": null
+    },
+    "ghoul": {
+      "lookType": 18,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 18
+    },
+    "mummy": {
+      "lookType": 65,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 65
+    },
+    "skeleton": {
+      "lookType": 33,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 33
+    },
+    "poison_spider": {
+      "lookType": 36,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 36
+    },
+    "sandcrawler": {
+      "lookType": 350,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 641
+    },
+    "spider": {
+      "lookType": 30,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 30
+    },
+    "wasp": {
+      "lookType": 44,
+      "lookHead": 0,
+      "lookBody": 0,
+      "lookLegs": 0,
+      "lookFeet": 0,
+      "lookAddons": 0,
+      "raceId": 44
+    }
+  },
+  "corpses": {
+    "azure_frog": {
+      "corpseId": 6079
+    },
+    "bog_frog": {
+      "corpseId": 6079
+    },
+    "coral_frog": {
+      "corpseId": 6079
+    },
+    "crimson_frog": {
+      "corpseId": 6079
+    },
+    "deathspawn": {
+      "corpseId": 3105
+    },
+    "filth_toad": {
+      "corpseId": 6077
+    },
+    "green_frog": {
+      "corpseId": 6079
+    },
+    "infernal_frog": {
+      "corpseId": 6079
+    },
+    "orchid_frog": {
+      "corpseId": 6079
+    },
+    "salamander": {
+      "corpseId": 17427
+    },
+    "toad": {
+      "corpseId": 6077
+    },
+    "apocalypse": {
+      "corpseId": 6068
+    },
+    "apprentice_sheng": {
+      "corpseId": 5981
+    },
+    "bazir": {
+      "corpseId": 4097
+    },
+    "black_knight": {
+      "corpseId": 18074
+    },
+    "bullwark": {
+      "corpseId": 20996
+    },
+    "custodian": {
+      "corpseId": 31923
+    },
+    "dharalion": {
+      "corpseId": 6011
+    },
+    "shadowpelt": {
+      "corpseId": 27722
+    },
+    "demon": {
+      "corpseId": 5995
+    },
+    "destroyer": {
+      "corpseId": 6319
+    },
+    "fury": {
+      "corpseId": 18118
+    },
+    "hellhound": {
+      "corpseId": 6331
+    },
+    "hellspawn": {
+      "corpseId": 9009
+    },
+    "juggernaut": {
+      "corpseId": 6335
+    },
+    "dragon": {
+      "corpseId": 4025
+    },
+    "dragon_lord": {
+      "corpseId": 5984
+    },
+    "hydra": {
+      "corpseId": 6048
+    },
+    "ice_dragon": {
+      "corpseId": 25185
+    },
+    "wyrm": {
+      "corpseId": 8113
+    },
+    "behemoth": {
+      "corpseId": 5999
+    },
+    "cyclops": {
+      "corpseId": 5962
+    },
+    "cyclops_drone": {
+      "corpseId": 771
+    },
+    "cyclops_smith": {
+      "corpseId": 656
+    },
+    "frost_troll": {
+      "corpseId": 5998
+    },
+    "goblin": {
+      "corpseId": 6002
+    },
+    "island_troll": {
+      "corpseId": 865
+    },
+    "troll": {
+      "corpseId": 5960
+    },
+    "amazon": {
+      "corpseId": 18042
+    },
+    "assassin": {
+      "corpseId": 18046
+    },
+    "bandit": {
+      "corpseId": 18050
+    },
+    "hunter": {
+      "corpseId": 18138
+    },
+    "monk": {
+      "corpseId": 18090
+    },
+    "valkyrie": {
+      "corpseId": 18242
+    },
+    "frazzlemaw": {
+      "corpseId": 20233
+    },
+    "guzzlemaw": {
+      "corpseId": 20151
+    },
+    "bat": {
+      "corpseId": 6053
+    },
+    "cave_rat": {
+      "corpseId": 5964
+    },
+    "winter_wolf": {
+      "corpseId": 5997
+    },
+    "wolf": {
+      "corpseId": 5968
+    },
+    "crocodile": {
+      "corpseId": 6046
+    },
+    "snake": {
+      "corpseId": 3998
+    },
+    "tortoise": {
+      "corpseId": 6072
+    },
+    "defiler": {
+      "corpseId": 6532
+    },
+    "slime": {
+      "corpseId": 2127
+    },
+    "ghoul": {
+      "corpseId": 5976
+    },
+    "mummy": {
+      "corpseId": 6004
+    },
+    "skeleton": {
+      "corpseId": 5972
+    },
+    "poison_spider": {
+      "corpseId": 5974
+    },
+    "sandcrawler": {
+      "corpseId": 10440
+    },
+    "spider": {
+      "corpseId": 5961
+    },
+    "wasp": {
+      "corpseId": 5989
+    }
+  }
+}
